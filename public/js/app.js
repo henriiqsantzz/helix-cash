@@ -229,8 +229,8 @@ document.getElementById('btnPlay').addEventListener('click', async () => {
     // Show game screen
     document.getElementById('page-game').classList.remove('hidden');
     document.getElementById('gameOverOverlay').classList.add('hidden');
-    document.getElementById('hudPlatforms').textContent = '0';
-    document.getElementById('hudPrize').textContent = 'R$ 0,00';
+    document.getElementById('hudPlatforms').textContent = '2';
+    document.getElementById('hudPrize').textContent = 'R$ 2,00';
 
     // Start the 3D game
     startHelixGame(currentBet);
