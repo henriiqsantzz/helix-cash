@@ -1,0 +1,11 @@
+{
+  "name": "helix-cash",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Helix Cash - Jogo Helix Jump com prêmios reais",
+  "scripts": {
+    "start": "node local-server.js",
+    "dev": "node local-server.js"
+  },
+  "dependencies": {}
+}
