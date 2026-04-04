@@ -12,6 +12,9 @@
   ],
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/index.js" },
+    { "source": "/admin.html", "destination": "/public/admin.html" },
+    { "source": "/css/(.*)", "destination": "/public/css/$1" },
+    { "source": "/js/(.*)", "destination": "/public/js/$1" },
     { "source": "/(.*)", "destination": "/public/index.html" }
   ],
   "headers": [
