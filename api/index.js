@@ -1,39 +1,48 @@
 const crypto = require('crypto');
 
-// ===================== IN-MEMORY DATABASE =====================
-// Note: On Vercel serverless, data resets between cold starts.
-// For production, connect to a real database (MongoDB, Supabase, PlanetScale, etc.)
+// ===================== DATABASE WITH PERSISTENCE =====================
+// Uses a JSON file stored in /tmp on Vercel (persists during warm invocations)
+// For FULL persistence, connect to Supabase/MongoDB/PlanetScale
+const fs = require('fs');
+const DB_PATH = '/tmp/helix-db.json';
 const JWT_SECRET = process.env.JWT_SECRET || 'helix-cash-secret-key-2024';
 
-// Global in-memory store (persists across warm invocations)
-if (!global.__db) {
-  global.__db = {
-    users: [],
-    deposits: [],
-    withdrawals: [],
-    games: [],
-    referral_earnings: [],
-    settings: {
-      min_deposit: '10', min_withdrawal: '20', max_multiplier: '7',
-      referral_bonus: '5', house_edge: '15', site_name: 'Helix Cash'
-    },
-    next_id: { users: 1, deposits: 1, withdrawals: 1, games: 1, referral_earnings: 1 }
-  };
-
-  // Create default admin
-  const salt = crypto.randomBytes(16).toString('hex');
-  const hash = crypto.pbkdf2Sync('admin123', salt, 1000, 64, 'sha512').toString('hex');
-  global.__db.users.push({
-    id: global.__db.next_id.users++,
-    name: 'Admin', email: 'admin@helixcash.com', phone: null,
-    password: salt + ':' + hash,
-    balance: 0, bonus_balance: 0, referral_code: 'ADMIN001',
-    referred_by: null, is_admin: true, is_blocked: false,
-    created_at: new Date().toISOString(), last_login: null
-  });
+function loadDB() {
+  try {
+    if (fs.existsSync(DB_PATH)) {
+      return JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
+    }
+  } catch (e) { /* fresh */ }
+  return getDefaultDB();
 }
 
-const db = global.__db;
+function getDefaultDB() {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.pbkdf2Sync('admin123', salt, 1000, 64, 'sha512').toString('hex');
+  return {
+    users: [{
+      id: 1, name: 'Admin', email: 'admin@helixcash.com', phone: null,
+      password: salt + ':' + hash, balance: 0, bonus_balance: 0,
+      referral_code: 'ADMIN001', referred_by: null,
+      is_admin: true, is_blocked: false, is_influencer: false,
+      influencer_win_rate: 0, total_deposited: 0, total_withdrawn: 0, total_games: 0,
+      created_at: new Date().toISOString(), last_login: null
+    }],
+    deposits: [], withdrawals: [], games: [], referral_earnings: [],
+    settings: {
+      min_deposit: '10', min_withdrawal: '20', max_multiplier: '7',
+      referral_bonus: '5', house_edge: '15', influencer_house_edge: '5',
+      site_name: 'Helix Cash'
+    },
+    next_id: { users: 2, deposits: 1, withdrawals: 1, games: 1, referral_earnings: 1 }
+  };
+}
+
+let db = loadDB();
+
+function saveDB() {
+  try { fs.writeFileSync(DB_PATH, JSON.stringify(db)); } catch (e) { /* silent */ }
+}
 
 // ===================== HELPERS =====================
 function hashPassword(password) {
@@ -43,6 +52,7 @@ function hashPassword(password) {
 }
 
 function verifyPassword(password, stored) {
+  if (!stored || !stored.includes(':')) return false;
   const [salt, hash] = stored.split(':');
   const test = crypto.pbkdf2Sync(password, salt, 1000, 64, 'sha512').toString('hex');
   return hash === test;
@@ -50,7 +60,7 @@ function verifyPassword(password, stored) {
 
 function createToken(payload) {
   const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
-  const body = Buffer.from(JSON.stringify({ ...payload, exp: Date.now() + 7 * 24 * 60 * 60 * 1000 })).toString('base64url');
+  const body = Buffer.from(JSON.stringify({ ...payload, exp: Date.now() + 30 * 24 * 60 * 60 * 1000 })).toString('base64url');
   const signature = crypto.createHmac('sha256', JWT_SECRET).update(header + '.' + body).digest('base64url');
   return header + '.' + body + '.' + signature;
 }
@@ -74,29 +84,23 @@ function getUser(req) {
   return db.users.find(u => u.id === payload.id);
 }
 
-function genRefCode() {
-  return 'HC' + crypto.randomBytes(3).toString('hex').toUpperCase();
-}
-
-function genPixCode() {
-  return crypto.randomBytes(16).toString('hex');
-}
-
-function isToday(d) {
-  if (!d) return false;
-  return new Date(d).toDateString() === new Date().toDateString();
-}
+function genRefCode() { return 'HC' + crypto.randomBytes(3).toString('hex').toUpperCase(); }
+function genPixCode() { return crypto.randomBytes(16).toString('hex'); }
+function isToday(d) { if (!d) return false; return new Date(d).toDateString() === new Date().toDateString(); }
 
 function insert(table, record) {
   record.id = db.next_id[table]++;
   record.created_at = record.created_at || new Date().toISOString();
   db[table].push(record);
+  saveDB();
   return record;
 }
 
 // ===================== HANDLER =====================
 module.exports = async (req, res) => {
-  // CORS
+  // Reload DB on each request to get latest data
+  db = loadDB();
+
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
@@ -106,9 +110,7 @@ module.exports = async (req, res) => {
   const method = req.method;
   const body = req.body || {};
 
-  function json(code, data) {
-    return res.status(code).json(data);
-  }
+  function json(code, data) { return res.status(code).json(data); }
 
   try {
     // ===== AUTH =====
@@ -130,7 +132,10 @@ module.exports = async (req, res) => {
         balance: 0, bonus_balance: 0,
         referral_code: genRefCode(),
         referred_by: referredBy,
-        is_admin: false, is_blocked: false, last_login: null
+        is_admin: false, is_blocked: false,
+        is_influencer: false, influencer_win_rate: 0,
+        total_deposited: 0, total_withdrawn: 0, total_games: 0,
+        last_login: new Date().toISOString()
       });
 
       const token = createToken({ id: user.id });
@@ -148,10 +153,16 @@ module.exports = async (req, res) => {
       if (!verifyPassword(password, user.password)) return json(400, { error: 'Email ou senha incorretos' });
 
       user.last_login = new Date().toISOString();
+      saveDB();
       const token = createToken({ id: user.id });
       return json(200, {
         token,
-        user: { id: user.id, name: user.name, email: user.email, balance: user.balance, bonus_balance: user.bonus_balance, referral_code: user.referral_code, is_admin: user.is_admin }
+        user: {
+          id: user.id, name: user.name, email: user.email,
+          balance: user.balance, bonus_balance: user.bonus_balance,
+          referral_code: user.referral_code, is_admin: user.is_admin,
+          is_influencer: user.is_influencer
+        }
       });
     }
 
@@ -180,6 +191,7 @@ module.exports = async (req, res) => {
         id: user.id, name: user.name, email: user.email, phone: user.phone,
         balance: user.balance, bonus_balance: user.bonus_balance,
         referral_code: user.referral_code, is_admin: user.is_admin,
+        is_influencer: user.is_influencer || false,
         created_at: user.created_at, referrals
       });
     }
@@ -214,6 +226,7 @@ module.exports = async (req, res) => {
       if (!pix_key) return json(400, { error: 'Informe a chave PIX' });
 
       user.balance -= amount;
+      user.total_withdrawn = (user.total_withdrawn || 0) + amount;
       const w = insert('withdrawals', {
         user_id: user.id, amount, pix_key, pix_type: pix_type || 'cpf',
         status: 'pending', processed_at: null
@@ -229,6 +242,8 @@ module.exports = async (req, res) => {
       if (db.games.find(g => g.user_id === user.id && g.status === 'playing')) return json(400, { error: 'Você já tem uma partida ativa' });
 
       user.balance -= bet_amount;
+      user.total_games = (user.total_games || 0) + 1;
+      saveDB();
       const game = insert('games', {
         user_id: user.id, bet_amount, platforms_reached: 0,
         multiplier: 1, prize: 0, status: 'playing', finished_at: null
@@ -241,10 +256,30 @@ module.exports = async (req, res) => {
       const game = db.games.find(g => g.id === game_id && g.user_id === user.id && g.status === 'playing');
       if (!game) return json(400, { error: 'Partida não encontrada' });
 
-      const houseEdge = parseFloat(db.settings.house_edge) / 100;
+      // Use different house edge for influencers
+      const isInfluencer = user.is_influencer || false;
+      const normalHouseEdge = parseFloat(db.settings.house_edge) / 100;
+      const influencerHouseEdge = parseFloat(db.settings.influencer_house_edge || '5') / 100;
+      const houseEdge = isInfluencer ? influencerHouseEdge : normalHouseEdge;
+
+      // Influencer custom win rate override
+      const influencerWinRate = user.influencer_win_rate || 0;
+
       const maxMult = parseFloat(db.settings.max_multiplier);
       let mult = Math.min(1 + (platforms_reached * 0.5), maxMult);
-      if (Math.random() < houseEdge) mult = Math.max(0, mult * 0.3);
+
+      // Apply house edge (chance of reducing prize)
+      if (isInfluencer && influencerWinRate > 0) {
+        // Influencer has a custom guaranteed win rate
+        if (Math.random() * 100 > influencerWinRate) {
+          mult = Math.max(0, mult * 0.3);
+        }
+        // else: influencer keeps full multiplier
+      } else {
+        if (Math.random() < houseEdge) {
+          mult = Math.max(0, mult * 0.3);
+        }
+      }
 
       const prize = Math.round(game.bet_amount * mult * 100) / 100;
       game.platforms_reached = platforms_reached;
@@ -253,8 +288,9 @@ module.exports = async (req, res) => {
       game.status = 'finished';
       game.finished_at = new Date().toISOString();
       if (prize > 0) user.balance += prize;
+      saveDB();
 
-      // Referral bonus
+      // Referral bonus on first game
       const gameCount = db.games.filter(g => g.user_id === user.id && g.status === 'finished').length;
       if (gameCount === 1 && user.referred_by) {
         const referrer = db.users.find(u => u.referral_code === user.referred_by);
@@ -286,16 +322,20 @@ module.exports = async (req, res) => {
     if (path === '/api/admin/dashboard' && method === 'GET') {
       const depApproved = db.deposits.filter(d => d.status === 'approved');
       const wApproved = db.withdrawals.filter(w => w.status === 'approved');
+      const totalDepAmount = depApproved.reduce((s, d) => s + d.amount, 0);
+      const totalWAmount = wApproved.reduce((s, w) => s + w.amount, 0);
+      const totalBets = db.games.reduce((s, g) => s + g.bet_amount, 0);
+      const totalPrizes = db.games.reduce((s, g) => s + (g.prize || 0), 0);
+      const influencerCount = db.users.filter(u => u.is_influencer && !u.is_admin).length;
+
       return json(200, {
         users: db.users.filter(u => !u.is_admin).length,
-        deposits: { total: depApproved.reduce((s, d) => s + d.amount, 0), count: depApproved.length },
-        withdrawals: { total: wApproved.reduce((s, w) => s + w.amount, 0), count: wApproved.length },
-        games: {
-          count: db.games.length,
-          total_bets: db.games.reduce((s, g) => s + g.bet_amount, 0),
-          total_prizes: db.games.reduce((s, g) => s + (g.prize || 0), 0)
-        },
-        profit: depApproved.reduce((s, d) => s + d.amount, 0) - wApproved.reduce((s, w) => s + w.amount, 0),
+        influencers: influencerCount,
+        deposits: { total: totalDepAmount, count: depApproved.length },
+        withdrawals: { total: totalWAmount, count: wApproved.length },
+        games: { count: db.games.length, total_bets: totalBets, total_prizes: totalPrizes },
+        profit: totalDepAmount - totalWAmount,
+        game_profit: totalBets - totalPrizes,
         pending: {
           deposits: db.deposits.filter(d => d.status === 'pending').length,
           withdrawals: db.withdrawals.filter(w => w.status === 'pending').length
@@ -303,7 +343,8 @@ module.exports = async (req, res) => {
         today: {
           deposits: db.deposits.filter(d => d.status === 'approved' && isToday(d.approved_at)).reduce((s, d) => s + d.amount, 0),
           withdrawals: db.withdrawals.filter(w => w.status === 'approved' && isToday(w.processed_at)).reduce((s, w) => s + w.amount, 0),
-          new_users: db.users.filter(u => !u.is_admin && isToday(u.created_at)).length
+          new_users: db.users.filter(u => !u.is_admin && isToday(u.created_at)).length,
+          games: db.games.filter(g => isToday(g.created_at)).length
         }
       });
     }
@@ -313,17 +354,33 @@ module.exports = async (req, res) => {
         id: u.id, name: u.name, email: u.email, phone: u.phone,
         balance: u.balance, bonus_balance: u.bonus_balance,
         referral_code: u.referral_code, referred_by: u.referred_by,
-        is_blocked: u.is_blocked, created_at: u.created_at, last_login: u.last_login
+        is_blocked: u.is_blocked, is_influencer: u.is_influencer || false,
+        influencer_win_rate: u.influencer_win_rate || 0,
+        total_deposited: u.total_deposited || 0,
+        total_withdrawn: u.total_withdrawn || 0,
+        total_games: u.total_games || 0,
+        created_at: u.created_at, last_login: u.last_login
       })).reverse());
     }
 
-    // Admin user actions
-    const userActionMatch = path.match(/^\/api\/admin\/user\/(\d+)\/(block|balance)$/);
+    // Admin user actions - extended
+    const userActionMatch = path.match(/^\/api\/admin\/user\/(\d+)\/(block|balance|influencer|add-balance)$/);
     if (userActionMatch && method === 'POST') {
       const target = db.users.find(u => u.id === parseInt(userActionMatch[1]));
       if (!target) return json(404, { error: 'Usuário não encontrado' });
-      if (userActionMatch[2] === 'block') target.is_blocked = !!body.blocked;
-      else target.balance = parseFloat(body.amount) || 0;
+      const action = userActionMatch[2];
+
+      if (action === 'block') {
+        target.is_blocked = !!body.blocked;
+      } else if (action === 'balance') {
+        target.balance = parseFloat(body.amount) || 0;
+      } else if (action === 'add-balance') {
+        target.balance += parseFloat(body.amount) || 0;
+      } else if (action === 'influencer') {
+        target.is_influencer = !!body.is_influencer;
+        target.influencer_win_rate = parseFloat(body.win_rate) || 0;
+      }
+      saveDB();
       return json(200, { success: true });
     }
 
@@ -342,8 +399,12 @@ module.exports = async (req, res) => {
       if (depAction[2] === 'approve') {
         dep.status = 'approved'; dep.approved_at = new Date().toISOString();
         const t = db.users.find(u => u.id === dep.user_id);
-        if (t) t.balance += dep.amount;
+        if (t) {
+          t.balance += dep.amount;
+          t.total_deposited = (t.total_deposited || 0) + dep.amount;
+        }
       } else { dep.status = 'rejected'; }
+      saveDB();
       return json(200, { success: true });
     }
 
@@ -366,13 +427,14 @@ module.exports = async (req, res) => {
         const t = db.users.find(u => u.id === w.user_id);
         if (t) t.balance += w.amount;
       }
+      saveDB();
       return json(200, { success: true });
     }
 
     if (path === '/api/admin/games' && method === 'GET') {
       return json(200, db.games.map(g => {
         const u = db.users.find(u => u.id === g.user_id) || {};
-        return { ...g, name: u.name, email: u.email };
+        return { ...g, name: u.name, email: u.email, is_influencer: u.is_influencer || false };
       }).reverse().slice(0, 100));
     }
 
@@ -382,8 +444,9 @@ module.exports = async (req, res) => {
 
     if (path === '/api/admin/settings' && method === 'POST') {
       Object.entries(body).forEach(([k, v]) => {
-        if (db.settings.hasOwnProperty(k)) db.settings[k] = String(v);
+        db.settings[k] = String(v);
       });
+      saveDB();
       return json(200, { success: true });
     }
 
