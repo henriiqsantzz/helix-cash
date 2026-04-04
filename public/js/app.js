@@ -73,7 +73,7 @@ document.getElementById('registerForm').addEventListener('submit', async (e) => 
   btn.innerHTML = '<span class="loader"></span>';
 
   try {
-    const data = await api('https://helix-cash.vercel.app/api/auth/register', {
+    const data = await api('/api/auth/register', {
       method: 'POST',
       body: JSON.stringify({
         name: form.name.value,
@@ -110,7 +110,7 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
   btn.innerHTML = '<span class="loader"></span>';
 
   try {
-    const data = await api('https://helix-cash.vercel.app/api/auth/login', {
+    const data = await api('/api/auth/login', {
       method: 'POST',
       body: JSON.stringify({
         email: form.email.value,
@@ -124,7 +124,7 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
     localStorage.setItem('hc_user', JSON.stringify(user));
 
     if (user.is_admin) {
-      window.location.href = 'https://helix-cash.vercel.app/admin.html';
+      window.location.href = '/public/admin.html';
       return;
     }
 
@@ -150,7 +150,7 @@ function logout() {
 // ===================== USER DATA =====================
 async function loadUserData() {
   try {
-    const data = await api('https://helix-cash.vercel.app/api/user/me');
+    const data = await api('/api/user/me');
     user = data;
     localStorage.setItem('hc_user', JSON.stringify(user));
     updateUI();
@@ -173,7 +173,7 @@ function updateUI() {
 // ===================== STATS =====================
 async function loadPublicStats() {
   try {
-    const stats = await api('https://helix-cash.vercel.app/api/stats');
+    const stats = await api('/api/stats');
     document.getElementById('stat-online').textContent = stats.online.toLocaleString('pt-BR');
     document.getElementById('stat-users').textContent = stats.online.toLocaleString('pt-BR');
     document.getElementById('stat-paid').textContent = 'R$ ' + stats.today_paid.toLocaleString('pt-BR');
@@ -183,7 +183,7 @@ async function loadPublicStats() {
 
 async function loadStats() {
   try {
-    const stats = await api('https://helix-cash.vercel.app/api/stats');
+    const stats = await api('/api/stats');
     const el = document.getElementById('panelOnline');
     if (el) el.textContent = stats.online;
   } catch (e) { /* silent */ }
@@ -217,7 +217,7 @@ document.getElementById('btnPlay').addEventListener('click', async () => {
   btn.innerHTML = '<span class="loader"></span>';
 
   try {
-    const data = await api('https://helix-cash.vercel.app/api/game/start', {
+    const data = await api('/api/game/start', {
       method: 'POST',
       body: JSON.stringify({ bet_amount: currentBet })
     });
@@ -253,7 +253,7 @@ function onPlatformPassed(count) {
 // Called when player dies or cashes out
 async function onGameEnd(platformsReached, cashed) {
   try {
-    const data = await api('https://helix-cash.vercel.app/api/game/finish', {
+    const data = await api('/api/game/finish', {
       method: 'POST',
       body: JSON.stringify({
         game_id: currentGameId,
@@ -316,7 +316,7 @@ document.getElementById('btnDeposit').addEventListener('click', async () => {
   btn.innerHTML = '<span class="loader"></span>';
 
   try {
-    const data = await api('https://helix-cash.vercel.app/api/deposit', {
+    const data = await api('/api/deposit', {
       method: 'POST',
       body: JSON.stringify({ amount })
     });
@@ -346,7 +346,7 @@ document.getElementById('btnWithdraw').addEventListener('click', async () => {
   btn.innerHTML = '<span class="loader"></span>';
 
   try {
-    const data = await api('https://helix-cash.vercel.app/api/withdraw', {
+    const data = await api('/api/withdraw', {
       method: 'POST',
       body: JSON.stringify({ amount, pix_key: pixKey, pix_type: pixType })
     });
@@ -366,7 +366,7 @@ document.getElementById('btnWithdraw').addEventListener('click', async () => {
 // ===================== REFERRALS =====================
 async function loadReferrals() {
   try {
-    const data = await api('https://helix-cash.vercel.app/api/referrals');
+    const data = await api('/api/referrals');
     document.getElementById('refEarned').textContent = 'R$ ' + formatMoney(data.total_earned);
 
     const listEl = document.getElementById('referralList');
