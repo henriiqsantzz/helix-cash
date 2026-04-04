@@ -3,54 +3,93 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Helix Cash - Admin</title>
+  <title>Helix Cash - Painel Admin</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://helix-cash.vercel.app/public/css/style.css">
   <style>
-    body { background: var(--bg-dark); }
+    body { background: #0a0a1a; }
     .admin-layout { display: flex; min-height: 100vh; }
     .admin-mobile-header {
-      display: none; padding: 12px 16px; background: var(--bg-card);
+      display: none; padding: 12px 16px; background: #12122a;
       border-bottom: 1px solid rgba(124,77,255,0.15);
       align-items: center; justify-content: space-between;
     }
     @media (max-width: 768px) {
       .admin-mobile-header { display: flex; }
-      .admin-sidebar { transform: translateX(-100%); transition: transform 0.3s; }
+      .admin-sidebar { transform: translateX(-100%); transition: transform 0.3s; position: fixed; z-index: 999; }
       .admin-sidebar.open { transform: translateX(0); }
-      .admin-main { margin-left: 0; padding: 16px; }
+      .admin-main { margin-left: 0 !important; padding: 16px !important; }
+      .admin-cards { grid-template-columns: repeat(2, 1fr) !important; }
+      .admin-table { font-size: 12px; }
     }
     .admin-section { display: none; }
     .admin-section.active { display: block; }
-    .admin-badge {
-      display: inline-block; padding: 2px 8px; border-radius: 50px;
-      font-size: 11px; font-weight: 600;
-    }
-    .admin-actions { display: flex; gap: 6px; }
+    .admin-actions { display: flex; gap: 6px; flex-wrap: wrap; }
     .refresh-btn {
-      background: rgba(124,77,255,0.1); color: var(--accent-light);
+      background: rgba(124,77,255,0.1); color: #b388ff;
       padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600;
-      border: 1px solid rgba(124,77,255,0.2);
+      border: 1px solid rgba(124,77,255,0.2); cursor: pointer;
     }
-    .settings-form { max-width: 500px; }
+    .refresh-btn:hover { background: rgba(124,77,255,0.2); }
+    .settings-form { max-width: 600px; }
     .settings-form .form-group { margin-bottom: 20px; }
+    .influencer-badge {
+      display: inline-block; padding: 2px 8px; border-radius: 50px;
+      font-size: 10px; font-weight: 700; background: rgba(255,193,7,0.15);
+      color: #ffc107; border: 1px solid rgba(255,193,7,0.3);
+    }
+    .modal-overlay {
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.7); backdrop-filter: blur(5px);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 2000;
+    }
+    .modal {
+      background: #12122a; border: 1px solid rgba(124,77,255,0.2);
+      border-radius: 16px; padding: 32px; max-width: 450px; width: 90%;
+      animation: slideUp 0.3s ease;
+    }
+    .modal h3 { font-size: 20px; font-weight: 900; margin-bottom: 20px; }
+    .modal .form-group { margin-bottom: 16px; }
+    .modal-actions { display: flex; gap: 8px; margin-top: 20px; }
+    .user-detail { font-size: 12px; color: #a0a0c0; }
+    .card-icon { font-size: 24px; margin-bottom: 4px; }
+    .admin-card { position: relative; overflow: hidden; }
+    .admin-card::after {
+      content: ''; position: absolute; top: -50%; right: -50%;
+      width: 100px; height: 100px; border-radius: 50%;
+      background: rgba(124,77,255,0.05);
+    }
+    .search-input {
+      width: 100%; padding: 10px 16px; border-radius: 10px;
+      background: #1a1a3e; border: 1px solid rgba(124,77,255,0.1);
+      color: #fff; font-size: 14px; margin-bottom: 16px; outline: none;
+    }
+    .search-input:focus { border-color: #7c4dff; }
+    .tab-bar { display: flex; gap: 8px; margin-bottom: 16px; }
+    .tab-btn {
+      padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600;
+      background: rgba(124,77,255,0.1); color: #b388ff; border: none; cursor: pointer;
+    }
+    .tab-btn.active { background: #7c4dff; color: white; }
   </style>
 </head>
 <body>
 
 <div class="admin-mobile-header">
-  <div class="logo" style="font-size:18px">HELIX<span>CASH</span> Admin</div>
-  <button onclick="document.querySelector('.admin-sidebar').classList.toggle('open')" style="background:none;color:white;font-size:24px">☰</button>
+  <div class="logo" style="font-size:18px">HELIX<span>CASH</span></div>
+  <button onclick="document.querySelector('.admin-sidebar').classList.toggle('open')" style="background:none;color:white;font-size:24px;border:none;cursor:pointer">☰</button>
 </div>
 
 <div class="admin-layout">
-  <aside class="admin-sidebar">
-    <div class="logo">HELIX<span>CASH</span></div>
-    <p style="padding:0 20px;font-size:11px;color:var(--text-secondary);margin-bottom:24px">Painel Administrativo</p>
+  <aside class="admin-sidebar" style="display:flex;flex-direction:column">
+    <div class="logo" style="padding:0 20px">HELIX<span>CASH</span></div>
+    <p style="padding:0 20px;font-size:11px;color:#a0a0c0;margin-bottom:24px">Painel Administrativo</p>
     <nav class="admin-nav">
       <button class="admin-nav-item active" data-section="dashboard">📊 Dashboard</button>
       <button class="admin-nav-item" data-section="users">👥 Usuários</button>
+      <button class="admin-nav-item" data-section="influencers">⭐ Influenciadores</button>
       <button class="admin-nav-item" data-section="deposits">💰 Depósitos</button>
       <button class="admin-nav-item" data-section="withdrawals">💸 Saques</button>
       <button class="admin-nav-item" data-section="games">🎮 Jogos</button>
@@ -63,143 +102,171 @@
   </aside>
 
   <main class="admin-main">
-    <!-- DASHBOARD -->
+
+    <!-- ===== DASHBOARD ===== -->
     <div id="section-dashboard" class="admin-section active">
-      <div class="admin-header">
-        <h1>Dashboard</h1>
-        <p style="color:var(--text-secondary)">Visão geral da plataforma</p>
+      <div class="admin-header"><h1>📊 Dashboard</h1><p style="color:#a0a0c0">Visao geral completa da plataforma</p></div>
+
+      <h3 style="font-size:14px;color:#a0a0c0;margin-bottom:12px;text-transform:uppercase;letter-spacing:2px">Resumo Geral</h3>
+      <div class="admin-cards" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr))">
+        <div class="admin-card"><div class="card-icon">👥</div><div class="label">Usuarios totais</div><div class="value purple" id="d-users">0</div></div>
+        <div class="admin-card"><div class="card-icon">⭐</div><div class="label">Influenciadores</div><div class="value" style="color:#ffc107" id="d-influencers">0</div></div>
+        <div class="admin-card"><div class="card-icon">💰</div><div class="label">Depositos aprovados</div><div class="value green" id="d-deposits">R$ 0</div></div>
+        <div class="admin-card"><div class="card-icon">💸</div><div class="label">Saques pagos</div><div class="value red" id="d-withdrawals">R$ 0</div></div>
+        <div class="admin-card"><div class="card-icon">📈</div><div class="label">Lucro (Dep - Saq)</div><div class="value green" id="d-profit">R$ 0</div></div>
+        <div class="admin-card"><div class="card-icon">🎮</div><div class="label">Total jogos</div><div class="value purple" id="d-games">0</div></div>
+        <div class="admin-card"><div class="card-icon">🎰</div><div class="label">Total apostado</div><div class="value purple" id="d-bets">R$ 0</div></div>
+        <div class="admin-card"><div class="card-icon">🏆</div><div class="label">Total premios</div><div class="value red" id="d-prizes">R$ 0</div></div>
+        <div class="admin-card"><div class="card-icon">💵</div><div class="label">Lucro dos jogos</div><div class="value green" id="d-game-profit">R$ 0</div></div>
       </div>
 
-      <div class="admin-cards" id="dashCards">
-        <div class="admin-card"><div class="label">Usuários totais</div><div class="value purple" id="d-users">0</div></div>
-        <div class="admin-card"><div class="label">Depósitos aprovados</div><div class="value green" id="d-deposits">R$ 0</div></div>
-        <div class="admin-card"><div class="label">Saques pagos</div><div class="value red" id="d-withdrawals">R$ 0</div></div>
-        <div class="admin-card"><div class="label">Lucro total</div><div class="value green" id="d-profit">R$ 0</div></div>
-        <div class="admin-card"><div class="label">Jogos realizados</div><div class="value purple" id="d-games">0</div></div>
-        <div class="admin-card"><div class="label">Total apostado</div><div class="value purple" id="d-bets">R$ 0</div></div>
-        <div class="admin-card"><div class="label">Total em prêmios</div><div class="value red" id="d-prizes">R$ 0</div></div>
-        <div class="admin-card"><div class="label">Novos usuários hoje</div><div class="value green" id="d-today-users">0</div></div>
+      <h3 style="font-size:14px;color:#a0a0c0;margin:24px 0 12px;text-transform:uppercase;letter-spacing:2px">Hoje</h3>
+      <div class="admin-cards" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr))">
+        <div class="admin-card"><div class="card-icon">👤</div><div class="label">Novos usuarios hoje</div><div class="value green" id="d-today-users">0</div></div>
+        <div class="admin-card"><div class="card-icon">💰</div><div class="label">Depositos hoje</div><div class="value green" id="d-today-deposits">R$ 0</div></div>
+        <div class="admin-card"><div class="card-icon">💸</div><div class="label">Saques hoje</div><div class="value red" id="d-today-withdrawals">R$ 0</div></div>
+        <div class="admin-card"><div class="card-icon">🎮</div><div class="label">Jogos hoje</div><div class="value purple" id="d-today-games">0</div></div>
       </div>
 
-      <div class="admin-cards">
-        <div class="admin-card" style="border-color:rgba(255,193,7,0.3)">
-          <div class="label">⚠️ Depósitos pendentes</div>
-          <div class="value" style="color:#ffc107" id="d-pending-deposits">0</div>
-        </div>
-        <div class="admin-card" style="border-color:rgba(255,193,7,0.3)">
-          <div class="label">⚠️ Saques pendentes</div>
-          <div class="value" style="color:#ffc107" id="d-pending-withdrawals">0</div>
-        </div>
+      <h3 style="font-size:14px;color:#a0a0c0;margin:24px 0 12px;text-transform:uppercase;letter-spacing:2px">Pendentes</h3>
+      <div class="admin-cards" style="grid-template-columns:repeat(2,1fr)">
+        <div class="admin-card" style="border-color:rgba(255,193,7,0.3)"><div class="card-icon">⚠️</div><div class="label">Depositos pendentes</div><div class="value" style="color:#ffc107" id="d-pending-deposits">0</div></div>
+        <div class="admin-card" style="border-color:rgba(255,193,7,0.3)"><div class="card-icon">⚠️</div><div class="label">Saques pendentes</div><div class="value" style="color:#ffc107" id="d-pending-withdrawals">0</div></div>
       </div>
     </div>
 
-    <!-- USERS -->
+    <!-- ===== USERS ===== -->
     <div id="section-users" class="admin-section">
-      <div class="admin-header" style="display:flex;justify-content:space-between;align-items:center">
-        <div><h1>Usuários</h1><p style="color:var(--text-secondary)">Gerenciar usuários da plataforma</p></div>
+      <div class="admin-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+        <div><h1>👥 Usuarios</h1><p style="color:#a0a0c0">Gerenciar todos os usuarios</p></div>
         <button class="refresh-btn" onclick="loadUsers()">🔄 Atualizar</button>
       </div>
+      <input type="text" class="search-input" id="searchUsers" placeholder="Buscar por nome ou email..." oninput="filterUsers()">
       <div style="overflow-x:auto">
         <table class="admin-table">
           <thead>
-            <tr><th>Nome</th><th>Email</th><th>Saldo</th><th>Cadastro</th><th>Status</th><th>Ações</th></tr>
+            <tr><th>Nome</th><th>Email</th><th>Saldo</th><th>Depositado</th><th>Sacado</th><th>Jogos</th><th>Status</th><th>Acoes</th></tr>
           </thead>
           <tbody id="usersTable"></tbody>
         </table>
       </div>
     </div>
 
-    <!-- DEPOSITS -->
-    <div id="section-deposits" class="admin-section">
-      <div class="admin-header" style="display:flex;justify-content:space-between;align-items:center">
-        <div><h1>Depósitos</h1><p style="color:var(--text-secondary)">Gerenciar depósitos PIX</p></div>
-        <button class="refresh-btn" onclick="loadDeposits()">🔄 Atualizar</button>
+    <!-- ===== INFLUENCERS ===== -->
+    <div id="section-influencers" class="admin-section">
+      <div class="admin-header">
+        <h1>⭐ Influenciadores</h1>
+        <p style="color:#a0a0c0">Gerencie influenciadores com taxa de ganho personalizada</p>
       </div>
       <div style="overflow-x:auto">
         <table class="admin-table">
           <thead>
-            <tr><th>ID</th><th>Usuário</th><th>Valor</th><th>Status</th><th>Data</th><th>Ações</th></tr>
+            <tr><th>Nome</th><th>Email</th><th>Saldo</th><th>Taxa de Ganho</th><th>Jogos</th><th>Acoes</th></tr>
           </thead>
+          <tbody id="influencersTable"></tbody>
+        </table>
+      </div>
+      <p id="noInfluencers" style="text-align:center;color:#a0a0c0;padding:40px;display:none">Nenhum influenciador cadastrado. Marque usuarios como influenciador na aba Usuarios.</p>
+    </div>
+
+    <!-- ===== DEPOSITS ===== -->
+    <div id="section-deposits" class="admin-section">
+      <div class="admin-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+        <div><h1>💰 Depositos</h1><p style="color:#a0a0c0">Aprovar ou rejeitar depositos PIX</p></div>
+        <button class="refresh-btn" onclick="loadDeposits()">🔄 Atualizar</button>
+      </div>
+      <div class="tab-bar">
+        <button class="tab-btn active" onclick="filterDeposits('all',this)">Todos</button>
+        <button class="tab-btn" onclick="filterDeposits('pending',this)">Pendentes</button>
+        <button class="tab-btn" onclick="filterDeposits('approved',this)">Aprovados</button>
+        <button class="tab-btn" onclick="filterDeposits('rejected',this)">Rejeitados</button>
+      </div>
+      <div style="overflow-x:auto">
+        <table class="admin-table">
+          <thead><tr><th>ID</th><th>Usuario</th><th>Valor</th><th>Codigo PIX</th><th>Status</th><th>Data</th><th>Acoes</th></tr></thead>
           <tbody id="depositsTable"></tbody>
         </table>
       </div>
     </div>
 
-    <!-- WITHDRAWALS -->
+    <!-- ===== WITHDRAWALS ===== -->
     <div id="section-withdrawals" class="admin-section">
-      <div class="admin-header" style="display:flex;justify-content:space-between;align-items:center">
-        <div><h1>Saques</h1><p style="color:var(--text-secondary)">Gerenciar saques PIX</p></div>
+      <div class="admin-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+        <div><h1>💸 Saques</h1><p style="color:#a0a0c0">Aprovar ou rejeitar saques PIX</p></div>
         <button class="refresh-btn" onclick="loadWithdrawals()">🔄 Atualizar</button>
+      </div>
+      <div class="tab-bar">
+        <button class="tab-btn active" onclick="filterWithdrawals('all',this)">Todos</button>
+        <button class="tab-btn" onclick="filterWithdrawals('pending',this)">Pendentes</button>
+        <button class="tab-btn" onclick="filterWithdrawals('approved',this)">Aprovados</button>
       </div>
       <div style="overflow-x:auto">
         <table class="admin-table">
-          <thead>
-            <tr><th>ID</th><th>Usuário</th><th>Valor</th><th>Chave PIX</th><th>Status</th><th>Data</th><th>Ações</th></tr>
-          </thead>
+          <thead><tr><th>ID</th><th>Usuario</th><th>Valor</th><th>Chave PIX</th><th>Tipo</th><th>Status</th><th>Data</th><th>Acoes</th></tr></thead>
           <tbody id="withdrawalsTable"></tbody>
         </table>
       </div>
     </div>
 
-    <!-- GAMES -->
+    <!-- ===== GAMES ===== -->
     <div id="section-games" class="admin-section">
-      <div class="admin-header" style="display:flex;justify-content:space-between;align-items:center">
-        <div><h1>Jogos</h1><p style="color:var(--text-secondary)">Histórico de partidas</p></div>
+      <div class="admin-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+        <div><h1>🎮 Jogos</h1><p style="color:#a0a0c0">Historico completo de partidas</p></div>
         <button class="refresh-btn" onclick="loadGames()">🔄 Atualizar</button>
       </div>
       <div style="overflow-x:auto">
         <table class="admin-table">
-          <thead>
-            <tr><th>ID</th><th>Jogador</th><th>Aposta</th><th>Plataformas</th><th>Multi.</th><th>Prêmio</th><th>Data</th></tr>
-          </thead>
+          <thead><tr><th>ID</th><th>Jogador</th><th>Tipo</th><th>Aposta</th><th>Plataformas</th><th>Multi.</th><th>Premio</th><th>Resultado</th><th>Data</th></tr></thead>
           <tbody id="gamesTable"></tbody>
         </table>
       </div>
     </div>
 
-    <!-- SETTINGS -->
+    <!-- ===== SETTINGS ===== -->
     <div id="section-settings" class="admin-section">
-      <div class="admin-header">
-        <h1>Configurações</h1>
-        <p style="color:var(--text-secondary)">Ajustar parâmetros da plataforma</p>
-      </div>
+      <div class="admin-header"><h1>⚙️ Configuracoes</h1><p style="color:#a0a0c0">Parametros gerais da plataforma</p></div>
       <div class="settings-form">
+        <h3 style="color:#b388ff;margin-bottom:16px">Valores</h3>
+        <div class="form-group"><label>Deposito minimo (R$)</label><input type="number" class="form-input" id="set-min_deposit" step="1"></div>
+        <div class="form-group"><label>Saque minimo (R$)</label><input type="number" class="form-input" id="set-min_withdrawal" step="1"></div>
+        <div class="form-group"><label>Multiplicador maximo (x)</label><input type="number" class="form-input" id="set-max_multiplier" step="0.5"></div>
+
+        <h3 style="color:#b388ff;margin:24px 0 16px">Taxas do Jogo</h3>
         <div class="form-group">
-          <label>Depósito mínimo (R$)</label>
-          <input type="number" class="form-input" id="set-min_deposit" step="1">
-        </div>
-        <div class="form-group">
-          <label>Saque mínimo (R$)</label>
-          <input type="number" class="form-input" id="set-min_withdrawal" step="1">
-        </div>
-        <div class="form-group">
-          <label>Multiplicador máximo (x)</label>
-          <input type="number" class="form-input" id="set-max_multiplier" step="0.5">
-        </div>
-        <div class="form-group">
-          <label>Bônus de indicação (%)</label>
-          <input type="number" class="form-input" id="set-referral_bonus" step="1">
-        </div>
-        <div class="form-group">
-          <label>House Edge - Vantagem da casa (%)</label>
+          <label>House Edge - Jogadores normais (%)</label>
           <input type="number" class="form-input" id="set-house_edge" step="1" min="0" max="100">
-          <p style="font-size:12px;color:var(--text-secondary);margin-top:4px">Porcentagem de vezes que o resultado é reduzido. Quanto maior, mais a casa ganha.</p>
+          <p style="font-size:12px;color:#a0a0c0;margin-top:4px">% de chance do premio ser reduzido. Ex: 15 = 15% de chance de perder mais.</p>
         </div>
         <div class="form-group">
-          <label>Nome do site</label>
-          <input type="text" class="form-input" id="set-site_name">
+          <label>House Edge - Influenciadores (%)</label>
+          <input type="number" class="form-input" id="set-influencer_house_edge" step="1" min="0" max="100">
+          <p style="font-size:12px;color:#a0a0c0;margin-top:4px">House edge menor para influenciadores ganharem mais facilmente.</p>
         </div>
-        <button class="btn btn-primary" onclick="saveSettings()">SALVAR CONFIGURAÇÕES</button>
+
+        <h3 style="color:#b388ff;margin:24px 0 16px">Indicacao</h3>
+        <div class="form-group"><label>Bonus de indicacao (%)</label><input type="number" class="form-input" id="set-referral_bonus" step="1"></div>
+
+        <h3 style="color:#b388ff;margin:24px 0 16px">Geral</h3>
+        <div class="form-group"><label>Nome do site</label><input type="text" class="form-input" id="set-site_name"></div>
+
+        <button class="btn btn-primary" onclick="saveSettings()" style="margin-top:8px">SALVAR CONFIGURACOES</button>
       </div>
     </div>
+
   </main>
 </div>
 
+<!-- MODAL -->
+<div id="modal" class="modal-overlay" style="display:none"></div>
 <div id="toast" class="toast hidden"></div>
 
 <script>
 const token = localStorage.getItem('hc_token');
 if (!token) window.location.href = '/#login';
+
+let allUsers = [];
+let allDeposits = [];
+let allWithdrawals = [];
 
 async function api(url, options = {}) {
   const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
@@ -220,10 +287,16 @@ function showToast(msg, type = 'success') {
 }
 
 function statusBadge(status) {
-  const classes = { pending: 'status-pending', approved: 'status-approved', rejected: 'status-rejected', finished: 'status-approved', playing: 'status-pending' };
-  const labels = { pending: 'Pendente', approved: 'Aprovado', rejected: 'Rejeitado', finished: 'Finalizado', playing: 'Jogando' };
-  return `<span class="status-badge ${classes[status] || ''}">${labels[status] || status}</span>`;
+  const c = { pending: 'status-pending', approved: 'status-approved', rejected: 'status-rejected', finished: 'status-approved', playing: 'status-pending' };
+  const l = { pending: 'Pendente', approved: 'Aprovado', rejected: 'Rejeitado', finished: 'Finalizado', playing: 'Jogando' };
+  return `<span class="status-badge ${c[status] || ''}">${l[status] || status}</span>`;
 }
+
+function showModal(html) {
+  document.getElementById('modal').innerHTML = `<div class="modal">${html}</div>`;
+  document.getElementById('modal').style.display = 'flex';
+}
+function closeModal() { document.getElementById('modal').style.display = 'none'; }
 
 // ===== NAV =====
 document.querySelectorAll('.admin-nav-item').forEach(btn => {
@@ -233,8 +306,7 @@ document.querySelectorAll('.admin-nav-item').forEach(btn => {
     document.querySelectorAll('.admin-section').forEach(s => s.classList.remove('active'));
     document.getElementById('section-' + btn.dataset.section).classList.add('active');
     document.querySelector('.admin-sidebar').classList.remove('open');
-
-    const loaders = { users: loadUsers, deposits: loadDeposits, withdrawals: loadWithdrawals, games: loadGames, settings: loadSettings, dashboard: loadDashboard };
+    const loaders = { users: loadUsers, influencers: loadInfluencers, deposits: loadDeposits, withdrawals: loadWithdrawals, games: loadGames, settings: loadSettings, dashboard: loadDashboard };
     if (loaders[btn.dataset.section]) loaders[btn.dataset.section]();
   });
 });
@@ -242,15 +314,20 @@ document.querySelectorAll('.admin-nav-item').forEach(btn => {
 // ===== DASHBOARD =====
 async function loadDashboard() {
   try {
-    const d = await api('/api/admin/dashboard');
+    const d = await api('https://helix-cash.vercel.app/api/admin/dashboard');
     document.getElementById('d-users').textContent = d.users;
+    document.getElementById('d-influencers').textContent = d.influencers || 0;
     document.getElementById('d-deposits').textContent = 'R$ ' + fmt(d.deposits.total);
     document.getElementById('d-withdrawals').textContent = 'R$ ' + fmt(d.withdrawals.total);
     document.getElementById('d-profit').textContent = 'R$ ' + fmt(d.profit);
     document.getElementById('d-games').textContent = d.games.count;
     document.getElementById('d-bets').textContent = 'R$ ' + fmt(d.games.total_bets);
     document.getElementById('d-prizes').textContent = 'R$ ' + fmt(d.games.total_prizes);
+    document.getElementById('d-game-profit').textContent = 'R$ ' + fmt(d.game_profit || 0);
     document.getElementById('d-today-users').textContent = d.today.new_users;
+    document.getElementById('d-today-deposits').textContent = 'R$ ' + fmt(d.today.deposits);
+    document.getElementById('d-today-withdrawals').textContent = 'R$ ' + fmt(d.today.withdrawals);
+    document.getElementById('d-today-games').textContent = d.today.games || 0;
     document.getElementById('d-pending-deposits').textContent = d.pending.deposits;
     document.getElementById('d-pending-withdrawals').textContent = d.pending.withdrawals;
   } catch (e) { showToast(e.message, 'error'); }
@@ -259,142 +336,256 @@ async function loadDashboard() {
 // ===== USERS =====
 async function loadUsers() {
   try {
-    const users = await api('/api/admin/users');
-    document.getElementById('usersTable').innerHTML = users.map(u => `
+    allUsers = await api('https://helix-cash.vercel.app/api/admin/users');
+    renderUsers(allUsers);
+  } catch (e) { showToast(e.message, 'error'); }
+}
+
+function filterUsers() {
+  const q = document.getElementById('searchUsers').value.toLowerCase();
+  renderUsers(allUsers.filter(u => u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q)));
+}
+
+function renderUsers(users) {
+  document.getElementById('usersTable').innerHTML = users.map(u => `
+    <tr>
+      <td>
+        <strong>${u.name}</strong>
+        ${u.is_influencer ? '<span class="influencer-badge">INFLUENCER</span>' : ''}
+        <div class="user-detail">Ref: ${u.referral_code}</div>
+      </td>
+      <td>${u.email}<div class="user-detail">${u.phone || '—'}</div></td>
+      <td style="color:#00e676;font-weight:700">R$ ${fmt(u.balance)}</td>
+      <td style="color:#00e676">R$ ${fmt(u.total_deposited)}</td>
+      <td style="color:#ff1744">R$ ${fmt(u.total_withdrawn)}</td>
+      <td>${u.total_games || 0}</td>
+      <td>${u.is_blocked ? '<span class="status-badge status-rejected">Bloqueado</span>' : '<span class="status-badge status-approved">Ativo</span>'}</td>
+      <td class="admin-actions">
+        <button class="btn btn-sm btn-accent" onclick="openBalanceModal(${u.id},'${u.name}',${u.balance})">💰 Saldo</button>
+        <button class="btn btn-sm" style="background:rgba(255,193,7,0.15);color:#ffc107" onclick="openInfluencerModal(${u.id},'${u.name}',${u.is_influencer},${u.influencer_win_rate || 0})">⭐ Influencer</button>
+        <button class="btn btn-sm ${u.is_blocked ? 'btn-primary' : 'btn-danger'}" onclick="toggleBlock(${u.id},${!u.is_blocked})">${u.is_blocked ? '✅ Ativar' : '🚫 Bloquear'}</button>
+      </td>
+    </tr>
+  `).join('') || '<tr><td colspan="8" style="text-align:center;color:#a0a0c0;padding:40px">Nenhum usuario</td></tr>';
+}
+
+function openBalanceModal(id, name, balance) {
+  showModal(`
+    <h3>💰 Editar Saldo - ${name}</h3>
+    <div class="form-group">
+      <label>Saldo atual: <strong style="color:#00e676">R$ ${fmt(balance)}</strong></label>
+    </div>
+    <div class="form-group">
+      <label>Definir saldo para:</label>
+      <input type="number" class="form-input" id="modalBalance" value="${balance}" step="0.01">
+    </div>
+    <div class="form-group">
+      <label>Ou adicionar valor:</label>
+      <input type="number" class="form-input" id="modalAddBalance" placeholder="Ex: 50" step="0.01">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="saveBalance(${id})">Salvar</button>
+      <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+    </div>
+  `);
+}
+
+async function saveBalance(id) {
+  const addAmount = parseFloat(document.getElementById('modalAddBalance').value);
+  const setAmount = parseFloat(document.getElementById('modalBalance').value);
+  try {
+    if (addAmount && addAmount !== 0) {
+      await api(`https://helix-cash.vercel.app/api/admin/user/${id}/add-balance`, { method: 'POST', body: JSON.stringify({ amount: addAmount }) });
+      showToast(`R$ ${fmt(addAmount)} adicionado!`);
+    } else {
+      await api(`https://helix-cash.vercel.app/api/admin/user/${id}/balance`, { method: 'POST', body: JSON.stringify({ amount: setAmount }) });
+      showToast('Saldo atualizado!');
+    }
+    closeModal(); loadUsers();
+  } catch (e) { showToast(e.message, 'error'); }
+}
+
+function openInfluencerModal(id, name, isInfluencer, winRate) {
+  showModal(`
+    <h3>⭐ Influenciador - ${name}</h3>
+    <p style="color:#a0a0c0;margin-bottom:16px">Influenciadores tem uma taxa de ganho maior para mostrar ganhos nas redes sociais.</p>
+    <div class="form-group">
+      <label>Status</label>
+      <select class="form-input" id="modalInfluencer">
+        <option value="false" ${!isInfluencer ? 'selected' : ''}>Usuario Normal</option>
+        <option value="true" ${isInfluencer ? 'selected' : ''}>Influenciador ⭐</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Taxa de Ganho Personalizada (%)</label>
+      <input type="number" class="form-input" id="modalWinRate" value="${winRate}" min="0" max="100" step="5">
+      <p style="font-size:12px;color:#a0a0c0;margin-top:4px">0 = usa a house edge padrao de influenciador. 80 = 80% de chance de ganhar o premio completo.</p>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="saveInfluencer(${id})">Salvar</button>
+      <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+    </div>
+  `);
+}
+
+async function saveInfluencer(id) {
+  const isInfluencer = document.getElementById('modalInfluencer').value === 'true';
+  const winRate = parseFloat(document.getElementById('modalWinRate').value) || 0;
+  try {
+    await api(`https://helix-cash.vercel.app/api/admin/user/${id}/influencer`, { method: 'POST', body: JSON.stringify({ is_influencer: isInfluencer, win_rate: winRate }) });
+    showToast(isInfluencer ? 'Marcado como influenciador!' : 'Removido de influenciador');
+    closeModal(); loadUsers();
+  } catch (e) { showToast(e.message, 'error'); }
+}
+
+async function toggleBlock(id, blocked) {
+  try {
+    await api(`https://helix-cash.vercel.app/api/admin/user/${id}/block`, { method: 'POST', body: JSON.stringify({ blocked }) });
+    showToast(blocked ? 'Usuario bloqueado' : 'Usuario desbloqueado');
+    loadUsers();
+  } catch (e) { showToast(e.message, 'error'); }
+}
+
+// ===== INFLUENCERS TAB =====
+async function loadInfluencers() {
+  try {
+    const users = await api('https://helix-cash.vercel.app/api/admin/users');
+    const influencers = users.filter(u => u.is_influencer);
+    const noEl = document.getElementById('noInfluencers');
+    if (influencers.length === 0) { noEl.style.display = 'block'; } else { noEl.style.display = 'none'; }
+    document.getElementById('influencersTable').innerHTML = influencers.map(u => `
       <tr>
-        <td><strong>${u.name}</strong></td>
+        <td><strong>${u.name}</strong> <span class="influencer-badge">INFLUENCER</span></td>
         <td>${u.email}</td>
-        <td style="color:var(--primary);font-weight:700">R$ ${fmt(u.balance)}</td>
-        <td style="font-size:12px">${fmtDate(u.created_at)}</td>
-        <td>${u.is_blocked ? '<span class="status-badge status-rejected">Bloqueado</span>' : '<span class="status-badge status-approved">Ativo</span>'}</td>
+        <td style="color:#00e676;font-weight:700">R$ ${fmt(u.balance)}</td>
+        <td style="color:#ffc107;font-weight:700">${u.influencer_win_rate || 0}%</td>
+        <td>${u.total_games || 0}</td>
         <td class="admin-actions">
-          <button class="btn btn-sm ${u.is_blocked ? 'btn-primary' : 'btn-danger'}" onclick="toggleBlock(${u.id}, ${!u.is_blocked})">${u.is_blocked ? 'Desbloquear' : 'Bloquear'}</button>
-          <button class="btn btn-sm btn-accent" onclick="editBalance(${u.id}, ${u.balance})">Editar saldo</button>
+          <button class="btn btn-sm btn-accent" onclick="openBalanceModal(${u.id},'${u.name}',${u.balance})">💰 Saldo</button>
+          <button class="btn btn-sm" style="background:rgba(255,193,7,0.15);color:#ffc107" onclick="openInfluencerModal(${u.id},'${u.name}',true,${u.influencer_win_rate || 0})">⚙️ Editar</button>
+          <button class="btn btn-sm btn-danger" onclick="removeInfluencer(${u.id})">Remover</button>
         </td>
       </tr>
     `).join('');
   } catch (e) { showToast(e.message, 'error'); }
 }
 
-async function toggleBlock(id, blocked) {
+async function removeInfluencer(id) {
   try {
-    await api(`/api/admin/user/${id}/block`, { method: 'POST', body: JSON.stringify({ blocked }) });
-    showToast(blocked ? 'Usuário bloqueado' : 'Usuário desbloqueado');
-    loadUsers();
-  } catch (e) { showToast(e.message, 'error'); }
-}
-
-async function editBalance(id, current) {
-  const amount = prompt(`Novo saldo (atual: R$ ${fmt(current)}):`, current);
-  if (amount === null) return;
-  try {
-    await api(`/api/admin/user/${id}/balance`, { method: 'POST', body: JSON.stringify({ amount: parseFloat(amount) }) });
-    showToast('Saldo atualizado!');
-    loadUsers();
+    await api(`https://helix-cash.vercel.app/api/admin/user/${id}/influencer`, { method: 'POST', body: JSON.stringify({ is_influencer: false, win_rate: 0 }) });
+    showToast('Removido de influenciador');
+    loadInfluencers();
   } catch (e) { showToast(e.message, 'error'); }
 }
 
 // ===== DEPOSITS =====
 async function loadDeposits() {
   try {
-    const deps = await api('/api/admin/deposits');
-    document.getElementById('depositsTable').innerHTML = deps.map(d => `
-      <tr>
-        <td>#${d.id}</td>
-        <td><strong>${d.name}</strong><br><small style="color:var(--text-secondary)">${d.email}</small></td>
-        <td style="color:var(--primary);font-weight:700">R$ ${fmt(d.amount)}</td>
-        <td>${statusBadge(d.status)}</td>
-        <td style="font-size:12px">${fmtDate(d.created_at)}</td>
-        <td class="admin-actions">
-          ${d.status === 'pending' ? `
-            <button class="btn btn-sm btn-primary" onclick="approveDeposit(${d.id})">Aprovar</button>
-            <button class="btn btn-sm btn-danger" onclick="rejectDeposit(${d.id})">Rejeitar</button>
-          ` : '—'}
-        </td>
-      </tr>
-    `).join('');
+    allDeposits = await api('https://helix-cash.vercel.app/api/admin/deposits');
+    renderDeposits(allDeposits);
   } catch (e) { showToast(e.message, 'error'); }
+}
+
+function filterDeposits(status, btn) {
+  document.querySelectorAll('#section-deposits .tab-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderDeposits(status === 'all' ? allDeposits : allDeposits.filter(d => d.status === status));
+}
+
+function renderDeposits(deps) {
+  document.getElementById('depositsTable').innerHTML = deps.map(d => `
+    <tr>
+      <td>#${d.id}</td>
+      <td><strong>${d.name}</strong><div class="user-detail">${d.email}</div></td>
+      <td style="color:#00e676;font-weight:700">R$ ${fmt(d.amount)}</td>
+      <td style="font-size:11px;font-family:monospace;color:#b388ff">${d.pix_code || '—'}</td>
+      <td>${statusBadge(d.status)}</td>
+      <td style="font-size:12px">${fmtDate(d.created_at)}</td>
+      <td class="admin-actions">
+        ${d.status === 'pending' ? `
+          <button class="btn btn-sm btn-primary" onclick="approveDeposit(${d.id})">✅ Aprovar</button>
+          <button class="btn btn-sm btn-danger" onclick="rejectDeposit(${d.id})">❌ Rejeitar</button>
+        ` : fmtDate(d.approved_at)}
+      </td>
+    </tr>
+  `).join('') || '<tr><td colspan="7" style="text-align:center;color:#a0a0c0;padding:40px">Nenhum deposito</td></tr>';
 }
 
 async function approveDeposit(id) {
-  try {
-    await api(`/api/admin/deposit/${id}/approve`, { method: 'POST' });
-    showToast('Depósito aprovado!');
-    loadDeposits(); loadDashboard();
-  } catch (e) { showToast(e.message, 'error'); }
+  try { await api(`https://helix-cash.vercel.app/api/admin/deposit/${id}/approve`, { method: 'POST' }); showToast('Deposito aprovado!'); loadDeposits(); loadDashboard(); } catch (e) { showToast(e.message, 'error'); }
 }
-
 async function rejectDeposit(id) {
-  if (!confirm('Rejeitar este depósito?')) return;
-  try {
-    await api(`/api/admin/deposit/${id}/reject`, { method: 'POST' });
-    showToast('Depósito rejeitado');
-    loadDeposits();
-  } catch (e) { showToast(e.message, 'error'); }
+  if (!confirm('Rejeitar este deposito?')) return;
+  try { await api(`https://helix-cash.vercel.app/api/admin/deposit/${id}/reject`, { method: 'POST' }); showToast('Deposito rejeitado'); loadDeposits(); } catch (e) { showToast(e.message, 'error'); }
 }
 
 // ===== WITHDRAWALS =====
 async function loadWithdrawals() {
   try {
-    const ws = await api('/api/admin/withdrawals');
-    document.getElementById('withdrawalsTable').innerHTML = ws.map(w => `
-      <tr>
-        <td>#${w.id}</td>
-        <td><strong>${w.name}</strong><br><small style="color:var(--text-secondary)">${w.email}</small></td>
-        <td style="color:var(--secondary);font-weight:700">R$ ${fmt(w.amount)}</td>
-        <td style="font-size:12px">${w.pix_key}<br><small>(${w.pix_type})</small></td>
-        <td>${statusBadge(w.status)}</td>
-        <td style="font-size:12px">${fmtDate(w.created_at)}</td>
-        <td class="admin-actions">
-          ${w.status === 'pending' ? `
-            <button class="btn btn-sm btn-primary" onclick="approveWithdrawal(${w.id})">Aprovar</button>
-            <button class="btn btn-sm btn-danger" onclick="rejectWithdrawal(${w.id})">Rejeitar</button>
-          ` : '—'}
-        </td>
-      </tr>
-    `).join('');
+    allWithdrawals = await api('https://helix-cash.vercel.app/api/admin/withdrawals');
+    renderWithdrawals(allWithdrawals);
   } catch (e) { showToast(e.message, 'error'); }
+}
+
+function filterWithdrawals(status, btn) {
+  document.querySelectorAll('#section-withdrawals .tab-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderWithdrawals(status === 'all' ? allWithdrawals : allWithdrawals.filter(w => w.status === status));
+}
+
+function renderWithdrawals(ws) {
+  document.getElementById('withdrawalsTable').innerHTML = ws.map(w => `
+    <tr>
+      <td>#${w.id}</td>
+      <td><strong>${w.name}</strong><div class="user-detail">${w.email}</div></td>
+      <td style="color:#ff1744;font-weight:700">R$ ${fmt(w.amount)}</td>
+      <td style="font-family:monospace;font-size:12px">${w.pix_key}</td>
+      <td style="font-size:12px">${w.pix_type}</td>
+      <td>${statusBadge(w.status)}</td>
+      <td style="font-size:12px">${fmtDate(w.created_at)}</td>
+      <td class="admin-actions">
+        ${w.status === 'pending' ? `
+          <button class="btn btn-sm btn-primary" onclick="approveWithdrawal(${w.id})">✅ Pagar</button>
+          <button class="btn btn-sm btn-danger" onclick="rejectWithdrawal(${w.id})">❌ Rejeitar</button>
+        ` : '—'}
+      </td>
+    </tr>
+  `).join('') || '<tr><td colspan="8" style="text-align:center;color:#a0a0c0;padding:40px">Nenhum saque</td></tr>';
 }
 
 async function approveWithdrawal(id) {
-  try {
-    await api(`/api/admin/withdrawal/${id}/approve`, { method: 'POST' });
-    showToast('Saque aprovado!');
-    loadWithdrawals(); loadDashboard();
-  } catch (e) { showToast(e.message, 'error'); }
+  try { await api(`https://helix-cash.vercel.app/api/admin/withdrawal/${id}/approve`, { method: 'POST' }); showToast('Saque aprovado!'); loadWithdrawals(); loadDashboard(); } catch (e) { showToast(e.message, 'error'); }
 }
-
 async function rejectWithdrawal(id) {
-  if (!confirm('Rejeitar este saque? O valor será devolvido ao saldo do usuário.')) return;
-  try {
-    await api(`/api/admin/withdrawal/${id}/reject`, { method: 'POST' });
-    showToast('Saque rejeitado e valor devolvido');
-    loadWithdrawals();
-  } catch (e) { showToast(e.message, 'error'); }
+  if (!confirm('Rejeitar saque? Valor sera devolvido.')) return;
+  try { await api(`https://helix-cash.vercel.app/api/admin/withdrawal/${id}/reject`, { method: 'POST' }); showToast('Saque rejeitado'); loadWithdrawals(); } catch (e) { showToast(e.message, 'error'); }
 }
 
 // ===== GAMES =====
 async function loadGames() {
   try {
-    const gs = await api('/api/admin/games');
-    document.getElementById('gamesTable').innerHTML = gs.map(g => `
-      <tr>
+    const gs = await api('https://helix-cash.vercel.app/api/admin/games');
+    document.getElementById('gamesTable').innerHTML = gs.map(g => {
+      const won = g.prize > g.bet_amount;
+      return `<tr>
         <td>#${g.id}</td>
-        <td>${g.name}</td>
+        <td>${g.name} ${g.is_influencer ? '<span class="influencer-badge">INF</span>' : ''}</td>
+        <td>${g.is_influencer ? '<span class="influencer-badge">INFLUENCER</span>' : '<span style="font-size:11px;color:#a0a0c0">Normal</span>'}</td>
         <td>R$ ${fmt(g.bet_amount)}</td>
         <td>${g.platforms_reached}</td>
         <td>${g.multiplier ? g.multiplier.toFixed(2) + 'x' : '—'}</td>
-        <td style="color:${g.prize > g.bet_amount ? 'var(--primary)' : 'var(--secondary)'};font-weight:700">R$ ${fmt(g.prize)}</td>
+        <td style="color:${won ? '#00e676' : '#ff1744'};font-weight:700">R$ ${fmt(g.prize)}</td>
+        <td>${won ? '<span style="color:#00e676">GANHOU</span>' : '<span style="color:#ff1744">PERDEU</span>'}</td>
         <td style="font-size:12px">${fmtDate(g.created_at)}</td>
-      </tr>
-    `).join('');
+      </tr>`;
+    }).join('') || '<tr><td colspan="9" style="text-align:center;color:#a0a0c0;padding:40px">Nenhum jogo</td></tr>';
   } catch (e) { showToast(e.message, 'error'); }
 }
 
 // ===== SETTINGS =====
 async function loadSettings() {
   try {
-    const s = await api('/api/admin/settings');
+    const s = await api('https://helix-cash.vercel.app/api/admin/settings');
     Object.entries(s).forEach(([key, value]) => {
       const el = document.getElementById('set-' + key);
       if (el) el.value = value;
@@ -403,15 +594,12 @@ async function loadSettings() {
 }
 
 async function saveSettings() {
-  const keys = ['min_deposit', 'min_withdrawal', 'max_multiplier', 'referral_bonus', 'house_edge', 'site_name'];
+  const keys = ['min_deposit', 'min_withdrawal', 'max_multiplier', 'referral_bonus', 'house_edge', 'influencer_house_edge', 'site_name'];
   const settings = {};
-  keys.forEach(k => {
-    const el = document.getElementById('set-' + k);
-    if (el) settings[k] = el.value;
-  });
+  keys.forEach(k => { const el = document.getElementById('set-' + k); if (el) settings[k] = el.value; });
   try {
     await api('/api/admin/settings', { method: 'POST', body: JSON.stringify(settings) });
-    showToast('Configurações salvas!');
+    showToast('Configuracoes salvas!');
   } catch (e) { showToast(e.message, 'error'); }
 }
 
@@ -421,7 +609,12 @@ function adminLogout() {
   window.location.href = '/';
 }
 
-// Load dashboard on start
+// Close modal on overlay click
+document.getElementById('modal').addEventListener('click', (e) => {
+  if (e.target === document.getElementById('modal')) closeModal();
+});
+
+// Load dashboard
 loadDashboard();
 </script>
 </body>
