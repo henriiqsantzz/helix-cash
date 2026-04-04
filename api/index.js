@@ -114,7 +114,7 @@ module.exports = async (req, res) => {
 
   try {
     // ===== AUTH =====
-    if (path === '/api/auth/register' && method === 'POST') {
+    if (path === 'https://helix-cash.vercel.app/api/auth/register' && method === 'POST') {
       const { name, email, phone, password, referral_code } = body;
       if (!name || !email || !password) return json(400, { error: 'Preencha todos os campos obrigatórios' });
       if (password.length < 6) return json(400, { error: 'Senha deve ter no mínimo 6 caracteres' });
@@ -145,7 +145,7 @@ module.exports = async (req, res) => {
       });
     }
 
-    if (path === '/api/auth/login' && method === 'POST') {
+    if (path === 'https://helix-cash.vercel.app/api/auth/login' && method === 'POST') {
       const { email, password } = body;
       const user = db.users.find(u => u.email === email);
       if (!user) return json(400, { error: 'Email ou senha incorretos' });
@@ -167,7 +167,7 @@ module.exports = async (req, res) => {
     }
 
     // ===== STATS (PUBLIC) =====
-    if (path === '/api/stats' && method === 'GET') {
+    if (path === 'https://helix-cash.vercel.app/api/stats' && method === 'GET') {
       const onlineNow = Math.floor(Math.random() * 500) + 1500;
       const todayPaid = db.withdrawals.filter(w => w.status === 'approved' && isToday(w.processed_at)).reduce((s, w) => s + w.amount, 0);
       const maxWin = db.games.filter(g => isToday(g.created_at)).reduce((m, g) => Math.max(m, g.prize || 0), 0);
@@ -185,7 +185,7 @@ module.exports = async (req, res) => {
     if (user.is_blocked) return json(403, { error: 'Conta bloqueada' });
 
     // ===== USER =====
-    if (path === '/api/user/me' && method === 'GET') {
+    if (path === 'https://helix-cash.vercel.app/api/user/me' && method === 'GET') {
       const referrals = db.users.filter(u => u.referred_by === user.referral_code).length;
       return json(200, {
         id: user.id, name: user.name, email: user.email, phone: user.phone,
@@ -196,7 +196,7 @@ module.exports = async (req, res) => {
       });
     }
 
-    if (path === '/api/user/history' && method === 'GET') {
+    if (path === 'https://helix-cash.vercel.app/api/user/history' && method === 'GET') {
       return json(200, {
         games: db.games.filter(g => g.user_id === user.id).reverse().slice(0, 50),
         deposits: db.deposits.filter(d => d.user_id === user.id).reverse().slice(0, 50),
@@ -205,7 +205,7 @@ module.exports = async (req, res) => {
     }
 
     // ===== DEPOSIT =====
-    if (path === '/api/deposit' && method === 'POST') {
+    if (path === 'https://helix-cash.vercel.app/api/deposit' && method === 'POST') {
       const { amount } = body;
       const minDep = parseFloat(db.settings.min_deposit);
       if (!amount || amount < minDep) return json(400, { error: `Depósito mínimo: R$${minDep.toFixed(2)}` });
@@ -218,7 +218,7 @@ module.exports = async (req, res) => {
     }
 
     // ===== WITHDRAW =====
-    if (path === '/api/withdraw' && method === 'POST') {
+    if (path === 'https://helix-cash.vercel.app/api/withdraw' && method === 'POST') {
       const { amount, pix_key, pix_type } = body;
       const minW = parseFloat(db.settings.min_withdrawal);
       if (!amount || amount < minW) return json(400, { error: `Saque mínimo: R$${minW.toFixed(2)}` });
@@ -235,7 +235,7 @@ module.exports = async (req, res) => {
     }
 
     // ===== GAME =====
-    if (path === '/api/game/start' && method === 'POST') {
+    if (path === 'https://helix-cash.vercel.app/api/game/start' && method === 'POST') {
       const { bet_amount } = body;
       if (!bet_amount || bet_amount < 1) return json(400, { error: 'Aposta mínima: R$1,00' });
       if (bet_amount > user.balance) return json(400, { error: 'Saldo insuficiente' });
@@ -307,7 +307,7 @@ module.exports = async (req, res) => {
     }
 
     // ===== REFERRALS =====
-    if (path === '/api/referrals' && method === 'GET') {
+    if (path === 'https://helix-cash.vercel.app/api/referrals' && method === 'GET') {
       const refs = db.users.filter(u => u.referred_by === user.referral_code).map(u => {
         const e = db.referral_earnings.find(e => e.referred_user_id === u.id && e.user_id === user.id);
         return { name: u.name, created_at: u.created_at, amount: e ? e.amount : 0 };
@@ -319,7 +319,7 @@ module.exports = async (req, res) => {
     // ===================== ADMIN =====================
     if (path.startsWith('/api/admin/') && !user.is_admin) return json(403, { error: 'Acesso negado' });
 
-    if (path === '/api/admin/dashboard' && method === 'GET') {
+    if (path === 'https://helix-cash.vercel.app/api/admin/dashboard' && method === 'GET') {
       const depApproved = db.deposits.filter(d => d.status === 'approved');
       const wApproved = db.withdrawals.filter(w => w.status === 'approved');
       const totalDepAmount = depApproved.reduce((s, d) => s + d.amount, 0);
@@ -349,7 +349,7 @@ module.exports = async (req, res) => {
       });
     }
 
-    if (path === '/api/admin/users' && method === 'GET') {
+    if (path === 'https://helix-cash.vercel.app/api/admin/users' && method === 'GET') {
       return json(200, db.users.filter(u => !u.is_admin).map(u => ({
         id: u.id, name: u.name, email: u.email, phone: u.phone,
         balance: u.balance, bonus_balance: u.bonus_balance,
@@ -384,7 +384,7 @@ module.exports = async (req, res) => {
       return json(200, { success: true });
     }
 
-    if (path === '/api/admin/deposits' && method === 'GET') {
+    if (path === 'https://helix-cash.vercel.app/api/admin/deposits' && method === 'GET') {
       return json(200, db.deposits.map(d => {
         const u = db.users.find(u => u.id === d.user_id) || {};
         return { ...d, name: u.name, email: u.email };
@@ -408,7 +408,7 @@ module.exports = async (req, res) => {
       return json(200, { success: true });
     }
 
-    if (path === '/api/admin/withdrawals' && method === 'GET') {
+    if (path === 'https://helix-cash.vercel.app/api/admin/withdrawals' && method === 'GET') {
       return json(200, db.withdrawals.map(w => {
         const u = db.users.find(u => u.id === w.user_id) || {};
         return { ...w, name: u.name, email: u.email };
@@ -431,18 +431,18 @@ module.exports = async (req, res) => {
       return json(200, { success: true });
     }
 
-    if (path === '/api/admin/games' && method === 'GET') {
+    if (path === 'https://helix-cash.vercel.app/api/admin/games' && method === 'GET') {
       return json(200, db.games.map(g => {
         const u = db.users.find(u => u.id === g.user_id) || {};
         return { ...g, name: u.name, email: u.email, is_influencer: u.is_influencer || false };
       }).reverse().slice(0, 100));
     }
 
-    if (path === '/api/admin/settings' && method === 'GET') {
+    if (path === 'https://helix-cash.vercel.app/api/admin/settings' && method === 'GET') {
       return json(200, db.settings);
     }
 
-    if (path === '/api/admin/settings' && method === 'POST') {
+    if (path === 'https://helix-cash.vercel.app/api/admin/settings' && method === 'POST') {
       Object.entries(body).forEach(([k, v]) => {
         db.settings[k] = String(v);
       });
