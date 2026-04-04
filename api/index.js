@@ -1,50 +1,83 @@
 const crypto = require('crypto');
 
-// ===================== DATABASE WITH PERSISTENCE =====================
-// Uses a JSON file stored in /tmp on Vercel (persists during warm invocations)
-// For FULL persistence, connect to Supabase/MongoDB/PlanetScale
-const fs = require('fs');
-const DB_PATH = '/tmp/helix-db.json';
-const JWT_SECRET = process.env.JWT_SECRET || 'helix-cash-secret-key-2024';
+// ===================== CONFIG =====================
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_KEY = process.env.SUPABASE_KEY; // Use a service_role key
+const JWT_SECRET = process.env.JWT_SECRET || 'helix-cash-secret-2024';
 
-function loadDB() {
-  try {
-    if (fs.existsSync(DB_PATH)) {
-      return JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
+// ===================== SUPABASE REST CLIENT =====================
+async function supabaseRequest(path, method, body, extraHeaders) {
+  const url = SUPABASE_URL + '/rest/v1/' + path;
+  const opts = {
+    method: method || 'GET',
+    headers: {
+      'apikey': SUPABASE_KEY,
+      'Authorization': 'Bearer ' + SUPABASE_KEY,
+      'Content-Type': 'application/json',
+      ...(extraHeaders || {})
     }
-  } catch (e) { /* fresh */ }
-  return getDefaultDB();
-}
-
-function getDefaultDB() {
-  const salt = crypto.randomBytes(16).toString('hex');
-  const hash = crypto.pbkdf2Sync('admin123', salt, 1000, 64, 'sha512').toString('hex');
-  return {
-    users: [{
-      id: 1, name: 'Admin', email: 'admin@helixcash.com', phone: null,
-      password: salt + ':' + hash, balance: 0, bonus_balance: 0,
-      referral_code: 'ADMIN001', referred_by: null,
-      is_admin: true, is_blocked: false, is_influencer: false,
-      influencer_win_rate: 0, total_deposited: 0, total_withdrawn: 0, total_games: 0,
-      created_at: new Date().toISOString(), last_login: null
-    }],
-    deposits: [], withdrawals: [], games: [], referral_earnings: [],
-    settings: {
-      min_deposit: '10', min_withdrawal: '20', max_multiplier: '7',
-      referral_bonus: '5', house_edge: '15', influencer_house_edge: '5',
-      site_name: 'Helix Cash'
-    },
-    next_id: { users: 2, deposits: 1, withdrawals: 1, games: 1, referral_earnings: 1 }
   };
+  if (body && (method === 'POST' || method === 'PATCH' || method === 'PUT')) {
+    opts.body = JSON.stringify(body);
+  }
+  const res = await fetch(url, opts);
+  const text = await res.text();
+  if (!res.ok) throw new Error('Supabase ' + res.status + ': ' + text);
+  return text ? JSON.parse(text) : null;
 }
 
-let db = loadDB();
+// DB Helper
+const db = {
+  async select(table, filters, order) {
+    let q = 'select=*';
+    if (filters) q += '&' + filters;
+    q += '&order=' + (order || 'id.desc');
+    return await supabaseRequest(table + '?' + q);
+  },
 
-function saveDB() {
-  try { fs.writeFileSync(DB_PATH, JSON.stringify(db)); } catch (e) { /* silent */ }
-}
+  async selectOne(table, filters) {
+    let q = 'select=*&' + filters + '&limit=1';
+    const rows = await supabaseRequest(table + '?' + q);
+    return (rows && rows.length > 0) ? rows[0] : null;
+  },
 
-// ===================== HELPERS =====================
+  async selectJoin(table, joinTable, joinFields, filters, order) {
+    let q = 'select=*,' + joinTable + '(' + joinFields + ')';
+    if (filters) q += '&' + filters;
+    q += '&order=' + (order || 'created_at.desc');
+    return await supabaseRequest(table + '?' + q);
+  },
+
+  async insert(table, data) {
+    return await supabaseRequest(table, 'POST', data, {
+      'Prefer': 'return=representation'
+    });
+  },
+
+  async update(table, filters, data) {
+    return await supabaseRequest(table + '?' + filters, 'PATCH', data, {
+      'Prefer': 'return=representation'
+    });
+  },
+
+  async getSettings() {
+    const rows = await supabaseRequest('settings?select=*');
+    const obj = {};
+    if (rows) rows.forEach(function(r) { obj[r.key] = r.value; });
+    return obj;
+  },
+
+  async saveSettings(settings) {
+    const data = Object.entries(settings).map(function(e) {
+      return { key: e[0], value: String(e[1]) };
+    });
+    return await supabaseRequest('settings', 'POST', data, {
+      'Prefer': 'return=representation,resolution=merge-duplicates'
+    });
+  }
+};
+
+// ===================== AUTH HELPERS =====================
 function hashPassword(password) {
   const salt = crypto.randomBytes(16).toString('hex');
   const hash = crypto.pbkdf2Sync(password, salt, 1000, 64, 'sha512').toString('hex');
@@ -52,407 +85,374 @@ function hashPassword(password) {
 }
 
 function verifyPassword(password, stored) {
-  if (!stored || !stored.includes(':')) return false;
-  const [salt, hash] = stored.split(':');
+  const parts = stored.split(':');
+  const salt = parts[0];
+  const hash = parts[1];
   const test = crypto.pbkdf2Sync(password, salt, 1000, 64, 'sha512').toString('hex');
   return hash === test;
 }
 
-function createToken(payload) {
+function createToken(userId) {
   const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
-  const body = Buffer.from(JSON.stringify({ ...payload, exp: Date.now() + 30 * 24 * 60 * 60 * 1000 })).toString('base64url');
-  const signature = crypto.createHmac('sha256', JWT_SECRET).update(header + '.' + body).digest('base64url');
-  return header + '.' + body + '.' + signature;
+  const payload = Buffer.from(JSON.stringify({
+    id: userId,
+    exp: Date.now() + 7 * 24 * 60 * 60 * 1000
+  })).toString('base64url');
+  const sig = crypto.createHmac('sha256', JWT_SECRET)
+    .update(header + '.' + payload).digest('base64url');
+  return header + '.' + payload + '.' + sig;
 }
 
 function verifyToken(token) {
   try {
-    const [header, body, signature] = token.split('.');
-    const expected = crypto.createHmac('sha256', JWT_SECRET).update(header + '.' + body).digest('base64url');
-    if (signature !== expected) return null;
-    const payload = JSON.parse(Buffer.from(body, 'base64url').toString());
-    if (payload.exp && payload.exp < Date.now()) return null;
-    return payload;
+    const parts = token.split('.');
+    const sig = crypto.createHmac('sha256', JWT_SECRET)
+      .update(parts[0] + '.' + parts[1]).digest('base64url');
+    if (parts[2] !== sig) return null;
+    const data = JSON.parse(Buffer.from(parts[1], 'base64url').toString());
+    if (data.exp < Date.now()) return null;
+    return data;
   } catch (e) { return null; }
 }
 
-function getUser(req) {
-  const auth = req.headers.authorization;
-  if (!auth || !auth.startsWith('Bearer ')) return null;
-  const payload = verifyToken(auth.split(' ')[1]);
-  if (!payload) return null;
-  return db.users.find(u => u.id === payload.id);
+// ===================== BODY PARSER =====================
+function parseBody(req) {
+  if (req.body) return Promise.resolve(req.body);
+  return new Promise(function(resolve) {
+    let data = '';
+    req.on('data', function(chunk) { data += chunk; });
+    req.on('end', function() {
+      try { resolve(JSON.parse(data)); } catch (e) { resolve({}); }
+    });
+  });
 }
 
-function genRefCode() { return 'HC' + crypto.randomBytes(3).toString('hex').toUpperCase(); }
-function genPixCode() { return crypto.randomBytes(16).toString('hex'); }
-function isToday(d) { if (!d) return false; return new Date(d).toDateString() === new Date().toDateString(); }
-
-function insert(table, record) {
-  record.id = db.next_id[table]++;
-  record.created_at = record.created_at || new Date().toISOString();
-  db[table].push(record);
-  saveDB();
-  return record;
+// ===================== RESPONSE HELPER =====================
+function respond(res, code, data) {
+  if (typeof res.status === 'function') {
+    return res.status(code).json(data);
+  }
+  res.statusCode = code;
+  res.setHeader('Content-Type', 'application/json');
+  res.end(JSON.stringify(data));
 }
 
-// ===================== HANDLER =====================
-module.exports = async (req, res) => {
-  // Reload DB on each request to get latest data
-  db = loadDB();
+// ===================== AUTH MIDDLEWARE =====================
+async function authenticate(req) {
+  const auth = (req.headers && (req.headers.authorization || req.headers.Authorization)) || '';
+  const token = auth.replace('Bearer ', '');
+  if (!token) return null;
+  const decoded = verifyToken(token);
+  if (!decoded) return null;
+  return await db.selectOne('users', 'id=eq.' + decoded.id);
+}
 
+// ===================== INIT (create admin if needed) =====================
+let _initDone = false;
+async function ensureInit() {
+  if (_initDone) return;
+  try {
+    const admins = await db.select('users', 'is_admin=eq.true', 'id.asc');
+    if (!admins || admins.length === 0) {
+      await db.insert('users', {
+        name: 'Admin',
+        email: 'admin@helixcash.com',
+        password: hashPassword('admin123'),
+        referral_code: 'ADMIN001',
+        is_admin: true,
+        is_blocked: false,
+        is_influencer: false,
+        balance: 0,
+        bonus_balance: 0,
+        influencer_win_rate: 0,
+        total_deposited: 0,
+        total_withdrawn: 0,
+        total_games: 0
+      });
+    }
+    _initDone = true;
+  } catch (e) {
+    console.error('Init error:', e.message);
+  }
+}
+
+// ===================== NUM HELPER =====================
+function num(v) { return parseFloat(v) || 0; }
+
+// ===================== MAIN HANDLER =====================
+module.exports = async function handler(req, res) {
+  // CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  if (req.method === 'OPTIONS') return res.status(200).end();
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
+  if (req.method === 'OPTIONS') return respond(res, 200, {});
 
-  const path = req.url.replace(/\?.*$/, '');
+  // Check config
+  if (!SUPABASE_URL || !SUPABASE_KEY) {
+    return respond(res, 500, { error: 'Banco de dados nao configurado. Configure SUPABASE_URL e SUPABASE_KEY.' });
+  }
+
+  await ensureInit();
+
+  const url = req.url.split('?')[0];
   const method = req.method;
-  const body = req.body || {};
-
-  function json(code, data) { return res.status(code).json(data); }
 
   try {
-    // ===== AUTH =====
-    if (path === 'https://helix-cash.vercel.app/api/auth/register' && method === 'POST') {
-      const { name, email, phone, password, referral_code } = body;
-      if (!name || !email || !password) return json(400, { error: 'Preencha todos os campos obrigatórios' });
-      if (password.length < 6) return json(400, { error: 'Senha deve ter no mínimo 6 caracteres' });
-      if (db.users.find(u => u.email === email)) return json(400, { error: 'Email já cadastrado' });
+    // ==================== AUTH ROUTES ====================
 
-      let referredBy = null;
-      if (referral_code) {
-        const referrer = db.users.find(u => u.referral_code === referral_code);
-        if (referrer) referredBy = referral_code;
+    // REGISTER
+    if (url === '/api/auth/register' && method === 'POST') {
+      const body = await parseBody(req);
+      const name = (body.name || '').trim();
+      const email = (body.email || '').trim().toLowerCase();
+      const phone = (body.phone || '').trim();
+      const password = body.password || '';
+      const referral = (body.referral_code || '').trim();
+
+      if (!name || !email || !password) {
+        return respond(res, 400, { error: 'Nome, email e senha sao obrigatorios' });
+      }
+      if (password.length < 4) {
+        return respond(res, 400, { error: 'Senha deve ter pelo menos 4 caracteres' });
       }
 
-      const user = insert('users', {
-        name, email, phone: phone || null,
+      const existing = await db.selectOne('users', 'email=eq.' + encodeURIComponent(email));
+      if (existing) return respond(res, 400, { error: 'Email ja cadastrado' });
+
+      const code = 'HC' + crypto.randomBytes(3).toString('hex').toUpperCase();
+      const userData = {
+        name: name, email: email, phone: phone || null,
         password: hashPassword(password),
         balance: 0, bonus_balance: 0,
-        referral_code: genRefCode(),
-        referred_by: referredBy,
-        is_admin: false, is_blocked: false,
-        is_influencer: false, influencer_win_rate: 0,
-        total_deposited: 0, total_withdrawn: 0, total_games: 0,
-        last_login: new Date().toISOString()
-      });
+        referral_code: code, referred_by: referral || null,
+        is_admin: false, is_blocked: false, is_influencer: false,
+        influencer_win_rate: 0, total_deposited: 0, total_withdrawn: 0, total_games: 0
+      };
 
-      const token = createToken({ id: user.id });
-      return json(200, {
-        token,
-        user: { id: user.id, name: user.name, email: user.email, balance: 0, bonus_balance: 0, referral_code: user.referral_code }
+      const inserted = await db.insert('users', userData);
+      const newUser = inserted[0];
+
+      if (referral) {
+        const referrer = await db.selectOne('users', 'referral_code=eq.' + encodeURIComponent(referral));
+        if (referrer) {
+          const settings = await db.getSettings();
+          const bonus = num(settings.referral_bonus) || 5;
+          await db.update('users', 'id=eq.' + referrer.id, {
+            bonus_balance: num(referrer.bonus_balance) + bonus
+          });
+          await db.insert('referral_earnings', {
+            user_id: referrer.id, from_user_id: newUser.id, amount: bonus
+          });
+        }
+      }
+
+      const token = createToken(newUser.id);
+      return respond(res, 200, {
+        token: token,
+        user: {
+          id: newUser.id, name: newUser.name, email: newUser.email,
+          balance: 0, bonus_balance: 0, referral_code: code, is_admin: false
+        }
       });
     }
 
-    if (path === 'https://helix-cash.vercel.app/api/auth/login' && method === 'POST') {
-      const { email, password } = body;
-      const user = db.users.find(u => u.email === email);
-      if (!user) return json(400, { error: 'Email ou senha incorretos' });
-      if (user.is_blocked) return json(403, { error: 'Conta bloqueada' });
-      if (!verifyPassword(password, user.password)) return json(400, { error: 'Email ou senha incorretos' });
+    // LOGIN
+    if (url === '/api/auth/login' && method === 'POST') {
+      const body = await parseBody(req);
+      const email = (body.email || '').trim().toLowerCase();
+      const password = body.password || '';
 
-      user.last_login = new Date().toISOString();
-      saveDB();
-      const token = createToken({ id: user.id });
-      return json(200, {
-        token,
+      if (!email || !password) {
+        return respond(res, 400, { error: 'Email e senha sao obrigatorios' });
+      }
+
+      const user = await db.selectOne('users', 'email=eq.' + encodeURIComponent(email));
+      if (!user) return respond(res, 401, { error: 'Email ou senha incorretos' });
+      if (!verifyPassword(password, user.password)) {
+        return respond(res, 401, { error: 'Email ou senha incorretos' });
+      }
+      if (user.is_blocked) return respond(res, 403, { error: 'Conta bloqueada' });
+
+      await db.update('users', 'id=eq.' + user.id, { last_login: new Date().toISOString() });
+
+      const token = createToken(user.id);
+      return respond(res, 200, {
+        token: token,
         user: {
           id: user.id, name: user.name, email: user.email,
-          balance: user.balance, bonus_balance: user.bonus_balance,
-          referral_code: user.referral_code, is_admin: user.is_admin,
-          is_influencer: user.is_influencer
+          balance: num(user.balance), bonus_balance: num(user.bonus_balance),
+          referral_code: user.referral_code, is_admin: user.is_admin
         }
       });
     }
 
-    // ===== STATS (PUBLIC) =====
-    if (path === 'https://helix-cash.vercel.app/api/stats' && method === 'GET') {
-      const onlineNow = Math.floor(Math.random() * 500) + 1500;
-      const todayPaid = db.withdrawals.filter(w => w.status === 'approved' && isToday(w.processed_at)).reduce((s, w) => s + w.amount, 0);
-      const maxWin = db.games.filter(g => isToday(g.created_at)).reduce((m, g) => Math.max(m, g.prize || 0), 0);
-      return json(200, {
-        online: onlineNow,
-        total_users: db.users.filter(u => !u.is_admin).length + 2847,
-        today_paid: todayPaid + 8420,
-        max_win_today: Math.max(maxWin, 700)
+    // ME
+    if (url === '/api/auth/me' && method === 'GET') {
+      const user = await authenticate(req);
+      if (!user) return respond(res, 401, { error: 'Nao autorizado' });
+      return respond(res, 200, {
+        id: user.id, name: user.name, email: user.email,
+        balance: num(user.balance), bonus_balance: num(user.bonus_balance),
+        referral_code: user.referral_code, is_admin: user.is_admin
       });
     }
 
-    // ===== AUTH REQUIRED =====
-    const user = getUser(req);
-    if (!user) return json(401, { error: 'Faça login para continuar' });
-    if (user.is_blocked) return json(403, { error: 'Conta bloqueada' });
+    // ==================== USER ROUTES ====================
 
-    // ===== USER =====
-    if (path === 'https://helix-cash.vercel.app/api/user/me' && method === 'GET') {
-      const referrals = db.users.filter(u => u.referred_by === user.referral_code).length;
-      return json(200, {
-        id: user.id, name: user.name, email: user.email, phone: user.phone,
-        balance: user.balance, bonus_balance: user.bonus_balance,
-        referral_code: user.referral_code, is_admin: user.is_admin,
-        is_influencer: user.is_influencer || false,
-        created_at: user.created_at, referrals
-      });
+    // BALANCE
+    if (url === '/api/user/balance' && method === 'GET') {
+      const user = await authenticate(req);
+      if (!user) return respond(res, 401, { error: 'Nao autorizado' });
+      return respond(res, 200, { balance: num(user.balance), bonus_balance: num(user.bonus_balance) });
     }
 
-    if (path === 'https://helix-cash.vercel.app/api/user/history' && method === 'GET') {
-      return json(200, {
-        games: db.games.filter(g => g.user_id === user.id).reverse().slice(0, 50),
-        deposits: db.deposits.filter(d => d.user_id === user.id).reverse().slice(0, 50),
-        withdrawals: db.withdrawals.filter(w => w.user_id === user.id).reverse().slice(0, 50)
-      });
-    }
+    // DEPOSIT
+    if (url === '/api/deposit' && method === 'POST') {
+      const user = await authenticate(req);
+      if (!user) return respond(res, 401, { error: 'Nao autorizado' });
+      const body = await parseBody(req);
+      const amount = num(body.amount);
+      const pix_key = (body.pix_key || '').trim();
 
-    // ===== DEPOSIT =====
-    if (path === 'https://helix-cash.vercel.app/api/deposit' && method === 'POST') {
-      const { amount } = body;
-      const minDep = parseFloat(db.settings.min_deposit);
-      if (!amount || amount < minDep) return json(400, { error: `Depósito mínimo: R$${minDep.toFixed(2)}` });
-
-      const deposit = insert('deposits', {
-        user_id: user.id, amount, method: 'PIX',
-        status: 'pending', pix_code: genPixCode(), approved_at: null
-      });
-      return json(200, { id: deposit.id, amount, pix_code: deposit.pix_code, status: 'pending', message: 'Depósito criado! Aguardando confirmação.' });
-    }
-
-    // ===== WITHDRAW =====
-    if (path === 'https://helix-cash.vercel.app/api/withdraw' && method === 'POST') {
-      const { amount, pix_key, pix_type } = body;
-      const minW = parseFloat(db.settings.min_withdrawal);
-      if (!amount || amount < minW) return json(400, { error: `Saque mínimo: R$${minW.toFixed(2)}` });
-      if (amount > user.balance) return json(400, { error: 'Saldo insuficiente' });
-      if (!pix_key) return json(400, { error: 'Informe a chave PIX' });
-
-      user.balance -= amount;
-      user.total_withdrawn = (user.total_withdrawn || 0) + amount;
-      const w = insert('withdrawals', {
-        user_id: user.id, amount, pix_key, pix_type: pix_type || 'cpf',
-        status: 'pending', processed_at: null
-      });
-      return json(200, { id: w.id, amount, status: 'pending', message: 'Saque solicitado!' });
-    }
-
-    // ===== GAME =====
-    if (path === 'https://helix-cash.vercel.app/api/game/start' && method === 'POST') {
-      const { bet_amount } = body;
-      if (!bet_amount || bet_amount < 1) return json(400, { error: 'Aposta mínima: R$1,00' });
-      if (bet_amount > user.balance) return json(400, { error: 'Saldo insuficiente' });
-      if (db.games.find(g => g.user_id === user.id && g.status === 'playing')) return json(400, { error: 'Você já tem uma partida ativa' });
-
-      user.balance -= bet_amount;
-      user.total_games = (user.total_games || 0) + 1;
-      saveDB();
-      const game = insert('games', {
-        user_id: user.id, bet_amount, platforms_reached: 0,
-        multiplier: 1, prize: 0, status: 'playing', finished_at: null
-      });
-      return json(200, { game_id: game.id, bet_amount, new_balance: user.balance });
-    }
-
-    if (path === '/api/game/finish' && method === 'POST') {
-      const { game_id, platforms_reached } = body;
-      const game = db.games.find(g => g.id === game_id && g.user_id === user.id && g.status === 'playing');
-      if (!game) return json(400, { error: 'Partida não encontrada' });
-
-      // Use different house edge for influencers
-      const isInfluencer = user.is_influencer || false;
-      const normalHouseEdge = parseFloat(db.settings.house_edge) / 100;
-      const influencerHouseEdge = parseFloat(db.settings.influencer_house_edge || '5') / 100;
-      const houseEdge = isInfluencer ? influencerHouseEdge : normalHouseEdge;
-
-      // Influencer custom win rate override
-      const influencerWinRate = user.influencer_win_rate || 0;
-
-      const maxMult = parseFloat(db.settings.max_multiplier);
-      let mult = Math.min(1 + (platforms_reached * 0.5), maxMult);
-
-      // Apply house edge (chance of reducing prize)
-      if (isInfluencer && influencerWinRate > 0) {
-        // Influencer has a custom guaranteed win rate
-        if (Math.random() * 100 > influencerWinRate) {
-          mult = Math.max(0, mult * 0.3);
-        }
-        // else: influencer keeps full multiplier
-      } else {
-        if (Math.random() < houseEdge) {
-          mult = Math.max(0, mult * 0.3);
-        }
+      const settings = await db.getSettings();
+      if (!amount || amount < num(settings.min_deposit)) {
+        return respond(res, 400, { error: 'Deposito minimo: R$' + settings.min_deposit });
       }
 
-      const prize = Math.round(game.bet_amount * mult * 100) / 100;
-      game.platforms_reached = platforms_reached;
-      game.multiplier = Math.round(mult * 100) / 100;
-      game.prize = prize;
-      game.status = 'finished';
-      game.finished_at = new Date().toISOString();
-      if (prize > 0) user.balance += prize;
-      saveDB();
+      const dep = await db.insert('deposits', {
+        user_id: user.id, amount: amount, method: 'pix', status: 'pending', pix_key: pix_key
+      });
+      return respond(res, 200, { success: true, deposit: dep[0] });
+    }
 
-      // Referral bonus on first game
-      const gameCount = db.games.filter(g => g.user_id === user.id && g.status === 'finished').length;
-      if (gameCount === 1 && user.referred_by) {
-        const referrer = db.users.find(u => u.referral_code === user.referred_by);
-        if (referrer) {
-          const bonus = Math.round(game.bet_amount * (parseFloat(db.settings.referral_bonus) / 100) * 100) / 100;
-          if (bonus > 0) {
-            referrer.bonus_balance += bonus;
-            insert('referral_earnings', { user_id: referrer.id, referred_user_id: user.id, amount: bonus });
-          }
-        }
+    // WITHDRAW
+    if (url === '/api/withdraw' && method === 'POST') {
+      const user = await authenticate(req);
+      if (!user) return respond(res, 401, { error: 'Nao autorizado' });
+      const body = await parseBody(req);
+      const amount = num(body.amount);
+      const pix_key = (body.pix_key || '').trim();
+
+      if (!pix_key) return respond(res, 400, { error: 'Chave PIX obrigatoria' });
+
+      const settings = await db.getSettings();
+      if (!amount || amount < num(settings.min_withdrawal)) {
+        return respond(res, 400, { error: 'Saque minimo: R$' + settings.min_withdrawal });
+      }
+      if (num(user.balance) < amount) {
+        return respond(res, 400, { error: 'Saldo insuficiente' });
       }
 
-      return json(200, { game_id, platforms_reached, multiplier: game.multiplier, prize, bet_amount: game.bet_amount, new_balance: user.balance });
-    }
+      await db.update('users', 'id=eq.' + user.id, { balance: num(user.balance) - amount });
 
-    // ===== REFERRALS =====
-    if (path === 'https://helix-cash.vercel.app/api/referrals' && method === 'GET') {
-      const refs = db.users.filter(u => u.referred_by === user.referral_code).map(u => {
-        const e = db.referral_earnings.find(e => e.referred_user_id === u.id && e.user_id === user.id);
-        return { name: u.name, created_at: u.created_at, amount: e ? e.amount : 0 };
+      const wd = await db.insert('withdrawals', {
+        user_id: user.id, amount: amount, pix_key: pix_key, status: 'pending'
       });
-      const total = db.referral_earnings.filter(e => e.user_id === user.id).reduce((s, e) => s + e.amount, 0);
-      return json(200, { referrals: refs, total_earned: total });
+      return respond(res, 200, { success: true, withdrawal: wd[0] });
     }
 
-    // ===================== ADMIN =====================
-    if (path.startsWith('/api/admin/') && !user.is_admin) return json(403, { error: 'Acesso negado' });
-
-    if (path === 'https://helix-cash.vercel.app/api/admin/dashboard' && method === 'GET') {
-      const depApproved = db.deposits.filter(d => d.status === 'approved');
-      const wApproved = db.withdrawals.filter(w => w.status === 'approved');
-      const totalDepAmount = depApproved.reduce((s, d) => s + d.amount, 0);
-      const totalWAmount = wApproved.reduce((s, w) => s + w.amount, 0);
-      const totalBets = db.games.reduce((s, g) => s + g.bet_amount, 0);
-      const totalPrizes = db.games.reduce((s, g) => s + (g.prize || 0), 0);
-      const influencerCount = db.users.filter(u => u.is_influencer && !u.is_admin).length;
-
-      return json(200, {
-        users: db.users.filter(u => !u.is_admin).length,
-        influencers: influencerCount,
-        deposits: { total: totalDepAmount, count: depApproved.length },
-        withdrawals: { total: totalWAmount, count: wApproved.length },
-        games: { count: db.games.length, total_bets: totalBets, total_prizes: totalPrizes },
-        profit: totalDepAmount - totalWAmount,
-        game_profit: totalBets - totalPrizes,
-        pending: {
-          deposits: db.deposits.filter(d => d.status === 'pending').length,
-          withdrawals: db.withdrawals.filter(w => w.status === 'pending').length
-        },
-        today: {
-          deposits: db.deposits.filter(d => d.status === 'approved' && isToday(d.approved_at)).reduce((s, d) => s + d.amount, 0),
-          withdrawals: db.withdrawals.filter(w => w.status === 'approved' && isToday(w.processed_at)).reduce((s, w) => s + w.amount, 0),
-          new_users: db.users.filter(u => !u.is_admin && isToday(u.created_at)).length,
-          games: db.games.filter(g => isToday(g.created_at)).length
-        }
-      });
+    // USER DEPOSITS LIST
+    if (url === '/api/deposits' && method === 'GET') {
+      const user = await authenticate(req);
+      if (!user) return respond(res, 401, { error: 'Nao autorizado' });
+      const deposits = await db.select('deposits', 'user_id=eq.' + user.id, 'created_at.desc');
+      return respond(res, 200, deposits.map(function(d) {
+        return { id: d.id, amount: num(d.amount), method: d.method, status: d.status, pix_key: d.pix_key, created_at: d.created_at };
+      }));
     }
 
-    if (path === 'https://helix-cash.vercel.app/api/admin/users' && method === 'GET') {
-      return json(200, db.users.filter(u => !u.is_admin).map(u => ({
-        id: u.id, name: u.name, email: u.email, phone: u.phone,
-        balance: u.balance, bonus_balance: u.bonus_balance,
-        referral_code: u.referral_code, referred_by: u.referred_by,
-        is_blocked: u.is_blocked, is_influencer: u.is_influencer || false,
-        influencer_win_rate: u.influencer_win_rate || 0,
-        total_deposited: u.total_deposited || 0,
-        total_withdrawn: u.total_withdrawn || 0,
-        total_games: u.total_games || 0,
-        created_at: u.created_at, last_login: u.last_login
-      })).reverse());
+    // USER WITHDRAWALS LIST
+    if (url === '/api/withdrawals' && method === 'GET') {
+      const user = await authenticate(req);
+      if (!user) return respond(res, 401, { error: 'Nao autorizado' });
+      const wds = await db.select('withdrawals', 'user_id=eq.' + user.id, 'created_at.desc');
+      return respond(res, 200, wds.map(function(w) {
+        return { id: w.id, amount: num(w.amount), pix_key: w.pix_key, status: w.status, created_at: w.created_at };
+      }));
     }
 
-    // Admin user actions - extended
-    const userActionMatch = path.match(/^\/api\/admin\/user\/(\d+)\/(block|balance|influencer|add-balance)$/);
-    if (userActionMatch && method === 'POST') {
-      const target = db.users.find(u => u.id === parseInt(userActionMatch[1]));
-      if (!target) return json(404, { error: 'Usuário não encontrado' });
-      const action = userActionMatch[2];
+    // GAME FINISH
+    if (url === '/api/game/finish' && method === 'POST') {
+      const user = await authenticate(req);
+      if (!user) return respond(res, 401, { error: 'Nao autorizado' });
+      const body = await parseBody(req);
+      const bet_amount = num(body.bet_amount);
+      const multiplier = num(body.multiplier);
+      const balance = num(user.balance);
 
-      if (action === 'block') {
-        target.is_blocked = !!body.blocked;
-      } else if (action === 'balance') {
-        target.balance = parseFloat(body.amount) || 0;
-      } else if (action === 'add-balance') {
-        target.balance += parseFloat(body.amount) || 0;
-      } else if (action === 'influencer') {
-        target.is_influencer = !!body.is_influencer;
-        target.influencer_win_rate = parseFloat(body.win_rate) || 0;
+      if (!bet_amount || bet_amount <= 0 || bet_amount > balance) {
+        return respond(res, 400, { error: 'Valor de aposta invalido' });
       }
-      saveDB();
-      return json(200, { success: true });
-    }
 
-    if (path === 'https://helix-cash.vercel.app/api/admin/deposits' && method === 'GET') {
-      return json(200, db.deposits.map(d => {
-        const u = db.users.find(u => u.id === d.user_id) || {};
-        return { ...d, name: u.name, email: u.email };
-      }).reverse().slice(0, 100));
-    }
+      const settings = await db.getSettings();
+      const maxMul = num(settings.max_multiplier) || 7;
+      const safeMul = Math.min(multiplier || 1, maxMul);
 
-    const depAction = path.match(/^\/api\/admin\/deposit\/(\d+)\/(approve|reject)$/);
-    if (depAction && method === 'POST') {
-      const dep = db.deposits.find(d => d.id === parseInt(depAction[1]));
-      if (!dep) return json(404, { error: 'Depósito não encontrado' });
-      if (dep.status !== 'pending') return json(400, { error: 'Já processado' });
-      if (depAction[2] === 'approve') {
-        dep.status = 'approved'; dep.approved_at = new Date().toISOString();
-        const t = db.users.find(u => u.id === dep.user_id);
-        if (t) {
-          t.balance += dep.amount;
-          t.total_deposited = (t.total_deposited || 0) + dep.amount;
-        }
-      } else { dep.status = 'rejected'; }
-      saveDB();
-      return json(200, { success: true });
-    }
-
-    if (path === 'https://helix-cash.vercel.app/api/admin/withdrawals' && method === 'GET') {
-      return json(200, db.withdrawals.map(w => {
-        const u = db.users.find(u => u.id === w.user_id) || {};
-        return { ...w, name: u.name, email: u.email };
-      }).reverse().slice(0, 100));
-    }
-
-    const wAction = path.match(/^\/api\/admin\/withdrawal\/(\d+)\/(approve|reject)$/);
-    if (wAction && method === 'POST') {
-      const w = db.withdrawals.find(w => w.id === parseInt(wAction[1]));
-      if (!w) return json(404, { error: 'Saque não encontrado' });
-      if (w.status !== 'pending') return json(400, { error: 'Já processado' });
-      if (wAction[2] === 'approve') {
-        w.status = 'approved'; w.processed_at = new Date().toISOString();
-      } else {
-        w.status = 'rejected'; w.processed_at = new Date().toISOString();
-        const t = db.users.find(u => u.id === w.user_id);
-        if (t) t.balance += w.amount;
+      var houseEdge = num(settings.house_edge) || 15;
+      if (user.is_influencer && num(user.influencer_win_rate) > 0) {
+        houseEdge = 100 - num(user.influencer_win_rate);
       }
-      saveDB();
-      return json(200, { success: true });
-    }
 
-    if (path === 'https://helix-cash.vercel.app/api/admin/games' && method === 'GET') {
-      return json(200, db.games.map(g => {
-        const u = db.users.find(u => u.id === g.user_id) || {};
-        return { ...g, name: u.name, email: u.email, is_influencer: u.is_influencer || false };
-      }).reverse().slice(0, 100));
-    }
+      const rand = Math.random() * 100;
+      const isWin = rand >= houseEdge;
 
-    if (path === 'https://helix-cash.vercel.app/api/admin/settings' && method === 'GET') {
-      return json(200, db.settings);
-    }
+      var prize = 0;
+      var newBalance = balance - bet_amount;
+      var result = 'loss';
 
-    if (path === 'https://helix-cash.vercel.app/api/admin/settings' && method === 'POST') {
-      Object.entries(body).forEach(([k, v]) => {
-        db.settings[k] = String(v);
+      if (isWin) {
+        prize = bet_amount * safeMul;
+        newBalance = balance + prize - bet_amount;
+        result = 'win';
+      }
+      newBalance = Math.max(0, newBalance);
+
+      await db.update('users', 'id=eq.' + user.id, {
+        balance: newBalance,
+        total_games: (user.total_games || 0) + 1
       });
-      saveDB();
-      return json(200, { success: true });
+
+      await db.insert('games', {
+        user_id: user.id, bet_amount: bet_amount, multiplier: safeMul, prize: prize, result: result
+      });
+
+      return respond(res, 200, { result: result, prize: prize, balance: newBalance });
     }
 
-    return json(404, { error: 'Rota não encontrada' });
+    // REFERRAL
+    if (url === '/api/referral' && method === 'GET') {
+      const user = await authenticate(req);
+      if (!user) return respond(res, 401, { error: 'Nao autorizado' });
 
-  } catch (e) {
-    return json(500, { error: 'Erro interno: ' + e.message });
-  }
-};
+      const earnings = await db.select('referral_earnings', 'user_id=eq.' + user.id, 'created_at.desc');
+      const referred = await db.select('users', 'referred_by=eq.' + encodeURIComponent(user.referral_code), 'id.desc');
+      const totalEarned = earnings.reduce(function(s, e) { return s + num(e.amount); }, 0);
+
+      return respond(res, 200, {
+        code: user.referral_code, total_earned: totalEarned,
+        referred_count: referred.length,
+        earnings: earnings.map(function(e) {
+          return { id: e.id, amount: num(e.amount), created_at: e.created_at };
+        })
+      });
+    }
+
+    // ==================== ADMIN ROUTES ====================
+
+    // DASHBOARD
+    if (url === '/api/admin/dashboard' && method === 'GET') {
+      const admin = await authenticate(req);
+      if (!admin || !admin.is_admin) return respond(res, 401, { error: 'Nao autorizado' });
+
+      const results = await Promise.all([
+        db.select('users', 'is_admin=eq.false', 'id.desc'),
+        db.select('deposits', '', 'id.desc'),
+        db.select('withdrawals', '', 'id.desc'),
+        db.select('games', '', 'id.desc'),
+        db.getSettings()
+      ]);
+
+      const users = results[0] || [];
+      const deposits = results[1] || [];
+      const withdrawals = results[2] || [];
+      const games = results[3] || [];
