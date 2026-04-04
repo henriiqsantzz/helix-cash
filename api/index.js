@@ -22,7 +22,7 @@ function getDefaultDB() {
   return {
     users: [{
       id: 1, name: 'Admin', email: 'admin@helixcash.com', phone: null,
-      password: salt + 'Admin1' + hash, balance: 0, bonus_balance: 0,
+      password: salt + ':' + hash, balance: 0, bonus_balance: 0,
       referral_code: 'ADMIN001', referred_by: null,
       is_admin: true, is_blocked: false, is_influencer: false,
       influencer_win_rate: 0, total_deposited: 0, total_withdrawn: 0, total_games: 0,
