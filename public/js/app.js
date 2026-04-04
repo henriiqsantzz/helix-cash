@@ -124,7 +124,7 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
     localStorage.setItem('hc_user', JSON.stringify(user));
 
     if (user.is_admin) {
-      window.location.href = '/public/admin.html';
+      window.location.href = '/admin.html';
       return;
     }
 
@@ -229,10 +229,8 @@ document.getElementById('btnPlay').addEventListener('click', async () => {
     // Show game screen
     document.getElementById('page-game').classList.remove('hidden');
     document.getElementById('gameOverOverlay').classList.add('hidden');
-    document.getElementById('hudPlatforms').textContent = '0';
-    document.getElementById('hudPrize').textContent = 'R$ 0,00';
 
-    // Start the 3D game
+    // Start the Helix Jump game
     startHelixGame(currentBet);
 
   } catch (e) {
@@ -245,9 +243,7 @@ document.getElementById('btnPlay').addEventListener('click', async () => {
 
 // Called by game engine when platforms are passed
 function onPlatformPassed(count) {
-  document.getElementById('hudPlatforms').textContent = count;
-  const prize = currentBet * (1 + count * 0.5);
-  document.getElementById('hudPrize').textContent = 'R$ ' + formatMoney(prize);
+  // HUD is handled internally by the game engine now
 }
 
 // Called when player dies or cashes out
