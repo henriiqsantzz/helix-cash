@@ -4,8 +4,33 @@ const fs = require('fs');
 // ===================== CONFIG =====================
 const JWT_SECRET = process.env.JWT_SECRET || 'helix-cash-secret-2024';
 const DB_FILE = '/tmp/helix-db.json';
+const SUPABASE_URL = process.env.SUPABASE_URL || '';
+const SUPABASE_KEY = process.env.SUPABASE_KEY || '';
+const USE_SUPABASE = !!(SUPABASE_URL && SUPABASE_KEY);
 
-// ===================== DATABASE (FILE-BASED) =====================
+// ===================== SUPABASE HELPER =====================
+async function supaFetch(path, method, body, extraHeaders) {
+  if (!USE_SUPABASE) return null;
+  var url = SUPABASE_URL + '/rest/v1/' + path;
+  var opts = {
+    method: method || 'GET',
+    headers: {
+      'apikey': SUPABASE_KEY,
+      'Authorization': 'Bearer ' + SUPABASE_KEY,
+      'Content-Type': 'application/json',
+      ...(extraHeaders || {})
+    }
+  };
+  if (body && (method === 'POST' || method === 'PATCH' || method === 'PUT')) {
+    opts.body = JSON.stringify(body);
+  }
+  var res = await fetch(url, opts);
+  var text = await res.text();
+  if (!res.ok) throw new Error('Supabase ' + res.status + ': ' + text);
+  return text ? JSON.parse(text) : null;
+}
+
+// ===================== DATABASE (DUAL: /tmp + Supabase) =====================
 function createDefaultDB() {
   const salt = crypto.randomBytes(16).toString('hex');
   const hash = crypto.pbkdf2Sync('admin123', salt, 1000, 64, 'sha512').toString('hex');
@@ -32,10 +57,25 @@ function createDefaultDB() {
   };
 }
 
-function loadDB() {
+async function loadDB() {
+  // 1. Try Supabase first (permanent storage)
+  if (USE_SUPABASE) {
+    try {
+      var rows = await supaFetch('app_state?select=data&id=eq.1');
+      if (rows && rows.length > 0 && rows[0].data) {
+        var data = typeof rows[0].data === 'string' ? JSON.parse(rows[0].data) : rows[0].data;
+        if (!data.pending_games) data.pending_games = [];
+        if (!data.next_id.pending_games) data.next_id.pending_games = 1;
+        // Also save to /tmp as cache
+        try { fs.writeFileSync(DB_FILE, JSON.stringify(data)); } catch(e) {}
+        return data;
+      }
+    } catch (e) { console.error('Supabase load error:', e.message); }
+  }
+  // 2. Fallback to /tmp file
   try {
     if (fs.existsSync(DB_FILE)) {
-      const data = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
+      var data = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
       if (!data.pending_games) data.pending_games = [];
       if (!data.next_id.pending_games) data.next_id.pending_games = 1;
       return data;
@@ -44,8 +84,18 @@ function loadDB() {
   return createDefaultDB();
 }
 
-function saveDB(db) {
-  try { fs.writeFileSync(DB_FILE, JSON.stringify(db)); } catch (e) { console.error('DB save error:', e.message); }
+async function saveDB(db) {
+  // Always save to /tmp
+  try { fs.writeFileSync(DB_FILE, JSON.stringify(db)); } catch (e) {}
+  // Also save to Supabase if configured (permanent)
+  if (USE_SUPABASE) {
+    try {
+      await supaFetch('app_state', 'POST',
+        { id: 1, data: db, updated_at: new Date().toISOString() },
+        { 'Prefer': 'return=minimal,resolution=merge-duplicates' }
+      );
+    } catch (e) { console.error('Supabase save error:', e.message); }
+  }
 }
 
 // ===================== AUTH HELPERS =====================
@@ -115,7 +165,7 @@ module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
   if (req.method === 'OPTIONS') return respond(res, 200, {});
 
-  var db = loadDB();
+  var db = await loadDB();
   var url = req.url.split('?')[0];
   var method = req.method;
 
@@ -177,7 +227,7 @@ module.exports = async function handler(req, res) {
         }
       }
 
-      saveDB(db);
+      await saveDB(db);
       var token = createToken(newUser.id);
       return respond(res, 200, {
         token: token,
@@ -199,7 +249,7 @@ module.exports = async function handler(req, res) {
       if (user.is_blocked) return respond(res, 403, { error: 'Conta bloqueada' });
 
       user.last_login = new Date().toISOString();
-      saveDB(db);
+      await saveDB(db);
 
       var token = createToken(user.id);
       return respond(res, 200, {
@@ -248,7 +298,7 @@ module.exports = async function handler(req, res) {
         pix_code: pixCode, created_at: new Date().toISOString(), updated_at: new Date().toISOString()
       };
       db.deposits.push(dep);
-      saveDB(db);
+      await saveDB(db);
 
       return respond(res, 200, { success: true, pix_code: pixCode, deposit: dep });
     }
@@ -273,7 +323,7 @@ module.exports = async function handler(req, res) {
         created_at: new Date().toISOString(), updated_at: new Date().toISOString()
       };
       db.withdrawals.push(wd);
-      saveDB(db);
+      await saveDB(db);
 
       return respond(res, 200, { success: true, message: 'Saque de R$' + amount.toFixed(2) + ' solicitado! Aguarde aprovacao.' });
     }
@@ -313,7 +363,7 @@ module.exports = async function handler(req, res) {
         bet_amount: betAmount, created_at: new Date().toISOString()
       };
       db.pending_games.push(pg);
-      saveDB(db);
+      await saveDB(db);
 
       return respond(res, 200, { game_id: pg.id, new_balance: user.balance });
     }
@@ -377,7 +427,7 @@ module.exports = async function handler(req, res) {
         created_at: new Date().toISOString()
       };
       db.games.push(game);
-      saveDB(db);
+      await saveDB(db);
 
       return respond(res, 200, {
         result: result, prize: prize, new_balance: num(user.balance),
@@ -486,7 +536,7 @@ module.exports = async function handler(req, res) {
       if (!user) return respond(res, 404, { error: 'Usuario nao encontrado' });
 
       user.balance = num(user.balance) + num(body.amount);
-      saveDB(db);
+      await saveDB(db);
       return respond(res, 200, { success: true });
     }
 
@@ -502,7 +552,7 @@ module.exports = async function handler(req, res) {
 
       user.is_influencer = !!body.is_influencer;
       user.influencer_win_rate = num(body.influencer_win_rate) || 0;
-      saveDB(db);
+      await saveDB(db);
       return respond(res, 200, { success: true });
     }
 
@@ -516,7 +566,7 @@ module.exports = async function handler(req, res) {
       if (!user) return respond(res, 404, { error: 'Usuario nao encontrado' });
 
       user.is_blocked = !user.is_blocked;
-      saveDB(db);
+      await saveDB(db);
       return respond(res, 200, { success: true });
     }
 
@@ -559,7 +609,7 @@ module.exports = async function handler(req, res) {
         }
       }
 
-      saveDB(db);
+      await saveDB(db);
       return respond(res, 200, { success: true });
     }
 
@@ -602,7 +652,7 @@ module.exports = async function handler(req, res) {
         user.balance = num(user.balance) + num(wd.amount);
       }
 
-      saveDB(db);
+      await saveDB(db);
       return respond(res, 200, { success: true });
     }
 
@@ -636,7 +686,7 @@ module.exports = async function handler(req, res) {
       if (!admin || !admin.is_admin) return respond(res, 401, { error: 'Nao autorizado' });
       var body = await parseBody(req);
       Object.keys(body).forEach(function (key) { db.settings[key] = body[key]; });
-      saveDB(db);
+      await saveDB(db);
       return respond(res, 200, { success: true });
     }
 
