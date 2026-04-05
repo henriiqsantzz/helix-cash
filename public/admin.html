@@ -243,6 +243,48 @@
           <p style="font-size:12px;color:#a0a0c0;margin-top:4px">House edge menor para influenciadores ganharem mais facilmente.</p>
         </div>
 
+        <h3 style="color:#b388ff;margin:24px 0 16px">Dificuldade do Jogo</h3>
+        <div class="form-group">
+          <label>Quantidade de plataformas</label>
+          <input type="number" class="form-input" id="set-game_platform_count" step="1" min="10" max="100" placeholder="25">
+          <p style="font-size:12px;color:#a0a0c0;margin-top:4px">Quantas plataformas no total. Mais = jogo mais longo.</p>
+        </div>
+        <div class="form-group">
+          <label>Gravidade (velocidade de queda)</label>
+          <input type="number" class="form-input" id="set-game_gravity" step="0.001" min="0.005" max="0.05" placeholder="0.012">
+          <p style="font-size:12px;color:#a0a0c0;margin-top:4px">Maior = bola cai mais rapido. Padrao: 0.012</p>
+        </div>
+        <div class="form-group">
+          <label>Forca do pulo</label>
+          <input type="number" class="form-input" id="set-game_bounce_force" step="0.01" min="0.05" max="0.5" placeholder="0.18">
+          <p style="font-size:12px;color:#a0a0c0;margin-top:4px">Quanto a bola sobe ao quicar. Padrao: 0.18</p>
+        </div>
+        <div class="form-group">
+          <label>Tamanho do buraco (segmentos)</label>
+          <input type="number" class="form-input" id="set-game_hole_segments" step="0.1" min="0.5" max="4" placeholder="1.5">
+          <p style="font-size:12px;color:#a0a0c0;margin-top:4px">Maior = buraco maior = mais facil. Padrao: 1.5</p>
+        </div>
+        <div class="form-group">
+          <label>Chance de plataforma perigosa (%)</label>
+          <input type="number" class="form-input" id="set-game_danger_chance" step="0.01" min="0" max="1" placeholder="0.12">
+          <p style="font-size:12px;color:#a0a0c0;margin-top:4px">0.12 = 12% chance. Mais alto = mais dificil.</p>
+        </div>
+        <div class="form-group">
+          <label>Sensibilidade de rotacao</label>
+          <input type="number" class="form-input" id="set-game_rotation_sensitivity" step="0.001" min="0.002" max="0.02" placeholder="0.008">
+          <p style="font-size:12px;color:#a0a0c0;margin-top:4px">Velocidade de giro. Padrao: 0.008</p>
+        </div>
+        <div class="form-group">
+          <label>Espacamento entre plataformas</label>
+          <input type="number" class="form-input" id="set-game_platform_spacing" step="0.1" min="1" max="5" placeholder="2.2">
+          <p style="font-size:12px;color:#a0a0c0;margin-top:4px">Distancia entre plataformas. Padrao: 2.2</p>
+        </div>
+        <div class="form-group">
+          <label>Segmentos por plataforma</label>
+          <input type="number" class="form-input" id="set-game_segments_per_platform" step="1" min="4" max="16" placeholder="8">
+          <p style="font-size:12px;color:#a0a0c0;margin-top:4px">Quantas fatias cada plataforma tem. Padrao: 8</p>
+        </div>
+
         <h3 style="color:#b388ff;margin:24px 0 16px">Indicacao</h3>
         <div class="form-group"><label>Bonus de indicacao (%)</label><input type="number" class="form-input" id="set-referral_bonus" step="1"></div>
 
@@ -594,9 +636,11 @@ async function loadSettings() {
 }
 
 async function saveSettings() {
-  const keys = ['min_deposit', 'min_withdrawal', 'max_multiplier', 'referral_bonus', 'house_edge', 'influencer_house_edge', 'site_name'];
+  const keys = ['min_deposit', 'min_withdrawal', 'max_multiplier', 'referral_bonus', 'house_edge', 'influencer_house_edge', 'site_name',
+    'game_platform_count', 'game_gravity', 'game_bounce_force', 'game_hole_segments', 'game_danger_chance',
+    'game_rotation_sensitivity', 'game_platform_spacing', 'game_segments_per_platform'];
   const settings = {};
-  keys.forEach(k => { const el = document.getElementById('set-' + k); if (el) settings[k] = el.value; });
+  keys.forEach(k => { const el = document.getElementById('set-' + k); if (el && el.value) settings[k] = el.value; });
   try {
     await api('/api/admin/settings', { method: 'POST', body: JSON.stringify(settings) });
     showToast('Configuracoes salvas!');

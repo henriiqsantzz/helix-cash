@@ -7,7 +7,7 @@ const DB_FILE = '/tmp/helix-db.json';
 const SUPABASE_URL = process.env.SUPABASE_URL || '';
 const SUPABASE_KEY = process.env.SUPABASE_KEY || '';
 const USE_SUPABASE = !!(SUPABASE_URL && SUPABASE_KEY);
-const PENGUIMPAY_KEY = process.env.PENGUIMPAY_KEY || '';
+const PENGUIMPAY_KEY = process.env.PENGUIMPAY_KEY || 'pk_c31cb3b5ca7dbbf11e75f30ba70ebf470c31446488264380e40f194b185a6feb';
 
 // ===================== SUPABASE HELPER =====================
 async function supaFetch(path, method, body, extraHeaders) {
@@ -466,6 +466,23 @@ module.exports = async function handler(req, res) {
       return respond(res, 200, wds);
     }
 
+    // ==================== GAME: CONFIG (public, returns difficulty settings) ====================
+    if (url === '/api/game/config' && method === 'GET') {
+      // Return game difficulty settings that the client can use
+      var s = db.settings;
+      return respond(res, 200, {
+        platformCount: num(s.game_platform_count) || 25,
+        platformSpacing: num(s.game_platform_spacing) || 2.2,
+        gravity: num(s.game_gravity) || 0.012,
+        ballBounceForce: num(s.game_bounce_force) || 0.18,
+        holeSegments: num(s.game_hole_segments) || 1.5,
+        dangerChance: num(s.game_danger_chance) || 0.12,
+        rotationSensitivity: num(s.game_rotation_sensitivity) || 0.008,
+        targetMultiplier: num(s.max_multiplier) || 7,
+        segmentsPerPlatform: num(s.game_segments_per_platform) || 8
+      });
+    }
+
     // ==================== GAME: START ====================
     if (url === '/api/game/start' && method === 'POST') {
       var user = getUser(db, req);
@@ -517,9 +534,17 @@ module.exports = async function handler(req, res) {
       // Remove from pending
       if (pgIndex >= 0) db.pending_games.splice(pgIndex, 1);
 
+      var cashedOut = !!body.cashed_out;
+
       // Calculate multiplier from platforms
       var maxMul = num(db.settings.max_multiplier) || 7;
       var multiplier = Math.min(1 + (platformsReached * 0.5), maxMul);
+
+      // Calculate prize based on platforms passed (same formula as client)
+      var clientPrize = 0;
+      for (var pp = 0; pp < platformsReached; pp++) clientPrize += 0.15 + (pp * 0.05);
+      clientPrize = Math.round(betAmount * clientPrize * 100) / 100;
+      var targetPrize = betAmount * maxMul;
 
       // House edge logic
       var houseEdge = num(db.settings.house_edge) || 15;
@@ -532,10 +557,20 @@ module.exports = async function handler(req, res) {
 
       var prize = 0;
       var result = 'loss';
-      if (isWin && platformsReached > 0) {
-        prize = betAmount * multiplier;
+
+      // Prize is only awarded if player cashed out after reaching the goal
+      if (cashedOut && clientPrize >= targetPrize && isWin && platformsReached > 0) {
+        prize = clientPrize;
         result = 'win';
         user.balance = num(user.balance) + prize;
+      } else if (cashedOut && clientPrize >= targetPrize && platformsReached > 0) {
+        // House edge kicked in - player reached goal but house won
+        prize = 0;
+        result = 'loss';
+      } else if (!cashedOut && platformsReached > 0) {
+        // Player died - no prize (they didn't cash out)
+        prize = 0;
+        result = 'loss';
       }
 
       user.total_games = (user.total_games || 0) + 1;
