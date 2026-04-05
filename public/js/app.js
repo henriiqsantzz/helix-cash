@@ -303,9 +303,14 @@ document.querySelectorAll('.amount-option[data-dep]').forEach(btn => {
   });
 });
 
+let currentDepositId = null;
+let depositCheckInterval = null;
+
 document.getElementById('btnDeposit').addEventListener('click', async () => {
   const amount = parseFloat(document.getElementById('depositAmount').value);
+  const cpf = (document.getElementById('depositCpf') ? document.getElementById('depositCpf').value : '').trim();
   if (!amount || amount < 10) return showToast('Depósito mínimo: R$10,00', 'error');
+  if (!cpf) return showToast('Informe seu CPF para gerar o PIX', 'error');
 
   const btn = document.getElementById('btnDeposit');
   btn.disabled = true;
@@ -314,12 +319,29 @@ document.getElementById('btnDeposit').addEventListener('click', async () => {
   try {
     const data = await api('/api/deposit', {
       method: 'POST',
-      body: JSON.stringify({ amount })
+      body: JSON.stringify({ amount, cpf })
     });
 
-    document.getElementById('pixCode').textContent = data.pix_code;
+    currentDepositId = data.deposit ? data.deposit.id : null;
+
+    // Show PIX code
+    document.getElementById('pixCode').textContent = data.pix_code || 'Código indisponível';
     document.getElementById('pixResult').classList.remove('hidden');
+
+    // Show QR code image if available
+    const qrImg = document.getElementById('pixQrImage');
+    if (qrImg && data.qr_code_image) {
+      qrImg.src = data.qr_code_image.startsWith('data:') ? data.qr_code_image : ('data:image/png;base64,' + data.qr_code_image);
+      qrImg.style.display = 'block';
+    }
+
     showToast('PIX gerado com sucesso!');
+
+    // Start polling for payment confirmation
+    if (currentDepositId) {
+      if (depositCheckInterval) clearInterval(depositCheckInterval);
+      depositCheckInterval = setInterval(checkDepositStatus, 5000);
+    }
   } catch (e) {
     showToast(e.message, 'error');
   } finally {
@@ -327,6 +349,30 @@ document.getElementById('btnDeposit').addEventListener('click', async () => {
     btn.textContent = 'GERAR PIX';
   }
 });
+
+async function checkDepositStatus() {
+  if (!currentDepositId) return;
+  try {
+    const data = await api('/api/deposit/status', {
+      method: 'POST',
+      body: JSON.stringify({ deposit_id: currentDepositId })
+    });
+    if (data.status === 'approved') {
+      clearInterval(depositCheckInterval);
+      depositCheckInterval = null;
+      user.balance = data.new_balance;
+      updateUI();
+      showToast('Pagamento confirmado! Saldo atualizado.');
+      document.getElementById('pixResult').classList.add('hidden');
+      currentDepositId = null;
+    } else if (data.status === 'rejected' || data.status === 'expired') {
+      clearInterval(depositCheckInterval);
+      depositCheckInterval = null;
+      showToast('PIX expirado ou rejeitado. Tente novamente.', 'error');
+      currentDepositId = null;
+    }
+  } catch (e) { /* silent */ }
+}
 
 // ===================== WITHDRAW =====================
 document.getElementById('btnWithdraw').addEventListener('click', async () => {

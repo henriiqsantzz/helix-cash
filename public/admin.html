@@ -6,7 +6,7 @@
   <title>Helix Cash - Painel Admin</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://helix-cash.vercel.app/public/css/style.css">
+  <link rel="stylesheet" href="/css/style.css">
   <style>
     body { background: #0a0a1a; }
     .admin-layout { display: flex; min-height: 100vh; }
@@ -314,7 +314,7 @@ document.querySelectorAll('.admin-nav-item').forEach(btn => {
 // ===== DASHBOARD =====
 async function loadDashboard() {
   try {
-    const d = await api('https://helix-cash.vercel.app/api/admin/dashboard');
+    const d = await api('/api/admin/dashboard');
     document.getElementById('d-users').textContent = d.users;
     document.getElementById('d-influencers').textContent = d.influencers || 0;
     document.getElementById('d-deposits').textContent = 'R$ ' + fmt(d.deposits.total);
@@ -336,7 +336,7 @@ async function loadDashboard() {
 // ===== USERS =====
 async function loadUsers() {
   try {
-    allUsers = await api('https://helix-cash.vercel.app/api/admin/users');
+    allUsers = await api('/api/admin/users');
     renderUsers(allUsers);
   } catch (e) { showToast(e.message, 'error'); }
 }
@@ -395,10 +395,10 @@ async function saveBalance(id) {
   const setAmount = parseFloat(document.getElementById('modalBalance').value);
   try {
     if (addAmount && addAmount !== 0) {
-      await api(`https://helix-cash.vercel.app/api/admin/user/${id}/add-balance`, { method: 'POST', body: JSON.stringify({ amount: addAmount }) });
+      await api(`/api/admin/user/${id}/add-balance`, { method: 'POST', body: JSON.stringify({ amount: addAmount }) });
       showToast(`R$ ${fmt(addAmount)} adicionado!`);
     } else {
-      await api(`https://helix-cash.vercel.app/api/admin/user/${id}/balance`, { method: 'POST', body: JSON.stringify({ amount: setAmount }) });
+      await api(`/api/admin/user/${id}/balance`, { method: 'POST', body: JSON.stringify({ amount: setAmount }) });
       showToast('Saldo atualizado!');
     }
     closeModal(); loadUsers();
@@ -432,7 +432,7 @@ async function saveInfluencer(id) {
   const isInfluencer = document.getElementById('modalInfluencer').value === 'true';
   const winRate = parseFloat(document.getElementById('modalWinRate').value) || 0;
   try {
-    await api(`https://helix-cash.vercel.app/api/admin/user/${id}/influencer`, { method: 'POST', body: JSON.stringify({ is_influencer: isInfluencer, win_rate: winRate }) });
+    await api(`/api/admin/user/${id}/influencer`, { method: 'POST', body: JSON.stringify({ is_influencer: isInfluencer, win_rate: winRate }) });
     showToast(isInfluencer ? 'Marcado como influenciador!' : 'Removido de influenciador');
     closeModal(); loadUsers();
   } catch (e) { showToast(e.message, 'error'); }
@@ -440,7 +440,7 @@ async function saveInfluencer(id) {
 
 async function toggleBlock(id, blocked) {
   try {
-    await api(`https://helix-cash.vercel.app/api/admin/user/${id}/block`, { method: 'POST', body: JSON.stringify({ blocked }) });
+    await api(`/api/admin/user/${id}/block`, { method: 'POST', body: JSON.stringify({ blocked }) });
     showToast(blocked ? 'Usuario bloqueado' : 'Usuario desbloqueado');
     loadUsers();
   } catch (e) { showToast(e.message, 'error'); }
@@ -449,7 +449,7 @@ async function toggleBlock(id, blocked) {
 // ===== INFLUENCERS TAB =====
 async function loadInfluencers() {
   try {
-    const users = await api('https://helix-cash.vercel.app/api/admin/users');
+    const users = await api('/api/admin/users');
     const influencers = users.filter(u => u.is_influencer);
     const noEl = document.getElementById('noInfluencers');
     if (influencers.length === 0) { noEl.style.display = 'block'; } else { noEl.style.display = 'none'; }
@@ -472,7 +472,7 @@ async function loadInfluencers() {
 
 async function removeInfluencer(id) {
   try {
-    await api(`https://helix-cash.vercel.app/api/admin/user/${id}/influencer`, { method: 'POST', body: JSON.stringify({ is_influencer: false, win_rate: 0 }) });
+    await api(`/api/admin/user/${id}/influencer`, { method: 'POST', body: JSON.stringify({ is_influencer: false, win_rate: 0 }) });
     showToast('Removido de influenciador');
     loadInfluencers();
   } catch (e) { showToast(e.message, 'error'); }
@@ -481,7 +481,7 @@ async function removeInfluencer(id) {
 // ===== DEPOSITS =====
 async function loadDeposits() {
   try {
-    allDeposits = await api('https://helix-cash.vercel.app/api/admin/deposits');
+    allDeposits = await api('/api/admin/deposits');
     renderDeposits(allDeposits);
   } catch (e) { showToast(e.message, 'error'); }
 }
@@ -512,17 +512,17 @@ function renderDeposits(deps) {
 }
 
 async function approveDeposit(id) {
-  try { await api(`https://helix-cash.vercel.app/api/admin/deposit/${id}/approve`, { method: 'POST' }); showToast('Deposito aprovado!'); loadDeposits(); loadDashboard(); } catch (e) { showToast(e.message, 'error'); }
+  try { await api(`/api/admin/deposit/${id}/approve`, { method: 'POST' }); showToast('Deposito aprovado!'); loadDeposits(); loadDashboard(); } catch (e) { showToast(e.message, 'error'); }
 }
 async function rejectDeposit(id) {
   if (!confirm('Rejeitar este deposito?')) return;
-  try { await api(`https://helix-cash.vercel.app/api/admin/deposit/${id}/reject`, { method: 'POST' }); showToast('Deposito rejeitado'); loadDeposits(); } catch (e) { showToast(e.message, 'error'); }
+  try { await api(`/api/admin/deposit/${id}/reject`, { method: 'POST' }); showToast('Deposito rejeitado'); loadDeposits(); } catch (e) { showToast(e.message, 'error'); }
 }
 
 // ===== WITHDRAWALS =====
 async function loadWithdrawals() {
   try {
-    allWithdrawals = await api('https://helix-cash.vercel.app/api/admin/withdrawals');
+    allWithdrawals = await api('/api/admin/withdrawals');
     renderWithdrawals(allWithdrawals);
   } catch (e) { showToast(e.message, 'error'); }
 }
@@ -554,17 +554,17 @@ function renderWithdrawals(ws) {
 }
 
 async function approveWithdrawal(id) {
-  try { await api(`https://helix-cash.vercel.app/api/admin/withdrawal/${id}/approve`, { method: 'POST' }); showToast('Saque aprovado!'); loadWithdrawals(); loadDashboard(); } catch (e) { showToast(e.message, 'error'); }
+  try { await api(`/api/admin/withdrawal/${id}/approve`, { method: 'POST' }); showToast('Saque aprovado!'); loadWithdrawals(); loadDashboard(); } catch (e) { showToast(e.message, 'error'); }
 }
 async function rejectWithdrawal(id) {
   if (!confirm('Rejeitar saque? Valor sera devolvido.')) return;
-  try { await api(`https://helix-cash.vercel.app/api/admin/withdrawal/${id}/reject`, { method: 'POST' }); showToast('Saque rejeitado'); loadWithdrawals(); } catch (e) { showToast(e.message, 'error'); }
+  try { await api(`/api/admin/withdrawal/${id}/reject`, { method: 'POST' }); showToast('Saque rejeitado'); loadWithdrawals(); } catch (e) { showToast(e.message, 'error'); }
 }
 
 // ===== GAMES =====
 async function loadGames() {
   try {
-    const gs = await api('https://helix-cash.vercel.app/api/admin/games');
+    const gs = await api('/api/admin/games');
     document.getElementById('gamesTable').innerHTML = gs.map(g => {
       const won = g.prize > g.bet_amount;
       return `<tr>
@@ -585,7 +585,7 @@ async function loadGames() {
 // ===== SETTINGS =====
 async function loadSettings() {
   try {
-    const s = await api('https://helix-cash.vercel.app/api/admin/settings');
+    const s = await api('/api/admin/settings');
     Object.entries(s).forEach(([key, value]) => {
       const el = document.getElementById('set-' + key);
       if (el) el.value = value;

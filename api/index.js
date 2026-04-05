@@ -7,6 +7,7 @@ const DB_FILE = '/tmp/helix-db.json';
 const SUPABASE_URL = process.env.SUPABASE_URL || '';
 const SUPABASE_KEY = process.env.SUPABASE_KEY || '';
 const USE_SUPABASE = !!(SUPABASE_URL && SUPABASE_KEY);
+const PENGUIMPAY_KEY = process.env.PENGUIMPAY_KEY || '';
 
 // ===================== SUPABASE HELPER =====================
 async function supaFetch(path, method, body, extraHeaders) {
@@ -281,26 +282,147 @@ module.exports = async function handler(req, res) {
       return respond(res, 200, { balance: num(user.balance), bonus_balance: num(user.bonus_balance) });
     }
 
-    // ==================== DEPOSIT ====================
+    // ==================== DEPOSIT (PenguimPay PIX) ====================
     if (url === '/api/deposit' && method === 'POST') {
       var user = getUser(db, req);
       if (!user) return respond(res, 401, { error: 'Nao autorizado' });
       var body = await parseBody(req);
       var amount = num(body.amount);
       var minDep = num(db.settings.min_deposit) || 10;
+      var cpf = (body.cpf || '').trim();
 
       if (!amount || amount < minDep) return respond(res, 400, { error: 'Deposito minimo: R$' + minDep });
+      if (!cpf) return respond(res, 400, { error: 'CPF obrigatorio para gerar PIX' });
 
-      var pixCode = 'HELIX' + Date.now().toString(36).toUpperCase() + crypto.randomBytes(4).toString('hex').toUpperCase();
       var dep = {
         id: db.next_id.deposits++, user_id: user.id, amount: amount,
-        method: 'pix', status: 'pending', pix_key: body.pix_key || '',
-        pix_code: pixCode, created_at: new Date().toISOString(), updated_at: new Date().toISOString()
+        method: 'pix', status: 'pending', pix_key: '', pix_code: '',
+        transaction_id: '', created_at: new Date().toISOString(), updated_at: new Date().toISOString()
       };
+
+      // Call PenguimPay API to generate PIX deposit
+      if (PENGUIMPAY_KEY) {
+        try {
+          var ppRes = await fetch('https://api.penguimpay.com/api/external/pix/deposit', {
+            method: 'POST',
+            headers: {
+              'Authorization': 'Bearer ' + PENGUIMPAY_KEY,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              amount: amount,
+              client: {
+                name: user.name || 'Helix Cash User',
+                document: cpf,
+                email: user.email || 'user@helixcash.com'
+              }
+            })
+          });
+          var ppData = await ppRes.json();
+
+          if (!ppRes.ok) {
+            return respond(res, 400, { error: 'Erro ao gerar PIX: ' + (ppData.message || ppData.error || 'Tente novamente') });
+          }
+
+          dep.transaction_id = ppData.transactionId || ppData.id || '';
+          dep.pix_code = ppData.pixCopiaECola || ppData.qrCode || ppData.pix_key || '';
+          dep.qr_code_image = ppData.qrCodeImage || ppData.qrCodeBase64 || '';
+        } catch (e) {
+          console.error('PenguimPay error:', e.message);
+          return respond(res, 500, { error: 'Erro ao conectar com gateway de pagamento. Tente novamente.' });
+        }
+      } else {
+        // Fallback: generate fake PIX code if no PenguimPay key
+        dep.pix_code = 'HELIX' + Date.now().toString(36).toUpperCase() + crypto.randomBytes(4).toString('hex').toUpperCase();
+      }
+
       db.deposits.push(dep);
       await saveDB(db);
 
-      return respond(res, 200, { success: true, pix_code: pixCode, deposit: dep });
+      return respond(res, 200, {
+        success: true,
+        pix_code: dep.pix_code,
+        qr_code_image: dep.qr_code_image || '',
+        transaction_id: dep.transaction_id,
+        deposit: dep
+      });
+    }
+
+    // ==================== PENGUIMPAY WEBHOOK ====================
+    if (url === '/api/webhook/penguimpay' && method === 'POST') {
+      var body = await parseBody(req);
+      console.log('PenguimPay webhook received:', JSON.stringify(body));
+
+      if (body.event === 'PAYMENT' && body.data) {
+        var txId = body.data.transactionId || body.data.externalId || '';
+        var status = (body.data.status || '').toUpperCase();
+
+        if (status === 'PAID_OUT' || status === 'APPROVED' || status === 'COMPLETED') {
+          // Find the pending deposit by transaction_id
+          var dep = null;
+          for (var i = 0; i < db.deposits.length; i++) {
+            if (db.deposits[i].transaction_id === txId && db.deposits[i].status === 'pending') {
+              dep = db.deposits[i];
+              break;
+            }
+          }
+
+          if (dep) {
+            dep.status = 'approved';
+            dep.updated_at = new Date().toISOString();
+
+            // Credit user balance
+            var depositUser = db.users.find(function(u) { return u.id === dep.user_id; });
+            if (depositUser) {
+              depositUser.balance = num(depositUser.balance) + num(dep.amount);
+              depositUser.total_deposited = num(depositUser.total_deposited) + num(dep.amount);
+            }
+            await saveDB(db);
+            console.log('Deposit approved via webhook:', txId, 'Amount:', dep.amount);
+          }
+        }
+      }
+      return respond(res, 200, { received: true });
+    }
+
+    // ==================== CHECK DEPOSIT STATUS ====================
+    if (url === '/api/deposit/status' && method === 'POST') {
+      var user = getUser(db, req);
+      if (!user) return respond(res, 401, { error: 'Nao autorizado' });
+      var body = await parseBody(req);
+      var depId = body.deposit_id;
+
+      var dep = db.deposits.find(function(d) { return d.id === depId && d.user_id === user.id; });
+      if (!dep) return respond(res, 404, { error: 'Deposito nao encontrado' });
+
+      // If still pending and has transaction_id, check with PenguimPay
+      if (dep.status === 'pending' && dep.transaction_id && PENGUIMPAY_KEY) {
+        try {
+          var checkRes = await fetch('https://api.penguimpay.com/api/external/pix/deposit/' + dep.transaction_id, {
+            headers: { 'Authorization': 'Bearer ' + PENGUIMPAY_KEY }
+          });
+          var checkData = await checkRes.json();
+          var txStatus = (checkData.status || '').toUpperCase();
+
+          if (txStatus === 'PAID_OUT' || txStatus === 'APPROVED' || txStatus === 'COMPLETED') {
+            dep.status = 'approved';
+            dep.updated_at = new Date().toISOString();
+            user.balance = num(user.balance) + num(dep.amount);
+            user.total_deposited = num(user.total_deposited) + num(dep.amount);
+            await saveDB(db);
+          } else if (txStatus === 'EXPIRED' || txStatus === 'FAILED') {
+            dep.status = 'rejected';
+            dep.updated_at = new Date().toISOString();
+            await saveDB(db);
+          }
+        } catch (e) { console.error('PenguimPay status check error:', e.message); }
+      }
+
+      return respond(res, 200, {
+        status: dep.status,
+        amount: num(dep.amount),
+        new_balance: num(user.balance)
+      });
     }
 
     // ==================== WITHDRAW ====================

@@ -6,7 +6,7 @@
   <title>Helix Cash - Gire e Ganhe Dinheiro Real</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://helix-cash.vercel.app/public/css/style.css">
+  <link rel="stylesheet" href="/css/style.css">
   <meta name="theme-color" content="#0a0a1a">
 </head>
 <body>
@@ -263,14 +263,20 @@
           <input type="number" class="form-input" id="depositAmount" placeholder="Ex: 50" min="10" step="1">
         </div>
 
+        <div class="form-group">
+          <label>CPF</label>
+          <input type="text" class="form-input" id="depositCpf" placeholder="000.000.000-00" maxlength="14">
+        </div>
+
         <button id="btnDeposit" class="btn btn-primary btn-block">GERAR PIX</button>
 
         <div id="pixResult" class="pix-code-box hidden">
           <p style="font-weight:700;font-size:16px">Código PIX gerado!</p>
-          <p style="font-size:13px;color:var(--text-secondary)">Copie o código abaixo e pague no seu banco</p>
-          <div class="code" id="pixCode"></div>
+          <p style="font-size:13px;color:var(--text-secondary)">Escaneie o QR Code ou copie o código abaixo</p>
+          <img id="pixQrImage" style="display:none;max-width:200px;margin:12px auto;border-radius:8px;" alt="QR Code PIX">
+          <div class="code" id="pixCode" style="word-break:break-all;font-size:11px;"></div>
           <button class="btn btn-accent btn-sm" onclick="navigator.clipboard.writeText(document.getElementById('pixCode').textContent);showToast('Código copiado!')">Copiar código</button>
-          <p style="font-size:12px;color:var(--text-secondary);margin-top:12px">Após o pagamento, o saldo será creditado automaticamente.</p>
+          <p style="font-size:12px;color:var(--text-secondary);margin-top:12px">Aguardando pagamento... O saldo será creditado automaticamente.</p>
         </div>
       </div>
     </div>
@@ -381,7 +387,7 @@
 <div id="toast" class="toast hidden"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="https://helix-cash.vercel.app/public/js/game.js"></script>
-<script src="https://helix-cash.vercel.app/public/js/app.js"></script>
+<script src="/js/game.js"></script>
+<script src="/js/app.js"></script>
 </body>
 </html>
