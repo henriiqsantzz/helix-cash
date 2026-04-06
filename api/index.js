@@ -481,13 +481,30 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // ==================== ADMIN: GESTÃO DE USUÁRIOS E INFLUENCERS ====================
+    // ==================== ADMIN: GESTÃO DE USUÁRIOS ====================
     if (url === '/api/admin/users' && method === 'GET') {
       if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
       return respond(res, 200, db.users.filter(u => !u.is_admin || u.id !== 1));
     }
 
-    // Rotas de Ações Individuais (Modal Admin)
+    // NOVA ROTA PARA CORRIGIR O ERRO 404 DO MODAL UPDATE
+    if (url === '/api/admin/user/update' && method === 'POST') {
+      if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
+      var body = await parseBody(req);
+      var target = db.users.find(u => u.id === parseInt(body.id));
+      if (!target) return respond(res, 404, { error: 'Usuario nao encontrado' });
+
+      if (body.balance !== undefined) target.balance = num(body.balance);
+      if (body.is_influencer !== undefined) target.is_influencer = !!body.is_influencer;
+      if (body.influencer_win_rate !== undefined) target.influencer_win_rate = num(body.influencer_win_rate);
+      if (body.is_admin !== undefined) target.is_admin = !!body.is_admin;
+      if (body.is_blocked !== undefined) target.is_blocked = !!body.is_blocked;
+
+      await saveDB(db);
+      return respond(res, 200, { success: true });
+    }
+
+    // Rotas de Ações Individuais (Mantidas)
     var userActionMatch = url.match(/^\/api\/admin\/user\/(\d+)\/(balance|influencer|make-admin|block)$/);
     if (userActionMatch && method === 'POST') {
       if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
@@ -505,7 +522,6 @@ module.exports = async function handler(req, res) {
       return respond(res, 200, { success: true });
     }
 
-    // AFILIADOS ADMIN (Nova Função)
     if (url === '/api/admin/affiliates' && method === 'GET') {
       if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
       const affs = db.users.filter(u => u.is_influencer || u.id === 1).map(i => {
@@ -516,7 +532,6 @@ module.exports = async function handler(req, res) {
       return respond(res, 200, affs);
     }
 
-    // FINANCEIRO ADMIN
     if (url === '/api/admin/deposits' && method === 'GET') {
       if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
       return respond(res, 200, db.deposits.slice().reverse().map(d => ({ ...d, user_name: (db.users.find(u=>u.id===d.user_id)||{}).name })));
