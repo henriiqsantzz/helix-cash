@@ -49,7 +49,7 @@ function createDefaultDB() {
     games: [],
     pending_games: [],
     referral_earnings: [],
-    webhooks: [], // Adicionado para notificações PushCut
+    webhooks: [], // Adicionado para suporte ao PushCut
     settings: {
       min_deposit: '10', min_withdrawal: '20', max_multiplier: '7',
       referral_bonus: '5', house_edge: '15', influencer_house_edge: '5',
@@ -224,9 +224,13 @@ module.exports = async function handler(req, res) {
           });
         }
       }
+
       await saveDB(db);
       var token = createToken(newUser.id);
-      return respond(res, 200, { token: token, user: newUser });
+      return respond(res, 200, {
+        token: token,
+        user: { id: newUser.id, name: newUser.name, email: newUser.email, balance: 0, bonus_balance: 0, referral_code: code, is_admin: false }
+      });
     }
 
     // ==================== AUTH: LOGIN ====================
@@ -236,13 +240,24 @@ module.exports = async function handler(req, res) {
       var password = body.password || '';
 
       if (!email || !password) return respond(res, 400, { error: 'Email e senha sao obrigatorios' });
+
       var user = db.users.find(function (u) { return u.email === email; });
-      if (!user || !verifyPassword(password, user.password)) return respond(res, 401, { error: 'Email ou senha incorretos' });
+      if (!user) return respond(res, 401, { error: 'Email ou senha incorretos' });
+      if (!verifyPassword(password, user.password)) return respond(res, 401, { error: 'Email ou senha incorretos' });
       if (user.is_blocked) return respond(res, 403, { error: 'Conta bloqueada' });
 
       user.last_login = new Date().toISOString();
       await saveDB(db);
-      return respond(res, 200, { token: createToken(user.id), user: user });
+
+      var token = createToken(user.id);
+      return respond(res, 200, {
+        token: token,
+        user: {
+          id: user.id, name: user.name, email: user.email,
+          balance: num(user.balance), bonus_balance: num(user.bonus_balance),
+          referral_code: user.referral_code, is_admin: user.is_admin
+        }
+      });
     }
 
     // ==================== AUTH: ME ====================
@@ -255,6 +270,13 @@ module.exports = async function handler(req, res) {
       });
     }
 
+    // ==================== USER: BALANCE ====================
+    if (url === '/api/user/balance' && method === 'GET') {
+      var user = getUser(db, req);
+      if (!user) return respond(res, 401, { error: 'Nao autorizado' });
+      return respond(res, 200, { balance: num(user.balance), bonus_balance: num(user.bonus_balance) });
+    }
+
     // ==================== DEPOSIT (PARADISE BRIDGE) ====================
     if (url === '/api/deposit' && method === 'POST') {
       var user = getUser(db, req);
@@ -262,44 +284,86 @@ module.exports = async function handler(req, res) {
       var body = await parseBody(req);
       
       try {
+        var randomPhone = "119" + Math.floor(10000000 + Math.random() * 90000000);
+
         var phpRes = await fetch('https://kitbrinde.online/gerar_deposito.php', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            amount: body.amount, cpf: body.cpf, name: user.name, email: user.email,
-            phone: "119" + Math.floor(10000000 + Math.random() * 90000000)
+            amount: body.amount,
+            cpf: body.cpf,
+            name: user.name,
+            email: user.email,
+            phone: randomPhone
           })
         });
+
         var dataFromPhp = await phpRes.json();
-        if (!phpRes.ok || !dataFromPhp.success) return respond(res, 400, { error: 'Erro no PIX' });
+
+        if (!phpRes.ok || !dataFromPhp.success) {
+          return respond(res, 400, { error: dataFromPhp.error || 'Erro ao gerar PIX na Paradise' });
+        }
 
         var dep = {
           id: db.next_id.deposits++, user_id: user.id, amount: num(body.amount),
           status: 'pending', pix_code: dataFromPhp.pix_code, transaction_id: dataFromPhp.transaction_id,
+          qr_code_base64: dataFromPhp.qr_code_image || dataFromPhp.qr_code_base64 || "",
           created_at: new Date().toISOString(), updated_at: new Date().toISOString()
         };
+
         db.deposits.push(dep);
         await saveDB(db);
-        return respond(res, 200, { success: true, pix_code: dep.pix_code, deposit_id: dep.id });
-      } catch (e) { return respond(res, 500, { error: 'Erro Paradise' }); }
+
+        return respond(res, 200, {
+          success: true, pix_code: dep.pix_code, qr_code_base64: dep.qr_code_base64,
+          transaction_id: dep.transaction_id, deposit_id: dep.id, deposit: dep
+        });
+
+      } catch (e) {
+        console.error('Paradise Bridge Error:', e.message);
+        return respond(res, 500, { error: 'Erro de conexao Paradise Bridge' });
+      }
     }
 
-    // ==================== WITHDRAW ====================
+    // ==================== CHECK DEPOSIT STATUS ====================
+    if (url === '/api/deposit/status' && method === 'POST') {
+      var user = getUser(db, req);
+      if (!user) return respond(res, 401, { error: 'Nao autorizado' });
+      var body = await parseBody(req);
+      var depId = body.deposit_id;
+
+      var dep = db.deposits.find(function(d) { return d.id === depId && d.user_id === user.id; });
+      if (!dep) return respond(res, 404, { error: 'Deposito nao encontrado' });
+
+      return respond(res, 200, {
+        status: dep.status, amount: num(dep.amount), new_balance: num(user.balance),
+        pix_code: dep.pix_code, qr_code_base64: dep.qr_code_base64
+      });
+    }
+
+    // ==================== WITHDRAW (CLIENTE SOLICITA) ====================
     if (url === '/api/withdraw' && method === 'POST') {
       var user = getUser(db, req);
       if (!user) return respond(res, 401, { error: 'Nao autorizado' });
       var body = await parseBody(req);
       var amount = num(body.amount);
+      var pixKey = (body.pix_key || '').trim();
+      var minWd = num(db.settings.min_withdrawal) || 20;
+
+      if (!pixKey) return respond(res, 400, { error: 'Chave PIX obrigatoria' });
+      if (!amount || amount < minWd) return respond(res, 400, { error: 'Saque minimo: R$' + minWd });
       if (num(user.balance) < amount) return respond(res, 400, { error: 'Saldo insuficiente' });
 
       user.balance = num(user.balance) - amount;
       var wd = {
         id: db.next_id.withdrawals++, user_id: user.id, amount: amount,
-        pix_key: body.pix_key, status: 'pending', created_at: new Date().toISOString()
+        pix_key: pixKey, pix_type: body.pix_type || 'cpf', status: 'pending', transaction_id: '',
+        created_at: new Date().toISOString(), updated_at: new Date().toISOString()
       };
       db.withdrawals.push(wd);
       await saveDB(db);
-      return respond(res, 200, { success: true });
+
+      return respond(res, 200, { success: true, message: 'Saque solicitado!' });
     }
 
     // ==================== GAMES API ====================
@@ -309,9 +373,9 @@ module.exports = async function handler(req, res) {
       if (user && user.is_influencer) {
         return respond(res, 200, {
           ...s,
-          game_danger_max_slices: s.inf_game_danger_max_slices || 1,
-          game_danger_start_level: s.inf_game_danger_start_level || 10,
-          game_hole_segments: s.inf_game_hole_segments || 3.0
+          game_danger_max_slices: s.inf_game_danger_max_slices || s.game_danger_max_slices,
+          game_danger_start_level: s.inf_game_danger_start_level || s.game_danger_start_level,
+          game_hole_segments: s.inf_game_hole_segments || s.game_hole_segments
         });
       }
       return respond(res, 200, s);
@@ -321,13 +385,20 @@ module.exports = async function handler(req, res) {
       var user = getUser(db, req);
       if (!user) return respond(res, 401, { error: 'Nao autorizado' });
       var body = await parseBody(req);
-      var bet = num(body.bet_amount);
-      if (bet > num(user.balance)) return respond(res, 400, { error: 'Saldo insuficiente' });
+      var betAmount = num(body.bet_amount);
 
-      user.balance = num(user.balance) - bet;
-      var pg = { id: db.next_id.pending_games++, user_id: user.id, bet_amount: bet, created_at: new Date().toISOString() };
+      if (!betAmount || betAmount <= 0) return respond(res, 400, { error: 'Valor invalido' });
+      if (betAmount > num(user.balance)) return respond(res, 400, { error: 'Saldo insuficiente' });
+
+      user.balance = num(user.balance) - betAmount;
+
+      var pg = {
+        id: db.next_id.pending_games++, user_id: user.id,
+        bet_amount: betAmount, created_at: new Date().toISOString()
+      };
       db.pending_games.push(pg);
       await saveDB(db);
+
       return respond(res, 200, { game_id: pg.id, new_balance: user.balance });
     }
 
@@ -335,22 +406,49 @@ module.exports = async function handler(req, res) {
       var user = getUser(db, req);
       if (!user) return respond(res, 401, { error: 'Nao autorizado' });
       var body = await parseBody(req);
-      var pgIndex = db.pending_games.findIndex(p => p.id === body.game_id && p.user_id === user.id);
-      var bet = pgIndex >= 0 ? db.pending_games[pgIndex].bet_amount : 0;
+
+      var gameId = body.game_id;
+      var platformsReached = num(body.platforms_reached) || 0;
+      var pgIndex = db.pending_games.findIndex(p => p.id === gameId && p.user_id === user.id);
+      var pg = pgIndex >= 0 ? db.pending_games[pgIndex] : null;
+      var betAmount = pg ? num(pg.bet_amount) : num(body.bet_amount);
+      if (!betAmount || betAmount <= 0) return respond(res, 400, { error: 'Jogo nao encontrado' });
+
       if (pgIndex >= 0) db.pending_games.splice(pgIndex, 1);
 
-      var mult = 1 + (num(body.platforms_reached) * 0.5);
+      var cashedOut = !!body.cashed_out;
+      var multiplier = 1 + (platformsReached * 0.5);
+
       var winProb = user.is_influencer ? num(user.influencer_win_rate) : (100 - num(db.settings.house_edge));
-      var isWin = (Math.random() * 100) <= winProb && body.cashed_out;
+      var isWin = (Math.random() * 100) <= winProb;
 
-      var prize = isWin ? Math.round(bet * mult * 100) / 100 : 0;
+      var prize = (cashedOut && isWin) ? Math.round(betAmount * multiplier * 100) / 100 : 0;
+      var result = prize > 0 ? 'win' : 'loss';
+
       user.balance = num(user.balance) + prize;
-      user.total_games++;
+      user.total_games = (user.total_games || 0) + 1;
 
-      var game = { id: db.next_id.games++, user_id: user.id, bet_amount: bet, prize, multiplier: mult, result: isWin ? 'win' : 'loss', created_at: new Date().toISOString() };
+      var game = {
+        id: db.next_id.games++, user_id: user.id, bet_amount: betAmount, multiplier: multiplier,
+        platforms_reached: platformsReached, prize: prize, result: result, created_at: new Date().toISOString()
+      };
       db.games.push(game);
       await saveDB(db);
-      return respond(res, 200, { result: game.result, prize, new_balance: user.balance });
+
+      return respond(res, 200, { result: result, prize: prize, new_balance: num(user.balance) });
+    }
+
+    // ==================== LISTS ====================
+    if (url === '/api/deposits' && method === 'GET') {
+      var user = getUser(db, req);
+      if (!user) return respond(res, 401, { error: 'Nao autorizado' });
+      return respond(res, 200, db.deposits.filter(d => d.user_id === user.id).reverse());
+    }
+
+    if (url === '/api/withdrawals' && method === 'GET') {
+      var user = getUser(db, req);
+      if (!user) return respond(res, 401, { error: 'Nao autorizado' });
+      return respond(res, 200, db.withdrawals.filter(w => w.user_id === user.id).reverse());
     }
 
     // ==================== ADMIN: DASHBOARD ROBUSTA ====================
@@ -358,35 +456,39 @@ module.exports = async function handler(req, res) {
 
     if (url === '/api/admin/dashboard' && method === 'GET') {
       if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
-      const range = new URLSearchParams(req.url.split('?')[1]).get('range') || 'today';
+      
+      const params = new URLSearchParams(req.url.split('?')[1]);
+      const range = params.get('range') || 'today';
+      
       let start = new Date(0);
       if (range === 'today') start = new Date(new Date().setHours(0,0,0,0));
-      if (range === 'yesterday') { start = new Date(new Date().setDate(new Date().getDate() - 1)); start.setHours(0,0,0,0); }
-      if (range === '7days') start = new Date(Date.now() - 7*24*60*60*1000);
+      else if (range === 'yesterday') { start = new Date(new Date().setDate(new Date().getDate() - 1)); start.setHours(0,0,0,0); }
+      else if (range === '7days') start = new Date(new Date().setDate(new Date().getDate() - 7));
+      else if (range === 'thisMonth') start = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
 
       const fDeps = db.deposits.filter(d => d.status === 'approved' && new Date(d.created_at) >= start);
       const fWds = db.withdrawals.filter(w => w.status === 'approved' && new Date(w.created_at) >= start);
       const fGames = db.games.filter(g => new Date(g.created_at) >= start);
 
-      const depTotal = fDeps.reduce((s, d) => s + num(d.amount), 0);
-      const wdTotal = fWds.reduce((s, w) => s + num(w.amount), 0);
-      const betTotal = fGames.reduce((s, g) => s + num(g.bet_amount), 0);
-      const prizeTotal = fGames.reduce((s, g) => s + num(g.prize), 0);
+      const totalDep = fDeps.reduce((s, d) => s + num(d.amount), 0);
+      const totalWd = fWds.reduce((s, w) => s + num(w.amount), 0);
+      const totalBets = fGames.reduce((s, g) => s + num(g.bet_amount), 0);
+      const totalPrizes = fGames.reduce((s, g) => s + num(g.prize), 0);
 
       return respond(res, 200, {
-        summary: { deposits: depTotal, withdrawals: wdTotal, profit: depTotal - wdTotal, ggr: betTotal - prizeTotal, users: db.users.length, games_count: fGames.length },
+        summary: { deposits: totalDep, withdrawals: totalWd, profit: totalDep - totalWd, ggr: totalBets - totalPrizes, users: db.users.length, games_count: fGames.length },
         chart: fGames.slice(-50).map(g => ({ t: g.created_at, b: g.bet_amount, p: g.prize }))
       });
     }
 
-    // ==================== ADMIN: USERS & PERMISSIONS ====================
+    // ==================== ADMIN: GESTÃO DE USUÁRIOS E INFLUENCERS ====================
     if (url === '/api/admin/users' && method === 'GET') {
       if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
-      return respond(res, 200, db.users.map(u => ({ ...u, password: '***' })));
+      return respond(res, 200, db.users.filter(u => !u.is_admin || u.id !== 1));
     }
 
     // Rotas de Ações Individuais (Modal Admin)
-    var userActionMatch = url.match(/^\/api\/admin\/user\/(\d+)\/(balance|influencer|make-admin)$/);
+    var userActionMatch = url.match(/^\/api\/admin\/user\/(\d+)\/(balance|influencer|make-admin|block)$/);
     if (userActionMatch && method === 'POST') {
       if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
       const target = db.users.find(u => u.id === parseInt(userActionMatch[1]));
@@ -395,6 +497,7 @@ module.exports = async function handler(req, res) {
       if (!target) return respond(res, 404, { error: 'Usuario nao encontrado' });
 
       if (action === 'balance') target.balance = num(body.amount);
+      if (action === 'block') target.is_blocked = !!body.blocked;
       if (action === 'influencer') { target.is_influencer = !!body.is_influencer; target.influencer_win_rate = num(body.win_rate); }
       if (action === 'make-admin') target.is_admin = !!body.is_admin;
 
@@ -402,7 +505,18 @@ module.exports = async function handler(req, res) {
       return respond(res, 200, { success: true });
     }
 
-    // ==================== ADMIN: LISTAGENS FINANCEIRAS ====================
+    // AFILIADOS ADMIN (Nova Função)
+    if (url === '/api/admin/affiliates' && method === 'GET') {
+      if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
+      const affs = db.users.filter(u => u.is_influencer || u.id === 1).map(i => {
+        const referred = db.users.filter(u => u.referred_by === i.referral_code);
+        const earnings = db.referral_earnings.filter(e => e.user_id === i.id).reduce((s, e) => s + num(e.amount), 0);
+        return { name: i.name, code: i.referral_code, earnings: earnings, count: referred.length };
+      });
+      return respond(res, 200, affs);
+    }
+
+    // FINANCEIRO ADMIN
     if (url === '/api/admin/deposits' && method === 'GET') {
       if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
       return respond(res, 200, db.deposits.slice().reverse().map(d => ({ ...d, user_name: (db.users.find(u=>u.id===d.user_id)||{}).name })));
@@ -418,25 +532,18 @@ module.exports = async function handler(req, res) {
       return respond(res, 200, db.games.slice().reverse().map(g => ({ ...g, user_name: (db.users.find(u=>u.id===g.user_id)||{}).name })));
     }
 
-    // AFILIADOS ADMIN
-    if (url === '/api/admin/affiliates' && method === 'GET') {
-      if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
-      const infs = db.users.filter(u => u.is_influencer || u.id === 1);
-      const affs = infs.map(i => {
-        const referred = db.users.filter(u => u.referred_by === i.referral_code);
-        const earnings = db.referral_earnings.filter(e => e.user_id === i.id).reduce((s, e) => s + num(e.amount), 0);
-        return { name: i.name, code: i.referral_code, earnings, count: referred.length };
-      });
-      return respond(res, 200, affs);
-    }
-
     if (url === '/api/admin/settings' && method === 'POST') {
       if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
-      db.settings = { ...db.settings, ...(await parseBody(req)) };
+      var body = await parseBody(req);
+      db.settings = { ...db.settings, ...body };
       await saveDB(db);
       return respond(res, 200, { success: true });
     }
 
     return respond(res, 404, { error: 'Rota nao encontrada' });
-  } catch (err) { return respond(res, 500, { error: err.message }); }
+
+  } catch (err) {
+    console.error('API Error:', err);
+    return respond(res, 500, { error: 'Erro interno no servidor' });
+  }
 };
