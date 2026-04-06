@@ -1,5 +1,5 @@
 // ===================== HELIX JUMP 3D GAME =====================
-// Three.js WebGL Helix Jump - Versão Final (Hitbox, 3D, Dificuldade e Cashout)
+// Three.js WebGL Helix Jump - Blindado contra Atrasos de Clique (DevTools/Mobile)
 (function() {
   'use strict';
 
@@ -17,7 +17,7 @@
     segmentsPerPlatform: 12,
     holeSegments: 2,
     
-    // VARIÁVEIS DO PAINEL ADMIN (Dificuldade Dinâmica)
+    // VARIÁVEIS DO PAINEL ADMIN
     dangerStartLevel: 2,
     dangerProgression: 5,
     dangerMaxSlices: 6,
@@ -69,24 +69,50 @@
 
   window.stopHelixGame = function() {
     gameActive = false;
-    if (animFrame) cancelAnimationFrame(animFrame);
-    animFrame = null; removeEvents(); cleanupHUD(); cleanupThree();
+    if (animFrame) {
+        cancelAnimationFrame(animFrame);
+        animFrame = null;
+    }
+    removeEvents(); cleanupHUD(); cleanupThree();
   };
 
-  // === BOTÃO RESGATAR CORRIGIDO (Anti-Delay e Anti-Vazamento) ===
+  // === SOLUÇÃO DEFINITIVA DO BOTÃO DE RESGATE (Anti-Delay Chrome DevTools) ===
   window.helixGameCashOut = function(e) {
     if (e) {
-      e.preventDefault();
-      e.stopPropagation();
+      if (e.preventDefault) e.preventDefault();
+      if (e.stopPropagation) e.stopPropagation();
     }
     
-    if (!gameActive || gamePhase !== 'playing') return;
+    // Evita clique duplo
+    if (isCashingOut) return;
     
+    // Se de fato a pessoa já estava morta antes de clicar, não faz nada
+    if (!gameActive || gamePhase === 'gameover') return;
+    
+    // 1. CONGELA O JOGO IMEDIATAMENTE (Corta o loop de renderização da física)
+    if (animFrame) {
+        cancelAnimationFrame(animFrame);
+        animFrame = null;
+    }
+
+    // 2. Trava as variáveis de status
     isCashingOut = true; 
-    gameActive = false; 
     gamePhase = 'gameover'; 
+    gameActive = false; 
     
-    if (typeof onGameEnd === 'function') {
+    // 3. Feedback visual pro jogador não achar que travou
+    var cb = document.getElementById('hud-cashout');
+    if (cb) {
+        cb.style.background = '#ffffff';
+        cb.style.color = '#000000';
+        cb.innerText = 'PROCESSANDO...';
+        cb.style.pointerEvents = 'none';
+    }
+    
+    // 4. Manda o prêmio pro banco de dados
+    if (typeof window.onGameEnd === 'function') {
+      window.onGameEnd(platformsPassed, true);
+    } else if (typeof onGameEnd === 'function') {
       onGameEnd(platformsPassed, true);
     }
   };
@@ -357,8 +383,8 @@
       + '<div style="width:100%;height:4px;background:rgba(255,255,255,0.15);border-radius:2px;margin-top:4px;overflow:hidden;">'
       + '<div id="hud-progress-bar" style="width:0%;height:100%;background:linear-gradient(90deg,#00e676,#69f0ae);border-radius:2px;transition:width 0.3s;"></div></div></div>';
 
-    // === BOTÃO DE SAQUE ATUALIZADO (Eventos Mousedown e Touchstart rápidos) ===
-    html += '<div id="hud-cashout" style="position:absolute;top:12px;right:12px;z-index:100;pointer-events:auto;background:linear-gradient(135deg,#00e676,#00c853);color:#000;padding:14px 24px;border-radius:12px;font-family:Inter,sans-serif;cursor:pointer;font-weight:900;font-size:15px;text-transform:uppercase;letter-spacing:1px;border:none;box-shadow:0 4px 15px rgba(0,230,118,0.4);display:none;" onmousedown="helixGameCashOut(event)" ontouchstart="helixGameCashOut(event)">Resgatar</div>';
+    // A MÁGICA ACONTECE AQUI: onpointerdown e ontouchstart direto no HTML furam o bloqueio de delay do DevTools/Chrome
+    html += '<button id="hud-cashout" style="position:absolute;top:12px;right:12px;z-index:9999;pointer-events:auto;background:linear-gradient(135deg,#00e676,#00c853);color:#000;padding:16px 28px;border-radius:12px;font-family:Inter,sans-serif;cursor:pointer;font-weight:900;font-size:16px;text-transform:uppercase;letter-spacing:1px;border:none;box-shadow:0 4px 15px rgba(0,230,118,0.4);display:none;" onpointerdown="window.helixGameCashOut(event)" ontouchstart="window.helixGameCashOut(event)" onclick="window.helixGameCashOut(event)">RESGATAR</button>';
 
     html += '<div id="hud-start" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:100;font-family:Inter,sans-serif;text-align:center;pointer-events:none;">'
       + '<div style="font-size:20px;font-weight:700;color:rgba(0,0,0,0.6);">Toque para jogar</div>'
@@ -377,6 +403,7 @@
     style.textContent = '@keyframes helixBounce{0%,100%{transform:translateY(0)}50%{transform:translateY(10px)}}@keyframes helixFadeUp{0%{opacity:1;transform:translate(-50%,-50%) scale(1)}100%{opacity:0;transform:translate(-50%,-80%) scale(1.5)}}@keyframes helixPulse{0%,100%{box-shadow:0 4px 15px rgba(0,230,118,0.4)}50%{box-shadow:0 4px 25px rgba(0,230,118,0.7)}}';
     hudContainer.appendChild(style);
     container.appendChild(hudContainer);
+    
     updateHUD();
   }
 
@@ -455,11 +482,36 @@
     window.removeEventListener('resize', onResize);
   }
 
-  function onDown(e) { if (gamePhase==='ready') startPlaying(); isDragging=true; lastDragX=e.clientX; }
-  function onMove(e) { if (!isDragging) return; var dx=e.clientX-lastDragX; helixRotation+=dx*CONFIG.rotationSensitivity; if(helixGroup)helixGroup.rotation.y=helixRotation; lastDragX=e.clientX; }
+  // Previne que clicar no HUD arraste a torre sem querer
+  function onDown(e) { 
+    if (e.target && e.target.id === 'hud-cashout') return;
+    if (gamePhase==='ready') startPlaying(); 
+    isDragging=true; 
+    lastDragX=e.clientX; 
+  }
+  function onMove(e) { 
+    if (!isDragging) return; 
+    var dx=e.clientX-lastDragX; 
+    helixRotation+=dx*CONFIG.rotationSensitivity; 
+    if(helixGroup)helixGroup.rotation.y=helixRotation; 
+    lastDragX=e.clientX; 
+  }
   function onUp() { isDragging=false; }
-  function onTouchDown(e) { e.preventDefault(); if(gamePhase==='ready')startPlaying(); isDragging=true; lastDragX=e.touches[0].clientX; }
-  function onTouchMove(e) { e.preventDefault(); if(!isDragging)return; var dx=e.touches[0].clientX-lastDragX; helixRotation+=dx*CONFIG.rotationSensitivity; if(helixGroup)helixGroup.rotation.y=helixRotation; lastDragX=e.touches[0].clientX; }
+  function onTouchDown(e) { 
+    if (e.target && e.target.id === 'hud-cashout') return;
+    e.preventDefault(); 
+    if(gamePhase==='ready')startPlaying(); 
+    isDragging=true; 
+    lastDragX=e.touches[0].clientX; 
+  }
+  function onTouchMove(e) { 
+    e.preventDefault(); 
+    if(!isDragging)return; 
+    var dx=e.touches[0].clientX-lastDragX; 
+    helixRotation+=dx*CONFIG.rotationSensitivity; 
+    if(helixGroup)helixGroup.rotation.y=helixRotation; 
+    lastDragX=e.touches[0].clientX; 
+  }
   function onResize() {
     if(!renderer||!camera) return;
     var ct=document.getElementById('gameCanvas').parentElement;
@@ -490,7 +542,10 @@
       if (comboTimer > 0) { comboTimer--; if (comboTimer <= 0) comboCount = 0; }
       checkCollisions();
       
-      if (ballWorldY < -(CONFIG.platformCount + 2) * CONFIG.platformSpacing) triggerGameOver();
+      // AUTO-WIN! Se o jogador passar todas as plataformas, ganha sozinho
+      if (ballWorldY < -(CONFIG.platformCount + 1) * CONFIG.platformSpacing) {
+          window.helixGameCashOut();
+      }
     }
 
     if (camera && gamePhase !== 'ready') {
@@ -506,7 +561,6 @@
     updateHUD();
   }
 
-  // ===================== COLISÃO REESCRITA (100% PRECISA) =====================
   function checkCollisions() {
     if (ballVelY <= 0) return;
 
@@ -519,7 +573,8 @@
       var platTop = p.y + CONFIG.platformHeight / 2;
       var platBottom = p.y - CONFIG.platformHeight / 2;
 
-      if (ballWorldY <= platTop + CONFIG.ballRadius && ballWorldY >= platBottom - 0.15 && ballVelY > 0) {
+      // Hitbox refinada (ajuda a não matar o jogador milissegundos antes dele clicar no botão)
+      if (ballWorldY <= platTop + (CONFIG.ballRadius * 0.5) && ballWorldY >= platBottom && ballVelY > 0) {
         var hEnd = p.holeStart + p.holeSize;
         var inHole = isAngleInRange(ballAngle, p.holeStart, hEnd);
 
@@ -571,10 +626,16 @@
 
   function triggerGameOver() {
     if (gamePhase === 'gameover') return;
-    gamePhase = 'gameover';
+    gamePhase = 'gameover'; 
+    
+    // Some com o botão de resgatar imediatamente pra pessoa nem conseguir clicar se ela morrer
+    var cb = document.getElementById('hud-cashout');
+    if (cb) cb.style.display = 'none';
+    
     setTimeout(function() {
       gameActive = false;
-      if (typeof onGameEnd === 'function') onGameEnd(platformsPassed, false);
+      if (typeof window.onGameEnd === 'function') window.onGameEnd(platformsPassed, false);
+      else if (typeof onGameEnd === 'function') onGameEnd(platformsPassed, false);
     }, 500);
   }
 
