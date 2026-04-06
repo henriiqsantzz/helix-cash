@@ -1,29 +1,29 @@
 // ===================== HELIX JUMP 3D GAME =====================
-// Three.js WebGL Helix Jump - Física e Câmera Corrigidas
+// Three.js WebGL Helix Jump - Enquadramento Mobile Perfeito
 (function() {
   'use strict';
 
-  // CONFIGURAÇÕES CORRIGIDAS (Câmera distante, FOV baixo para não distorcer)
+  // CONFIGURAÇÕES CORRIGIDAS (Plataforma menor para caber na tela e câmera ajustada)
   var CONFIG = {
     platformCount: 30,
     platformSpacing: 2.2,
-    platformOuterRadius: 3.0, // Plataforma mais larga
+    platformOuterRadius: 2.2, // Reduzido (era 3.0) para NÃO cortar nas laterais do celular
     platformInnerRadius: 0.5,
     platformHeight: 0.35,
-    postRadius: 0.5,          // Pilar proporcional
+    postRadius: 0.5,
     postHeight: 200,
-    ballRadius: 0.35,
+    ballRadius: 0.30,         // Bola levemente menor para manter proporção
     ballBounceForce: 0.22,
     gravity: 0.015,
     segmentsPerPlatform: 12,
     holeSegments: 2,
     
-    // === A MÁGICA DA CÂMERA (CORRIGIDA) ===
-    cameraFov: 45,            // FOV menor tira o efeito "olho de peixe" bizarro
-    cameraDistance: 14.0,     // Câmera BEM mais para trás
-    cameraHeight: 6.0,        // Câmera posicionada bem acima da bola
-    cameraOffsetDown: 4.0,    // Foca um pouco abaixo da bola (mostra o abismo sem quebrar o jogo)
-    postExtraTop: 20.0,       // Pilar longo o suficiente pra vazar a tela pra cima
+    // === CÂMERA E ENQUADRAMENTO ===
+    cameraFov: 60,            // Ângulo natural
+    cameraDistance: 11.0,     // Longe o suficiente para ver toda a largura
+    cameraHeight: 6.5,        // Altura da câmera
+    cameraOffsetDown: 3.5,    // Olha um pouco para baixo
+    postExtraTop: 20.0,       // Mantém o pilar subindo infinito
     
     cameraFollowSpeed: 0.08,
     rotationSensitivity: 0.008,
@@ -119,7 +119,6 @@
     createPlatforms();
     createBall();
 
-    // AJUSTE: Câmera posicionada de forma limpa, focada no ponto certo
     camera.position.set(0, ballWorldY + CONFIG.cameraHeight, CONFIG.cameraDistance);
     camera.lookAt(0, ballWorldY - CONFIG.cameraOffsetDown, 0);
     cameraTargetY = ballWorldY + CONFIG.cameraHeight;
@@ -445,7 +444,6 @@
     if (camera && gamePhase !== 'ready') {
       cameraTargetY = ballWorldY + CONFIG.cameraHeight;
       camera.position.y += (cameraTargetY - camera.position.y) * CONFIG.cameraFollowSpeed;
-      // AJUSTE: Mantém a câmera olhando de forma estável pro centro, sem virar de ponta cabeça
       camera.lookAt(0, camera.position.y - CONFIG.cameraHeight - CONFIG.cameraOffsetDown, 0);
     }
 
