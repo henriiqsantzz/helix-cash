@@ -8,10 +8,9 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/style.css">
   <style>
-    body { background: #0a0a1a; margin: 0; overflow-x: hidden; }
+    body { background: #0a0a1a; margin: 0; overflow-x: hidden; font-family: 'Inter', sans-serif; color: #fff; }
     .admin-layout { display: flex; min-height: 100vh; width: 100%; }
     
-    /* Sidebar Layout (Desktop) */
     .admin-sidebar {
       width: 260px; background: #12122a; border-right: 1px solid rgba(124,77,255,0.15);
       display: flex; flex-direction: column; position: fixed; height: 100vh; top: 0; left: 0; z-index: 1000;
@@ -26,79 +25,29 @@
       position: sticky; top: 0; z-index: 998;
     }
 
-    /* Mobile Responsiveness */
     @media (max-width: 900px) {
       .admin-mobile-header { display: flex; }
       .admin-sidebar { transform: translateX(-100%); box-shadow: 5px 0 15px rgba(0,0,0,0.5); }
       .admin-sidebar.open { transform: translateX(0); }
       .admin-main { margin-left: 0; padding: 16px; }
-      .admin-cards { grid-template-columns: repeat(2, 1fr) !important; gap: 12px; }
-      .admin-table th, .admin-table td { font-size: 12px; padding: 10px 8px; white-space: nowrap; }
-      .admin-header h1 { font-size: 24px; }
-    }
-    @media (max-width: 480px) {
-      .admin-cards { grid-template-columns: 1fr !important; }
     }
 
-    /* Utilities */
     .admin-section { display: none; animation: fadeIn 0.3s ease; }
     .admin-section.active { display: block; }
     @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     
-    .admin-actions { display: flex; gap: 6px; flex-wrap: wrap; }
-    .refresh-btn {
-      background: rgba(124,77,255,0.1); color: #b388ff; padding: 8px 16px; border-radius: 8px; 
-      font-size: 13px; font-weight: 600; border: 1px solid rgba(124,77,255,0.2); cursor: pointer;
-      display: flex; align-items: center; gap: 6px;
-    }
-    .refresh-btn:hover { background: rgba(124,77,255,0.2); }
-    
-    .settings-form { max-width: 600px; width: 100%; }
-    .settings-form .form-group { margin-bottom: 20px; }
-    
-    .influencer-badge {
-      display: inline-block; padding: 2px 8px; border-radius: 50px;
-      font-size: 10px; font-weight: 900; background: rgba(255,193,7,0.15);
-      color: #ffc107; border: 1px solid rgba(255,193,7,0.3); margin-left: 4px;
-    }
-    
-    .auto-badge {
-      display: inline-block; padding: 4px 12px; border-radius: 50px;
-      font-size: 11px; font-weight: 700; background: rgba(0,230,118,0.15);
-      color: #00e676; border: 1px solid rgba(0,230,118,0.3);
-    }
-
-    /* Modal */
-    .modal-overlay {
-      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(0,0,0,0.7); backdrop-filter: blur(5px);
-      display: flex; align-items: center; justify-content: center; z-index: 2000;
-    }
-    .modal {
-      background: #12122a; border: 1px solid rgba(124,77,255,0.2);
-      border-radius: 16px; padding: 24px; max-width: 450px; width: 90%;
-      animation: slideUp 0.3s ease; box-shadow: 0 10px 40px rgba(0,0,0,0.5);
-    }
-    .modal h3 { font-size: 20px; font-weight: 900; margin-bottom: 20px; }
-    .modal .form-group { margin-bottom: 16px; }
-    .modal-actions { display: flex; gap: 8px; margin-top: 20px; }
-    
-    .user-detail { font-size: 11px; color: #a0a0c0; margin-top: 2px; }
-    .card-icon { font-size: 24px; margin-bottom: 4px; }
-    
     .admin-card { position: relative; overflow: hidden; background: #12122a; padding: 20px; border-radius: 12px; border: 1px solid rgba(124,77,255,0.1); }
-    .admin-card::after {
-      content: ''; position: absolute; top: -50%; right: -50%;
-      width: 100px; height: 100px; border-radius: 50%; background: rgba(124,77,255,0.05);
-    }
-    
+    .value { font-size: 24px; font-weight: 900; margin-top: 8px; }
+    .green { color: #00e676; }
+    .red { color: #ff1744; }
+    .purple { color: #7c4dff; }
+
     .search-input {
       width: 100%; padding: 12px 16px; border-radius: 10px;
       background: #1a1a3e; border: 1px solid rgba(124,77,255,0.1);
-      color: #fff; font-size: 14px; margin-bottom: 16px; outline: none; transition: border 0.2s;
+      color: #fff; font-size: 14px; margin-bottom: 16px; outline: none;
     }
-    .search-input:focus { border-color: #7c4dff; }
-    
+
     .tab-bar { display: flex; gap: 8px; margin-bottom: 16px; overflow-x: auto; padding-bottom: 4px; }
     .tab-btn {
       padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600;
@@ -106,23 +55,39 @@
     }
     .tab-btn.active { background: #7c4dff; color: white; }
     
-    .table-responsive { width: 100%; overflow-x: auto; border-radius: 12px; border: 1px solid rgba(124,77,255,0.1); }
+    .table-responsive { width: 100%; overflow-x: auto; border-radius: 12px; border: 1px solid rgba(124,77,255,0.1); background: #12122a; }
+    .admin-table { width: 100%; border-collapse: collapse; }
+    .admin-table th { text-align: left; padding: 15px; background: rgba(124,77,255,0.05); color: #a0a0c0; font-size: 12px; text-transform: uppercase; }
+    .admin-table td { padding: 15px; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 14px; }
+
+    .modal-overlay {
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.85); backdrop-filter: blur(5px);
+      display: none; align-items: center; justify-content: center; z-index: 2000;
+    }
+    .modal {
+      background: #12122a; border: 1px solid rgba(124,77,255,0.2);
+      border-radius: 16px; padding: 24px; max-width: 500px; width: 90%;
+    }
+    
+    .influencer-badge { background: rgba(255,193,7,0.15); color: #ffc107; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 800; margin-left: 5px; }
+    .admin-badge { background: rgba(124,77,255,0.15); color: #b388ff; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 800; margin-left: 5px; }
   </style>
 </head>
 <body>
 
 <div class="admin-mobile-header">
-  <div class="logo" style="font-size:18px">HELIX<span>CASH</span></div>
-  <button onclick="document.querySelector('.admin-sidebar').classList.toggle('open')" style="background:none;color:white;font-size:24px;border:none;cursor:pointer">☰</button>
+  <div class="logo">HELIX<span>CASH</span></div>
+  <button onclick="document.querySelector('.admin-sidebar').classList.toggle('open')">☰</button>
 </div>
 
 <div class="admin-layout">
   <aside class="admin-sidebar">
-    <div style="padding:24px 20px 10px;">
+    <div style="padding:24px 20px;">
         <div class="logo">HELIX<span>CASH</span></div>
-        <p style="font-size:11px;color:#a0a0c0;margin-top:4px">Painel Administrativo</p>
+        <p style="font-size:11px;color:#a0a0c0">Painel Administrativo v3.0</p>
     </div>
-    <nav class="admin-nav" style="flex:1;overflow-y:auto;padding-top:10px;">
+    <nav class="admin-nav" style="flex:1">
       <button class="admin-nav-item active" data-section="dashboard">📊 Dashboard</button>
       <button class="admin-nav-item" data-section="users">👥 Usuários</button>
       <button class="admin-nav-item" data-section="influencers">⭐ Influenciadores</button>
@@ -131,92 +96,98 @@
       <button class="admin-nav-item" data-section="games">🎮 Jogos</button>
       <button class="admin-nav-item" data-section="settings">⚙️ Configurações</button>
     </nav>
-    <div style="padding:20px; border-top: 1px solid rgba(124,77,255,0.15);">
-      <button onclick="window.location.href='/'" class="btn btn-secondary btn-sm btn-block" style="font-size:12px;margin-bottom:8px;">← Voltar ao site</button>
-      <button onclick="adminLogout()" class="btn btn-danger btn-sm btn-block" style="font-size:12px;">Sair</button>
+    <div style="padding:20px;">
+      <button onclick="window.location.href='/'" class="btn btn-secondary btn-block">Voltar ao Site</button>
+      <button onclick="adminLogout()" class="btn btn-danger btn-block" style="margin-top:10px">Sair</button>
     </div>
   </aside>
-
-  <div id="sidebarOverlay" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:999;" onclick="document.querySelector('.admin-sidebar').classList.remove('open')"></div>
 
   <main class="admin-main">
 
     <div id="section-dashboard" class="admin-section active">
-      <div class="admin-header" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
-        <div><h1>📊 Dashboard</h1><p style="color:#a0a0c0">Gestão financeira e métricas</p></div>
-        <select class="form-input" style="max-width:180px;" id="dashboardRange" onchange="loadDashboard()">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+        <h1>📊 Dashboard</h1>
+        <select id="dashboardRange" class="form-input" style="width:200px" onchange="loadDashboard()">
           <option value="today">Hoje</option>
           <option value="yesterday">Ontem</option>
           <option value="7days">Últimos 7 dias</option>
           <option value="thisMonth">Este mês</option>
           <option value="lastMonth">Mês passado</option>
-          <option value="max">Máximo</option>
+          <option value="max" selected>Tudo (Máximo)</option>
         </select>
       </div>
 
-      <div class="admin-cards" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); display:grid; gap:20px;">
-        <div class="admin-card"><div class="card-icon">💰</div><div class="label">Depósitos</div><div class="value green" id="d-deposits">R$ 0,00</div></div>
-        <div class="admin-card"><div class="card-icon">💸</div><div class="label">Saques</div><div class="value red" id="d-withdrawals">R$ 0,00</div></div>
-        <div class="admin-card"><div class="card-icon">📈</div><div class="label">Lucro Líquido</div><div class="value green" id="d-profit">R$ 0,00</div></div>
-        <div class="admin-card"><div class="card-icon">💵</div><div class="label">GGR (Casa)</div><div class="value green" id="d-ggr">R$ 0,00</div></div>
-        <div class="admin-card"><div class="card-icon">👥</div><div class="label">Novos Usuários</div><div class="value purple" id="d-users">0</div></div>
-        <div class="admin-card"><div class="card-icon">🎮</div><div class="label">Total Jogos</div><div class="value purple" id="d-games">0</div></div>
+      <div class="admin-cards" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:20px;">
+        <div class="admin-card"><div>💰 Depósitos</div><div class="value green" id="d-deposits">R$ 0,00</div></div>
+        <div class="admin-card"><div>💸 Saques</div><div class="value red" id="d-withdrawals">R$ 0,00</div></div>
+        <div class="admin-card"><div>📈 Lucro Líquido</div><div class="value green" id="d-profit">R$ 0,00</div></div>
+        <div class="admin-card"><div>🎮 Lucro Cassino (GGR)</div><div class="value purple" id="d-ggr">R$ 0,00</div></div>
+        <div class="admin-card"><div>👥 Novos Usuários</div><div class="value" id="d-users">0</div></div>
+        <div class="admin-card"><div>🕹️ Partidas</div><div class="value" id="d-games">0</div></div>
       </div>
     </div>
 
     <div id="section-users" class="admin-section">
-      <div class="admin-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
-        <div><h1>👥 Usuários</h1><p style="color:#a0a0c0">Gerenciar clientes e permissões</p></div>
-        <button class="refresh-btn" onclick="loadUsers()">🔄 Atualizar</button>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+        <h1>👥 Usuários</h1>
+        <button class="btn btn-primary" onclick="loadUsers()">🔄 Atualizar</button>
       </div>
-      <input type="text" class="search-input" id="searchUsers" placeholder="Buscar por nome ou email..." oninput="filterUsers()">
+      <input type="text" id="searchUsers" class="search-input" placeholder="Buscar por nome ou email..." oninput="filterUsers()">
       <div class="table-responsive">
         <table class="admin-table">
-          <thead>
-            <tr><th>ID</th><th>Nome</th><th>Email</th><th>Saldo</th><th>Status</th><th>Ações</th></tr>
-          </thead>
+          <thead><tr><th>ID</th><th>Usuário</th><th>Email</th><th>Saldo</th><th>Cargos</th><th>Status</th><th>Ações</th></tr></thead>
           <tbody id="usersTable"></tbody>
         </table>
       </div>
     </div>
 
     <div id="section-influencers" class="admin-section">
-      <div class="admin-header">
-        <h1>⭐ Influenciadores</h1>
-        <p style="color:#a0a0c0">Ajuste individual de dificuldade e ganhos</p>
-      </div>
+      <h1>⭐ Influenciadores</h1>
+      <p style="color:#a0a0c0">Gerencie a dificuldade individual para marketing.</p>
       <div class="table-responsive">
         <table class="admin-table">
-          <thead>
-            <tr><th>Nome</th><th>Email</th><th>Taxa de Ganho (%)</th><th>Influencer</th><th>Admin</th><th>Ações</th></tr>
-          </thead>
+          <thead><tr><th>Nome</th><th>Email</th><th>Taxa de Vitória (%)</th><th>Saldo</th><th>Ações</th></tr></thead>
           <tbody id="influencersTable"></tbody>
         </table>
       </div>
     </div>
 
     <div id="section-deposits" class="admin-section">
-      <div class="admin-header"><h1>💰 Depósitos</h1></div>
-      <div class="table-responsive"><table class="admin-table"><thead><tr><th>ID</th><th>Valor</th><th>Status</th><th>Data</th></tr></thead><tbody id="depositsTable"></tbody></table></div>
+      <h1>💰 Depósitos</h1>
+      <div class="table-responsive">
+        <table class="admin-table">
+          <thead><tr><th>ID</th><th>Usuário</th><th>Valor</th><th>Status</th><th>Data</th></tr></thead>
+          <tbody id="depositsTable"></tbody>
+        </table>
+      </div>
     </div>
 
     <div id="section-withdrawals" class="admin-section">
-      <div class="admin-header"><h1>💸 Saques</h1></div>
-      <div class="table-responsive"><table class="admin-table"><thead><tr><th>ID</th><th>Valor</th><th>Chave PIX</th><th>Status</th></tr></thead><tbody id="withdrawalsTable"></tbody></table></div>
+      <h1>💸 Saques</h1>
+      <div class="table-responsive">
+        <table class="admin-table">
+          <thead><tr><th>ID</th><th>Usuário</th><th>Valor</th><th>Chave PIX</th><th>Status</th></tr></thead>
+          <tbody id="withdrawalsTable"></tbody>
+        </table>
+      </div>
     </div>
 
     <div id="section-games" class="admin-section">
-      <div class="admin-header"><h1>🎮 Jogos</h1></div>
-      <div class="table-responsive"><table class="admin-table"><thead><tr><th>ID</th><th>Aposta</th><th>Prêmio</th><th>Data</th></tr></thead><tbody id="gamesTable"></tbody></table></div>
+      <h1>🎮 Jogos</h1>
+      <div class="table-responsive">
+        <table class="admin-table">
+          <thead><tr><th>ID</th><th>Jogador</th><th>Aposta</th><th>Prêmio</th><th>Resultado</th><th>Data</th></tr></thead>
+          <tbody id="gamesTable"></tbody>
+        </table>
+      </div>
     </div>
 
     <div id="section-settings" class="admin-section">
-      <div class="admin-header"><h1>⚙️ Configurações</h1><p style="color:#a0a0c0">Configurações globais do sistema</p></div>
-      <div class="settings-form">
-        <div class="form-group"><label>Vantagem da Casa Global (%)</label><input type="number" class="form-input" id="set-house_edge"></div>
-        <div class="form-group"><label>Depósito Mínimo (R$)</label><input type="number" class="form-input" id="set-min_deposit"></div>
-        <div class="form-group"><label>Saque Mínimo (R$)</label><input type="number" class="form-input" id="set-min_withdrawal"></div>
-        <div class="form-group"><label>Andar Inicial Perigo</label><input type="number" class="form-input" id="set-game_danger_start_level"></div>
+      <h1>⚙️ Configurações</h1>
+      <div style="max-width:600px; background:#12122a; padding:25px; border-radius:12px; border:1px solid rgba(124,77,255,0.1)">
+        <div class="form-group"><label>Taxa da Casa (%)</label><input type="number" id="set-house_edge" class="form-input"></div>
+        <div class="form-group"><label>Depósito Mínimo</label><input type="number" id="set-min_deposit" class="form-input"></div>
+        <div class="form-group"><label>Saque Mínimo</label><input type="number" id="set-min_withdrawal" class="form-input"></div>
         <button class="btn btn-primary btn-block" onclick="saveSettings()">Salvar Configurações</button>
       </div>
     </div>
@@ -224,87 +195,100 @@
   </main>
 </div>
 
-<div id="modal" class="modal-overlay" style="display:none"></div>
-<div id="toast" class="toast hidden"></div>
+<div id="modal" class="modal-overlay">
+  <div class="modal" id="modalContent"></div>
+</div>
 
 <script>
 const token = localStorage.getItem('hc_token');
 if (!token) window.location.href = '/#login';
 
-let allUsers = [];
+let cacheUsers = [];
 
 async function api(url, options = {}) {
   const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
   const res = await fetch(url, { ...options, headers });
   const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'Erro na requisição');
+  if (!res.ok) throw new Error(data.error || 'Erro na API');
   return data;
 }
 
 function fmt(v) { return parseFloat(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 }); }
 
-function showToast(msg, type = 'success') {
-  const t = document.getElementById('toast');
-  t.textContent = msg; t.className = `toast toast-${type}`;
-  t.classList.remove('hidden');
-  setTimeout(() => t.classList.add('hidden'), 3500);
-}
-
-function showModal(html) {
-  document.getElementById('modal').innerHTML = `<div class="modal">${html}</div>`;
-  document.getElementById('modal').style.display = 'flex';
-}
-function closeModal() { document.getElementById('modal').style.display = 'none'; }
-
-// Dashboard com filtros
+// DASHBOARD
 async function loadDashboard() {
   try {
     const range = document.getElementById('dashboardRange').value;
     const d = await api(`/api/admin/dashboard?range=${range}`);
-    document.getElementById('d-deposits').textContent = 'R$ ' + fmt(d.stats.deposits);
-    document.getElementById('d-withdrawals').textContent = 'R$ ' + fmt(d.stats.withdrawals);
-    document.getElementById('d-profit').textContent = 'R$ ' + fmt(d.stats.deposits - d.stats.withdrawals);
-    document.getElementById('d-ggr').textContent = 'R$ ' + fmt(d.stats.bets - d.stats.prizes);
-    document.getElementById('d-users').textContent = d.stats.new_users;
-    document.getElementById('d-games').textContent = d.stats.games_count || 0;
-  } catch (e) { showToast(e.message, 'error'); }
+    document.getElementById('d-deposits').textContent = 'R$ ' + fmt(d.summary.deposits);
+    document.getElementById('d-withdrawals').textContent = 'R$ ' + fmt(d.summary.withdrawals);
+    document.getElementById('d-profit').textContent = 'R$ ' + fmt(d.summary.profit);
+    document.getElementById('d-ggr').textContent = 'R$ ' + fmt(d.summary.ggr);
+    document.getElementById('d-users').textContent = d.summary.users;
+    document.getElementById('d-games').textContent = d.summary.games_count;
+  } catch (e) { console.error(e); }
 }
 
+// USERS & INFLUENCERS
 async function loadUsers() {
   try {
-    allUsers = await api('/api/admin/users');
-    renderUsers(allUsers);
-  } catch (e) { showToast(e.message, 'error'); }
+    cacheUsers = await api('/api/admin/users');
+    renderUsers(cacheUsers);
+    renderInfluencers(cacheUsers.filter(u => u.is_influencer));
+  } catch (e) { alert(e.message); }
 }
 
 function renderUsers(users) {
   document.getElementById('usersTable').innerHTML = users.map(u => `
     <tr>
       <td>#${u.id}</td>
-      <td><strong>${u.name}</strong> ${u.is_influencer ? '⭐' : ''} ${u.is_admin ? '👑' : ''}</td>
+      <td>${u.name}</td>
       <td>${u.email}</td>
-      <td>R$ ${fmt(u.balance)}</td>
-      <td>${u.is_blocked ? 'Bloqueado' : 'Ativo'}</td>
-      <td class="admin-actions">
-        <button class="btn btn-sm" onclick="openEditModal(${u.id})">Editar</button>
+      <td class="green">R$ ${fmt(u.balance)}</td>
+      <td>
+        ${u.is_admin ? '<span class="admin-badge">ADMIN</span>' : ''}
+        ${u.is_influencer ? '<span class="influencer-badge">INF</span>' : ''}
       </td>
+      <td>${u.is_blocked ? '<span class="red">Bloqueado</span>' : '<span class="green">Ativo</span>'}</td>
+      <td><button class="btn btn-sm" onclick="openEdit(${u.id})">Editar</button></td>
     </tr>
   `).join('');
 }
 
-function openEditModal(id) {
-  const u = allUsers.find(x => x.id === id);
-  showModal(`
-    <h3>Editar Usuário: ${u.name}</h3>
+function renderInfluencers(infs) {
+  document.getElementById('influencersTable').innerHTML = infs.map(u => `
+    <tr>
+      <td>${u.name}</td>
+      <td>${u.email}</td>
+      <td style="color:#ffc107;font-weight:bold">${u.influencer_win_rate}%</td>
+      <td class="green">R$ ${fmt(u.balance)}</td>
+      <td><button class="btn btn-sm" onclick="openEdit(${u.id})">Ajustar</button></td>
+    </tr>
+  `).join('');
+}
+
+function filterUsers() {
+  const q = document.getElementById('searchUsers').value.toLowerCase();
+  const filtered = cacheUsers.filter(u => u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q));
+  renderUsers(filtered);
+}
+
+function openEdit(id) {
+  const u = cacheUsers.find(x => x.id === id);
+  document.getElementById('modalContent').innerHTML = `
+    <h3>Editar: ${u.name}</h3>
     <div class="form-group"><label>Saldo (R$)</label><input type="number" id="m-balance" class="form-input" value="${u.balance}"></div>
-    <div class="form-group"><label>Taxa de Vitória Influencer (%)</label><input type="number" id="m-winrate" class="form-input" value="${u.influencer_win_rate}"></div>
-    <div class="form-group"><label><input type="checkbox" id="m-influencer" ${u.is_influencer ? 'checked' : ''}> Influenciador</label></div>
-    <div class="form-group"><label><input type="checkbox" id="m-admin" ${u.is_admin ? 'checked' : ''}> Administrador</label></div>
-    <div class="modal-actions">
-      <button class="btn btn-primary" onclick="saveUser(${id})">Salvar</button>
-      <button class="btn btn-secondary" onclick="closeModal()">Fechar</button>
+    <div class="form-group"><label>Win Rate Influencer (%)</label><input type="number" id="m-winrate" class="form-input" value="${u.influencer_win_rate || 50}"></div>
+    <div style="margin:15px 0; display:flex; gap:15px">
+      <label><input type="checkbox" id="m-isadmin" ${u.is_admin ? 'checked' : ''}> Admin</label>
+      <label><input type="checkbox" id="m-isinf" ${u.is_influencer ? 'checked' : ''}> Influencer</label>
     </div>
-  `);
+    <div style="display:flex; gap:10px">
+      <button class="btn btn-primary" style="flex:1" onclick="saveUser(${u.id})">Salvar</button>
+      <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+    </div>
+  `;
+  document.getElementById('modal').style.display = 'flex';
 }
 
 async function saveUser(id) {
@@ -312,23 +296,35 @@ async function saveUser(id) {
     id,
     balance: document.getElementById('m-balance').value,
     influencer_win_rate: document.getElementById('m-winrate').value,
-    is_influencer: document.getElementById('m-influencer').checked,
-    is_admin: document.getElementById('m-admin').checked
+    is_admin: document.getElementById('m-isadmin').checked,
+    is_influencer: document.getElementById('m-isinf').checked
   };
-  try {
-    await api('/api/admin/user/update', { method: 'POST', body: JSON.stringify(body) });
-    showToast('Usuário atualizado!');
-    closeModal(); loadUsers();
-  } catch (e) { showToast(e.message, 'error'); }
+  await api('/api/admin/user/update', { method: 'POST', body: JSON.stringify(body) });
+  closeModal(); loadUsers();
 }
 
+function closeModal() { document.getElementById('modal').style.display = 'none'; }
+
+// FINANCEIRO & JOGOS
+async function loadFinancial() {
+  try {
+    const deps = await api('/api/admin/deposits');
+    const wds = await api('/api/admin/withdrawals');
+    const games = await api('/api/admin/games');
+    
+    document.getElementById('depositsTable').innerHTML = deps.map(d => `<tr><td>#${d.id}</td><td>${d.user_name || d.user_id}</td><td class="green">R$ ${fmt(d.amount)}</td><td>${d.status}</td><td>${new Date(d.created_at).toLocaleDateString()}</td></tr>`).join('');
+    document.getElementById('withdrawalsTable').innerHTML = wds.map(w => `<tr><td>#${w.id}</td><td>${w.user_name || w.user_id}</td><td class="red">R$ ${fmt(w.amount)}</td><td>${w.pix_key}</td><td>${w.status}</td></tr>`).join('');
+    document.getElementById('gamesTable').innerHTML = games.map(g => `<tr><td>#${g.id}</td><td>${g.user_name || g.user_id}</td><td>R$ ${fmt(g.bet_amount)}</td><td class="green">R$ ${fmt(g.prize)}</td><td>${g.result}</td><td>${new Date(g.created_at).toLocaleTimeString()}</td></tr>`).join('');
+  } catch (e) {}
+}
+
+// SETTINGS
 async function loadSettings() {
   try {
     const s = await api('/api/admin/settings');
     document.getElementById('set-house_edge').value = s.house_edge;
     document.getElementById('set-min_deposit').value = s.min_deposit;
     document.getElementById('set-min_withdrawal').value = s.min_withdrawal;
-    document.getElementById('set-game_danger_start_level').value = s.game_danger_start_level;
   } catch (e) {}
 }
 
@@ -336,16 +332,13 @@ async function saveSettings() {
   const body = {
     house_edge: document.getElementById('set-house_edge').value,
     min_deposit: document.getElementById('set-min_deposit').value,
-    min_withdrawal: document.getElementById('set-min_withdrawal').value,
-    game_danger_start_level: document.getElementById('set-game_danger_start_level').value
+    min_withdrawal: document.getElementById('set-min_withdrawal').value
   };
-  try {
-    await api('/api/admin/settings', { method: 'POST', body: JSON.stringify(body) });
-    showToast('Configurações salvas!');
-  } catch (e) { showToast(e.message, 'error'); }
+  await api('/api/admin/settings', { method: 'POST', body: JSON.stringify(body) });
+  alert('Configurações salvas!');
 }
 
-// Nav items
+// NAV
 document.querySelectorAll('.admin-nav-item').forEach(btn => {
   btn.onclick = () => {
     document.querySelectorAll('.admin-nav-item').forEach(b => b.classList.remove('active'));
@@ -354,7 +347,9 @@ document.querySelectorAll('.admin-nav-item').forEach(btn => {
     document.getElementById('section-' + btn.dataset.section).classList.add('active');
     
     if (btn.dataset.section === 'dashboard') loadDashboard();
-    if (btn.dataset.section === 'users' || btn.dataset.section === 'influencers') loadUsers();
+    if (btn.dataset.section === 'users') loadUsers();
+    if (btn.dataset.section === 'influencers') loadUsers();
+    if (btn.dataset.section === 'deposits' || btn.dataset.section === 'withdrawals' || btn.dataset.section === 'games') loadFinancial();
     if (btn.dataset.section === 'settings') loadSettings();
   };
 });
