@@ -157,88 +157,69 @@ function updateBetDisplay() {
   document.getElementById('platMeta').textContent = currentBet > 0 ? '14' : '\u2014';
 }
 
-// ===================== PLAY GAME =====================
-document.getElementById('btnPlay').addEventListener('click', async () => {
-  if (currentBet <= 0) return showToast('Selecione um valor de aposta!', 'error');
-  if (!user || user.balance < currentBet) return showToast('Saldo insuficiente! Faca um deposito.', 'error');
+// ===================== PLAY GAME (CORRIGIDO) =====================
 
-  const btn = document.getElementById('btnPlay');
-  btn.disabled = true; btn.innerHTML = '<span class="loader"></span>';
-
+// Esta função recebe os dados vindos do game.js (o motor do jogo)
+async function onGameEnd(platformsReached, cashed, prizeFromGame) {
   try {
-    const data = await api('/api/game/start', {
-      method: 'POST', body: JSON.stringify({ bet_amount: currentBet })
-    });
-    currentGameId = data.game_id;
-    user.balance = data.new_balance;
-    updateUI();
-
-    document.getElementById('page-game').classList.remove('hidden');
-    document.getElementById('gameOverOverlay').classList.add('hidden');
-
-    let serverConfig = null;
-    try {
-      const settings = await api('/api/game/config');
-      if (settings) serverConfig = settings;
-    } catch(e) { }
-
-    startHelixGame(currentBet, serverConfig);
-  } catch (e) { showToast(e.message, 'error'); }
-  finally {
-    btn.disabled = false;
-    btn.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg> JOGAR AGORA';
-  }
-});
-
-function onPlatformPassed(count) { }
-
-async function onGameEnd(platformsReached, cashed) {
-  try {
+    // 1. Envia para o seu banco de dados
     const data = await api('/api/game/finish', {
       method: 'POST',
       body: JSON.stringify({
         game_id: currentGameId,
         platforms_reached: platformsReached,
-        cashed_out: cashed
+        cashed_out: cashed,
+        prize: prizeFromGame // Envia o valor exato que o jogo calculou
       })
     });
 
+    // 2. Atualiza o saldo global com o que o servidor confirmou
     user.balance = data.new_balance;
     updateUI();
 
     const overlay = document.getElementById('gameOverOverlay');
     overlay.classList.remove('hidden');
 
-    if (cashed && data.prize > 0) {
-      document.getElementById('resultTitle').textContent = 'Resgatado!';
-      document.getElementById('resultTitle').style.color = 'var(--primary)';
-      document.getElementById('resultIcon').textContent = '\uD83D\uDCB0';
-    } else if (data.prize > 0) {
-      document.getElementById('resultTitle').textContent = 'Parabens!';
-      document.getElementById('resultTitle').style.color = 'var(--primary)';
-      document.getElementById('resultIcon').textContent = '\uD83C\uDF89';
+    // 3. Define o título e ícone baseado no resultado
+    const resultTitle = document.getElementById('resultTitle');
+    const resultIcon = document.getElementById('resultIcon');
+
+    if (cashed && prizeFromGame > 0) {
+      resultTitle.textContent = 'Resgatado!';
+      resultTitle.style.color = 'var(--primary)';
+      resultIcon.textContent = '💰';
+    } else if (prizeFromGame > 0) {
+      resultTitle.textContent = 'Parabéns!';
+      resultTitle.style.color = 'var(--primary)';
+      resultIcon.textContent = '🎉';
     } else {
-      document.getElementById('resultTitle').textContent = 'Fim de Jogo!';
-      document.getElementById('resultTitle').style.color = '#ff4444';
-      document.getElementById('resultIcon').textContent = '\uD83D\uDCA5';
+      resultTitle.textContent = 'Fim de Jogo!';
+      resultTitle.style.color = '#ff4444';
+      resultIcon.textContent = '💥';
     }
 
-    document.getElementById('resultPrize').textContent = 'R$ ' + formatMoney(data.prize);
-    document.getElementById('resultDetails').textContent =
-      'Plataformas: ' + data.platforms_reached + ' | Multiplicador: ' + data.multiplier + 'x | Aposta: R$ ' + formatMoney(data.bet_amount);
+    // 4. CORREÇÃO DO UNDEFINED:
+    // Usamos 'prizeFromGame' (que veio do motor) ou 'data.prize' (que veio do servidor)
+    // Usamos 'platformsReached' que é o número real de plataformas
+    
+    document.getElementById('resultPrize').textContent = 'R$ ' + formatMoney(prizeFromGame || data.prize);
+    
+    // Aqui montamos a frase de detalhes garantindo que nada seja undefined
+    const totalPlatforms = platformsReached || data.platforms_reached || 0;
+    const multiplier = (prizeFromGame / (currentBet || 1)).toFixed(2);
+    
+    document.getElementById('resultDetails').textContent = 
+      `Plataformas: ${totalPlatforms} | Multiplicador: ${multiplier}x | Aposta: R$ ${formatMoney(currentBet)}`;
 
-  } catch (e) { showToast(e.message, 'error'); }
+  } catch (e) { 
+    showToast("Erro ao finalizar jogo: " + e.message, 'error'); 
+  }
 }
 
-function cashOut() {
-  if (typeof helixGameCashOut === 'function') helixGameCashOut();
-}
-
-function closeGame() {
-  document.getElementById('page-game').classList.add('hidden');
-  if (typeof stopHelixGame === 'function') stopHelixGame();
-  currentGameId = null;
-  loadUserData();
+// Certifique-se que esta função existe para o motor do jogo chamar
+function onPlatformPassed(count) {
+    // Opcional: Atualizar algo no seu painel enquanto o usuário desce
+    console.log("Plataformas passadas:", count);
 }
 
 // ===================== DEPOSIT (CORRIGIDO) =====================
