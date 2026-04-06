@@ -312,18 +312,39 @@ module.exports = async function handler(req, res) {
               }
             })
           });
-          
+
           var rawText = await ppRes.text();
+          console.log('PenguimPay RAW response status:', ppRes.status, 'body:', rawText);
           var ppData = {};
-          try { ppData = JSON.parse(rawText); } catch(e) {}
+          try { ppData = JSON.parse(rawText); } catch(e) { console.error('PenguimPay JSON parse error:', e.message); }
 
           if (!ppRes.ok) {
             return respond(res, 400, { error: 'Aviso PenguimPay: ' + (ppData.message || ppData.error || 'Verifique seus dados.') });
           }
 
-          dep.transaction_id = ppData.transactionId || ppData.id || '';
-          dep.pix_code = ppData.pixCopiaECola || ppData.qrCode || ppData.pix_key || '';
-          dep.qr_code_image = ppData.qrCodeImage || ppData.qrCodeBase64 || '';
+          // Deep-search helper: PenguimPay may nest fields under 'data', 'pix', 'result', etc.
+          function findField(obj, keys) {
+            if (!obj || typeof obj !== 'object') return '';
+            for (var k = 0; k < keys.length; k++) {
+              if (obj[keys[k]] !== undefined && obj[keys[k]] !== null && obj[keys[k]] !== '') return obj[keys[k]];
+            }
+            // Search one level deeper (e.g. data.*, pix.*, result.*)
+            var nested = ['data', 'pix', 'result', 'payment', 'transaction', 'deposit'];
+            for (var n = 0; n < nested.length; n++) {
+              if (obj[nested[n]] && typeof obj[nested[n]] === 'object') {
+                for (var k2 = 0; k2 < keys.length; k2++) {
+                  if (obj[nested[n]][keys[k2]] !== undefined && obj[nested[n]][keys[k2]] !== null && obj[nested[n]][keys[k2]] !== '') return obj[nested[n]][keys[k2]];
+                }
+              }
+            }
+            return '';
+          }
+
+          dep.transaction_id = findField(ppData, ['transactionId', 'transaction_id', 'id', 'externalId', 'external_id', 'txId', 'tx_id']);
+          dep.pix_code = findField(ppData, ['pixCopiaECola', 'pix_copia_e_cola', 'copiaecola', 'copia_e_cola', 'copiaECola', 'pixCode', 'pix_code', 'qrCode', 'qr_code', 'qrcode', 'brcode', 'brCode', 'emv', 'pix_key', 'pixKey', 'code', 'payload']);
+          dep.qr_code_image = findField(ppData, ['qrCodeImage', 'qr_code_image', 'qrCodeBase64', 'qr_code_base64', 'qrcode_image', 'qrcodeImage', 'qr_image', 'qrImage', 'image', 'imageBase64', 'base64']);
+
+          console.log('PenguimPay mapped => transaction_id:', dep.transaction_id, 'pix_code length:', (dep.pix_code||'').length, 'qr_image length:', (dep.qr_code_image||'').length);
         } catch (e) {
           console.error('PenguimPay error:', e.message);
           return respond(res, 500, { error: 'Falha tecnica ao comunicar com a pagadora.' });
@@ -343,6 +364,19 @@ module.exports = async function handler(req, res) {
         transaction_id: dep.transaction_id,
         deposit: dep
       });
+    }
+
+    // ==================== DEBUG: Test PenguimPay raw response ====================
+    if (url === '/api/debug/pix-test' && method === 'GET') {
+      try {
+        var ppRes = await fetch('https://api.penguimpay.com/api/external/pix/deposit', {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + PENGUIMPAY_KEY, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ amount: 1.00, client: { name: 'Debug Test', document: '12345678900', email: 'debug@test.com' } })
+        });
+        var rawText = await ppRes.text();
+        return respond(res, 200, { status: ppRes.status, raw: rawText, parsed: (function(){ try { return JSON.parse(rawText); } catch(e) { return null; } })() });
+      } catch(e) { return respond(res, 500, { error: e.message }); }
     }
 
     // ==================== PENGUIMPAY WEBHOOK ====================
