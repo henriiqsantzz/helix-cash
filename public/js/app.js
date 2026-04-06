@@ -241,22 +241,14 @@ function closeGame() {
   loadUserData();
 }
 
-// ===================== DEPOSIT (PIX MODAL - PARADISE DIRECT) =====================
-document.querySelectorAll('.amount-option[data-dep]').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.amount-option[data-dep]').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    document.getElementById('depositAmount').value = btn.dataset.dep;
-  });
-});
-
+// ===================== DEPOSIT (MODAL FIXO) =====================
 document.getElementById('btnDeposit').addEventListener('click', async () => {
   const amount = parseFloat(document.getElementById('depositAmount').value);
   const cpfEl = document.getElementById('depositCpf');
   const cpf = cpfEl ? cpfEl.value.trim() : '';
   
   if (!amount || amount < 10) return showToast('Deposito minimo: R$10,00', 'error');
-  if (!cpf) return showToast('Informe seu CPF para gerar o PIX', 'error');
+  if (!cpf) return showToast('Informe seu CPF', 'error');
 
   const btn = document.getElementById('btnDeposit');
   btn.disabled = true; 
@@ -269,6 +261,7 @@ document.getElementById('btnDeposit').addEventListener('click', async () => {
 
     currentDepositId = data.deposit_id || (data.deposit ? data.deposit.id : null);
 
+    // 1. Pega o código PIX (Texto)
     const pixCode = data.pix_code || (data.deposit && data.deposit.pix_code) || 'Codigo indisponivel';
     const codeContainer = document.getElementById('pixCode');
     if (codeContainer) codeContainer.textContent = pixCode;
@@ -277,26 +270,29 @@ document.getElementById('btnDeposit').addEventListener('click', async () => {
     const qrLoading = document.getElementById('qrLoading');
 
     if (qrImg) {
-      // USANDO O CAMPO DIRETO DA PARADISE/PHP
-      let qrSource = data.qr_code_base64 || (data.deposit && data.deposit.qr_code_base64);
+      // 2. AQUI ESTÁ A CHAVE: Tenta ler todos os nomes possíveis (base64 ou image)
+      let qrSource = data.qr_code_base64 || data.qr_code_image || 
+                     (data.deposit && (data.deposit.qr_code_base64 || data.deposit.qr_code_image));
       
-      if (qrSource && qrSource.length > 20) {
-        // Limpa espaços e garante o prefixo data:image
+      console.log("DEBUG - Conteudo recebido para imagem:", qrSource);
+
+      if (qrSource && qrSource.length > 50) { // Garante que não é uma string curta/vazia
         qrSource = qrSource.replace(/\s/g, ''); 
+        
+        // Se não tiver o cabeçalho data:image, a gente adiciona na marra
         qrImg.src = qrSource.startsWith('data:') ? qrSource : ('data:image/png;base64,' + qrSource);
         
-        if (qrLoading) qrLoading.style.display = 'none';
         qrImg.style.display = 'block';
+        if (qrLoading) qrLoading.style.display = 'none';
       } else {
         qrImg.style.display = 'none';
         if (qrLoading) qrLoading.style.display = 'block';
+        console.error("ERRO: O servidor enviou os dados, mas a imagem veio vazia.");
       }
     }
 
     const modal = document.getElementById('pixModal');
     if (modal) modal.classList.remove('hidden');
-
-    showToast('PIX Paradise gerado!');
 
     if (currentDepositId) {
       if (depositCheckInterval) clearInterval(depositCheckInterval);
