@@ -153,42 +153,73 @@ function updateBetDisplay() {
   document.getElementById('betAmount').textContent = formatMoney(currentBet);
   const meta = currentBet * 7;
   document.getElementById('metaGanho').textContent = 'R$ ' + formatMoney(meta);
-  document.getElementById('perPlatform').textContent = currentBet > 0 ? 'R$ ' + formatMoney(currentBet * 0.5) : '\u2014';
-  document.getElementById('platMeta').textContent = currentBet > 0 ? '14' : '\u2014';
+  document.getElementById('perPlatform').textContent = currentBet > 0 ? 'R$ ' + formatMoney(currentBet * 0.5) : '—';
+  document.getElementById('platMeta').textContent = currentBet > 0 ? '14' : '—';
 }
 
-// ===================== PLAY GAME (CORRIGIDO) =====================
+// ===================== PLAY GAME =====================
+document.getElementById('btnPlay').addEventListener('click', async () => {
+  if (currentBet <= 0) return showToast('Selecione um valor de aposta!', 'error');
+  if (!user || user.balance < currentBet) return showToast('Saldo insuficiente! Faça um depósito.', 'error');
 
-// Esta função recebe os dados vindos do game.js (o motor do jogo)
+  const btn = document.getElementById('btnPlay');
+  btn.disabled = true; btn.innerHTML = '<span class="loader"></span>';
+
+  try {
+    const data = await api('/api/game/start', {
+      method: 'POST', body: JSON.stringify({ bet_amount: currentBet })
+    });
+    currentGameId = data.game_id;
+    user.balance = data.new_balance;
+    updateUI();
+
+    document.getElementById('page-game').classList.remove('hidden');
+    document.getElementById('gameOverOverlay').classList.add('hidden');
+
+    let serverConfig = null;
+    try {
+      const settings = await api('/api/game/config');
+      if (settings) serverConfig = settings;
+    } catch(e) { }
+
+    startHelixGame(currentBet, serverConfig);
+  } catch (e) { showToast(e.message, 'error'); }
+  finally {
+    btn.disabled = false;
+    btn.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg> JOGAR AGORA';
+  }
+});
+
+function onPlatformPassed(count) { }
+
+// CORREÇÃO: Função agora aceita 3 parâmetros enviados pelo game.js
 async function onGameEnd(platformsReached, cashed, prizeFromGame) {
   try {
-    // 1. Envia para o seu banco de dados
     const data = await api('/api/game/finish', {
       method: 'POST',
       body: JSON.stringify({
         game_id: currentGameId,
         platforms_reached: platformsReached,
         cashed_out: cashed,
-        prize: prizeFromGame // Envia o valor exato que o jogo calculou
+        prize: prizeFromGame // Envia o valor exato calculado pelo jogo
       })
     });
 
-    // 2. Atualiza o saldo global com o que o servidor confirmou
     user.balance = data.new_balance;
     updateUI();
 
     const overlay = document.getElementById('gameOverOverlay');
     overlay.classList.remove('hidden');
 
-    // 3. Define o título e ícone baseado no resultado
+    // Título e Ícone Dinâmico
     const resultTitle = document.getElementById('resultTitle');
     const resultIcon = document.getElementById('resultIcon');
 
-    if (cashed && prizeFromGame > 0) {
+    if (cashed && (prizeFromGame > 0 || data.prize > 0)) {
       resultTitle.textContent = 'Resgatado!';
       resultTitle.style.color = 'var(--primary)';
       resultIcon.textContent = '💰';
-    } else if (prizeFromGame > 0) {
+    } else if ((prizeFromGame > 0 || data.prize > 0)) {
       resultTitle.textContent = 'Parabéns!';
       resultTitle.style.color = 'var(--primary)';
       resultIcon.textContent = '🎉';
@@ -198,33 +229,30 @@ async function onGameEnd(platformsReached, cashed, prizeFromGame) {
       resultIcon.textContent = '💥';
     }
 
-    // 4. CORREÇÃO DO UNDEFINED:
-    // Usamos 'prizeFromGame' (que veio do motor) ou 'data.prize' (que veio do servidor)
-    // Usamos 'platformsReached' que é o número real de plataformas
-    
+    // Exibição do Prêmio e Detalhes sem undefined
     document.getElementById('resultPrize').textContent = 'R$ ' + formatMoney(prizeFromGame || data.prize);
     
-    // Aqui montamos a frase de detalhes garantindo que nada seja undefined
-    const totalPlatforms = platformsReached || data.platforms_reached || 0;
-    const multiplier = (prizeFromGame / (currentBet || 1)).toFixed(2);
-    
-    document.getElementById('resultDetails').textContent = 
-      `Plataformas: ${totalPlatforms} | Multiplicador: ${multiplier}x | Aposta: R$ ${formatMoney(currentBet)}`;
+    const finalPlats = platformsReached !== undefined ? platformsReached : (data.platforms_reached || 0);
+    const finalMult = prizeFromGame > 0 ? (prizeFromGame / currentBet).toFixed(2) : (data.multiplier || 0);
 
-  } catch (e) { 
-    showToast("Erro ao finalizar jogo: " + e.message, 'error'); 
-  }
+    document.getElementById('resultDetails').textContent =
+      'Plataformas: ' + finalPlats + ' | Multiplicador: ' + finalMult + 'x | Aposta: R$ ' + formatMoney(currentBet);
+
+  } catch (e) { showToast(e.message, 'error'); }
 }
 
-// Certifique-se que esta função existe para o motor do jogo chamar
-function onPlatformPassed(count) {
-    // Opcional: Atualizar algo no seu painel enquanto o usuário desce
-    console.log("Plataformas passadas:", count);
+function cashOut() {
+  if (typeof helixGameCashOut === 'function') helixGameCashOut();
 }
 
-// ===================== DEPOSIT (CORRIGIDO) =====================
+function closeGame() {
+  document.getElementById('page-game').classList.add('hidden');
+  if (typeof stopHelixGame === 'function') stopHelixGame();
+  currentGameId = null;
+  loadUserData();
+}
 
-// Escuta cliques nos botões de valores pré-definidos (R$ 10, 20, etc)
+// ===================== DEPOSIT =====================
 document.querySelectorAll('.amount-option').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.amount-option').forEach(b => b.classList.remove('active'));
@@ -234,14 +262,13 @@ document.querySelectorAll('.amount-option').forEach(btn => {
   });
 });
 
-// Função para gerar o depósito
 document.getElementById('btnDeposit').addEventListener('click', async () => {
   const amountInput = document.getElementById('depositAmount');
   const amount = parseFloat(amountInput.value);
   const cpfEl = document.getElementById('depositCpf');
   const cpf = cpfEl ? cpfEl.value.trim() : '';
   
-  if (!amount || amount < 10) return showToast('Deposito minimo: R$10,00', 'error');
+  if (!amount || amount < 10) return showToast('Depósito mínimo: R$10,00', 'error');
   if (!cpf || cpf.length < 11) return showToast('Informe um CPF válido para gerar o PIX', 'error');
 
   const btn = document.getElementById('btnDeposit');
@@ -250,50 +277,37 @@ document.getElementById('btnDeposit').addEventListener('click', async () => {
 
   try {
     const data = await api('/api/deposit', {
-  method: 'POST', body: JSON.stringify({ amount, cpf })
-});
+      method: 'POST', body: JSON.stringify({ amount, cpf })
+    });
 
-currentDepositId = data.deposit_id || (data.deposit ? data.deposit.id : null);
+    currentDepositId = data.deposit_id || (data.deposit ? data.deposit.id : null);
 
-// 1. Pega o código PIX Texto (Copia e Cola)
-const pixCode = data.pix_code || (data.deposit && data.deposit.pix_code);
-if (document.getElementById('pixCode')) {
-    document.getElementById('pixCode').textContent = pixCode || 'Erro ao gerar código';
-}
-
-// 2. EXIBIÇÃO DO QR CODE (Ajuste aqui)
-const qrImg = document.getElementById('pixQrImage');
-const qrLoading = document.getElementById('qrLoading');
-
-if (qrImg) {
-    // Tenta pegar o base64 de todos os lugares possíveis que o servidor pode mandar
-    let qrSource = data.qr_code_base64 || 
-                   (data.deposit && data.deposit.qr_code_base64) || 
-                   data.qr_code_image || 
-                   (data.deposit && data.deposit.qr_code_image);
-    
-    if (qrSource && qrSource.length > 50) {
-        // Remove espaços e garante o cabeçalho data:image
-        qrSource = qrSource.replace(/\s/g, ''); 
-        const finalSrc = qrSource.startsWith('data:') ? qrSource : `data:image/png;base64,${qrSource}`;
-        
-        qrImg.src = finalSrc;
-        qrImg.style.display = 'block';
-        if (qrLoading) qrLoading.style.display = 'none';
-        
-        console.log("QR Code carregado com sucesso.");
-    } else {
-        console.error("Imagem Base64 não encontrada no JSON de resposta:", data);
-        qrImg.style.display = 'none';
-        if (qrLoading) qrLoading.style.display = 'block';
+    const pixCode = data.pix_code || (data.deposit && data.deposit.pix_code);
+    if (document.getElementById('pixCode')) {
+        document.getElementById('pixCode').textContent = pixCode || 'Erro ao gerar código';
     }
-}
 
-    // Abre o modal
+    const qrImg = document.getElementById('pixQrImage');
+    const qrLoading = document.getElementById('qrLoading');
+
+    if (qrImg) {
+        let qrSource = data.qr_code_base64 || 
+                       (data.deposit && data.deposit.qr_code_base64) || 
+                       data.qr_code_image || 
+                       (data.deposit && data.deposit.qr_code_image);
+        
+        if (qrSource && qrSource.length > 50) {
+            qrSource = qrSource.replace(/\s/g, ''); 
+            const finalSrc = qrSource.startsWith('data:') ? qrSource : `data:image/png;base64,${qrSource}`;
+            qrImg.src = finalSrc;
+            qrImg.style.display = 'block';
+            if (qrLoading) qrLoading.style.display = 'none';
+        }
+    }
+
     const modal = document.getElementById('pixModal');
     if (modal) modal.classList.remove('hidden');
 
-    // Inicia verificação de status
     if (currentDepositId) {
       if (depositCheckInterval) clearInterval(depositCheckInterval);
       depositCheckInterval = setInterval(checkDepositStatus, 5000);
@@ -320,14 +334,12 @@ async function checkDepositStatus() {
       clearInterval(depositCheckInterval); depositCheckInterval = null;
       user.balance = data.new_balance; updateUI();
       showToast('Pagamento confirmado! Saldo atualizado.');
-      
       const modal = document.getElementById('pixModal');
       if (modal) modal.classList.add('hidden');
       currentDepositId = null;
     } else if (data.status === 'rejected' || data.status === 'expired') {
       clearInterval(depositCheckInterval); depositCheckInterval = null;
       showToast('PIX expirado ou rejeitado. Tente novamente.', 'error');
-      
       const modal = document.getElementById('pixModal');
       if (modal) modal.classList.add('hidden');
       currentDepositId = null;
@@ -340,7 +352,7 @@ document.getElementById('btnWithdraw').addEventListener('click', async () => {
   const amount = parseFloat(document.getElementById('withdrawAmount').value);
   const pixKey = document.getElementById('pixKey').value;
   const pixType = document.getElementById('pixType').value;
-  if (!amount || amount < 20) return showToast('Saque minimo: R$20,00', 'error');
+  if (!amount || amount < 20) return showToast('Saque mínimo: R$20,00', 'error');
   if (!pixKey) return showToast('Informe a chave PIX', 'error');
 
   const btn = document.getElementById('btnWithdraw');
@@ -363,7 +375,7 @@ async function loadReferrals() {
     document.getElementById('refEarned').textContent = 'R$ ' + formatMoney(data.total_earned);
     const listEl = document.getElementById('referralList');
     if (data.referrals.length === 0) {
-      listEl.innerHTML = '<div class="referral-card" style="text-align:center;color:var(--text-secondary)">Nenhum indicado ainda. Compartilhe seu codigo!</div>';
+      listEl.innerHTML = '<div class="referral-card" style="text-align:center;color:var(--text-secondary)">Nenhum indicado ainda. Compartilhe seu código!</div>';
     } else {
       listEl.innerHTML = data.referrals.map(r =>
         '<div class="history-item"><div class="left"><span class="type">' + r.name + '</span><span class="date">' + new Date(r.created_at).toLocaleDateString('pt-BR') + '</span></div><span class="amount positive">+R$ ' + formatMoney(r.amount || 0) + '</span></div>'
