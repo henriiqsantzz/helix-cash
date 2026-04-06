@@ -17,10 +17,12 @@
     segmentsPerPlatform: 12,
     holeSegments: 2,
     
-    // VARIÁVEIS DO PAINEL ADMIN
+    // VARIÁVEIS DINÂMICAS (Sincronizadas com Admin)
     dangerStartLevel: 2,
     dangerProgression: 5,
     dangerMaxSlices: 6,
+    holeSegments: 1.5,
+    rotationSensitivity: 0.008,
     
     // CÂMERA E ENQUADRAMENTO
     cameraFov: 60,
@@ -30,7 +32,6 @@
     postExtraTop: 20.0,
     
     cameraFollowSpeed: 0.08,
-    rotationSensitivity: 0.008,
     targetMultiplier: 8,
     latheSegments: 32
   };
@@ -54,12 +55,24 @@
   var isDragging = false, lastDragX = 0, helixRotation = 0;
   var cameraTargetY = 0, hudContainer = null;
 
+  // FUNÇÃO DE INICIALIZAÇÃO CORRIGIDA PARA DIFICULDADE ADMIN
   window.startHelixGame = function(bet, serverConfig) {
     if (serverConfig) {
+      // Aplica as configurações do Admin (Seja usuário normal ou influencer)
+      // O backend já envia os valores de "inf_" se o usuário for influencer
       Object.keys(serverConfig).forEach(function(k) {
-        if (CONFIG.hasOwnProperty(k)) CONFIG[k] = serverConfig[k];
+        // Mapeia os campos do servidor para o CONFIG do jogo
+        if (k === 'game_platform_count') CONFIG.platformCount = parseInt(serverConfig[k]);
+        if (k === 'game_gravity') CONFIG.gravity = parseFloat(serverConfig[k]);
+        if (k === 'game_bounce_force') CONFIG.ballBounceForce = parseFloat(serverConfig[k]);
+        if (k === 'game_hole_segments') CONFIG.holeSegments = parseFloat(serverConfig[k]);
+        if (k === 'game_danger_start_level') CONFIG.dangerStartLevel = parseInt(serverConfig[k]);
+        if (k === 'game_danger_max_slices') CONFIG.dangerMaxSlices = parseInt(serverConfig[k]);
+        if (k === 'game_rotation_sensitivity') CONFIG.rotationSensitivity = parseFloat(serverConfig[k]);
+        if (k === 'game_platform_spacing') CONFIG.platformSpacing = parseFloat(serverConfig[k]);
       });
     }
+
     betAmount = bet; platformsPassed = 0; isCashingOut = false;
     gameActive = true; prizeAmount = 0; comboCount = 0; comboTimer = 0;
     currentPaletteIndex = 0; gamePhase = 'ready'; helixRotation = 0;
@@ -76,31 +89,23 @@
     removeEvents(); cleanupHUD(); cleanupThree();
   };
 
-  // === SOLUÇÃO DEFINITIVA DO BOTÃO DE RESGATE (Anti-Delay Chrome DevTools) ===
   window.helixGameCashOut = function(e) {
     if (e) {
       if (e.preventDefault) e.preventDefault();
       if (e.stopPropagation) e.stopPropagation();
     }
-    
-    // Evita clique duplo
     if (isCashingOut) return;
-    
-    // Se de fato a pessoa já estava morta antes de clicar, não faz nada
     if (!gameActive || gamePhase === 'gameover') return;
     
-    // 1. CONGELA O JOGO IMEDIATAMENTE (Corta o loop de renderização da física)
     if (animFrame) {
         cancelAnimationFrame(animFrame);
         animFrame = null;
     }
 
-    // 2. Trava as variáveis de status
     isCashingOut = true; 
     gamePhase = 'gameover'; 
     gameActive = false; 
     
-    // 3. Feedback visual pro jogador não achar que travou
     var cb = document.getElementById('hud-cashout');
     if (cb) {
         cb.style.background = '#ffffff';
@@ -109,11 +114,8 @@
         cb.style.pointerEvents = 'none';
     }
     
-    // 4. Manda o prêmio pro banco de dados
     if (typeof window.onGameEnd === 'function') {
       window.onGameEnd(platformsPassed, true);
-    } else if (typeof onGameEnd === 'function') {
-      onGameEnd(platformsPassed, true);
     }
   };
 
@@ -140,14 +142,6 @@
     var dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
     dirLight.position.set(10, 20, 10);
     dirLight.castShadow = true;
-    dirLight.shadow.mapSize.width = 1024;
-    dirLight.shadow.mapSize.height = 1024;
-    dirLight.shadow.camera.near = 0.5;
-    dirLight.shadow.camera.far = 50;
-    dirLight.shadow.camera.left = -10;
-    dirLight.shadow.camera.right = 10;
-    dirLight.shadow.camera.top = 10;
-    dirLight.shadow.camera.bottom = -10;
     scene.add(dirLight);
 
     updateBackground();
@@ -189,7 +183,6 @@
     var geo = new THREE.CylinderGeometry(CONFIG.postRadius, CONFIG.postRadius, CONFIG.postHeight, 32, 1, false);
     var mat = new THREE.MeshStandardMaterial({ color: pal.pole, roughness: 0.3, metalness: 0.1 });
     postMesh = new THREE.Mesh(geo, mat);
-    
     postMesh.position.y = (-CONFIG.postHeight / 2) + CONFIG.postExtraTop;
     postMesh.receiveShadow = true;
     postMesh.castShadow = true;
@@ -201,7 +194,6 @@
     var capGeo = new THREE.SphereGeometry(CONFIG.postRadius, 32, 32, 0, Math.PI * 2, 0, Math.PI / 2);
     var capMat = new THREE.MeshStandardMaterial({ color: pal.topCap, roughness: 0.3, metalness: 0.1 });
     topCapMesh = new THREE.Mesh(capGeo, capMat);
-    
     topCapMesh.position.y = CONFIG.postExtraTop; 
     helixGroup.add(topCapMesh);
   }
@@ -211,11 +203,10 @@
     shape.absarc(0, 0, outerR, startAngle, startAngle + arcAngle, false);
     shape.absarc(0, 0, innerR, startAngle + arcAngle, startAngle, true);
 
-    var bevelThickness = 0.04;
     var extrudeSettings = {
-      depth: height - (bevelThickness * 2),
+      depth: height,
       bevelEnabled: true,
-      bevelThickness: bevelThickness,
+      bevelThickness: 0.04,
       bevelSize: 0.04,
       bevelSegments: 3,
       curveSegments: 24
@@ -223,7 +214,7 @@
 
     var geo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
     geo.rotateX(-Math.PI / 2); 
-    geo.translate(0, - (extrudeSettings.depth / 2), 0);
+    geo.translate(0, 0, 0);
 
     var mat = new THREE.MeshStandardMaterial({ color: color, roughness: 0.4, metalness: 0.1 });
     var mesh = new THREE.Mesh(geo, mat);
@@ -236,6 +227,8 @@
     platforms = [];
     var pal = PALETTES[currentPaletteIndex];
     var segAngle = (Math.PI * 2) / CONFIG.segmentsPerPlatform;
+    
+    // Buraco dinâmico baseado no Admin
     var holeArc = CONFIG.holeSegments * segAngle;
 
     for (var i = 0; i < CONFIG.platformCount; i++) {
@@ -253,23 +246,14 @@
 
       var dangerSlicesCount = 0;
       if (i >= CONFIG.dangerStartLevel) { 
-        var andaresDeRisco = i - CONFIG.dangerStartLevel;
-        var minRed = Math.floor(andaresDeRisco / CONFIG.dangerProgression); 
-        var maxRed = minRed + 2; 
-        
-        dangerSlicesCount = minRed + Math.floor(Math.random() * (maxRed - minRed + 1));
-        if (dangerSlicesCount > CONFIG.dangerMaxSlices) {
-            dangerSlicesCount = CONFIG.dangerMaxSlices; 
-        }
+        var minRed = Math.floor((i - CONFIG.dangerStartLevel) / 5); 
+        dangerSlicesCount = Math.min(CONFIG.dangerMaxSlices, minRed + 1);
       }
 
       var validSegmentsIndices = [];
       for (var s = 0; s < CONFIG.segmentsPerPlatform; s++) {
-        var sStart = s * segAngle;
-        var sMid = sStart + segAngle / 2;
-        if (!isAngleInRange(sMid, holeStart, holeEnd)) {
-          validSegmentsIndices.push(s);
-        }
+        var sMid = (s * segAngle) + segAngle / 2;
+        if (!isAngleInRange(sMid, holeStart, holeEnd)) validSegmentsIndices.push(s);
       }
 
       var shuffled = validSegmentsIndices.sort(function() { return 0.5 - Math.random() });
@@ -278,16 +262,12 @@
       for (var s = 0; s < CONFIG.segmentsPerPlatform; s++) {
         var sStart = s * segAngle;
         var sMid = sStart + segAngle / 2;
-        
         if (isAngleInRange(sMid, holeStart, holeEnd)) continue;
 
         var isDanger = dangerIndices.includes(s);
         var col = isDanger ? pal.killer : (s % 2 === 0 ? pal.platforms : pal.alt);
         
-        var mesh = createRingSegment(
-          CONFIG.platformInnerRadius, CONFIG.platformOuterRadius,
-          CONFIG.platformHeight, sStart, segAngle, col
-        );
+        var mesh = createRingSegment(CONFIG.platformInnerRadius, CONFIG.platformOuterRadius, CONFIG.platformHeight, sStart, segAngle, col);
         
         if(isDanger) {
             mesh.material.emissive = new THREE.Color(pal.killer);
@@ -327,45 +307,19 @@
     scene.background = tex;
   }
 
-  function createSplash(y) {
-    var pal = PALETTES[currentPaletteIndex];
-    for (var i = 0; i < 8; i++) {
-      var geo = new THREE.SphereGeometry(0.08, 8, 8);
-      var mat = new THREE.MeshBasicMaterial({ color: pal.platforms, transparent: true, opacity: 0.9 });
-      var p = new THREE.Mesh(geo, mat);
-      var angle = Math.random() * Math.PI * 2;
-      var bz = (CONFIG.platformInnerRadius + CONFIG.platformOuterRadius) / 2;
-      p.position.set(Math.sin(angle) * bz * 0.3, y + 0.1, Math.cos(angle) * bz * 0.3);
-      scene.add(p);
-      splashParticles.push({
-        mesh: p,
-        vx: (Math.random() - 0.5) * 0.2,
-        vy: Math.random() * 0.15 + 0.05,
-        vz: (Math.random() - 0.5) * 0.2,
-        life: 30
-      });
-    }
-  }
-
   function updateSplash() {
     for (var i = splashParticles.length - 1; i >= 0; i--) {
       var sp = splashParticles[i];
-      sp.mesh.position.x += sp.vx;
-      sp.mesh.position.y += sp.vy;
-      sp.mesh.position.z += sp.vz;
-      sp.vy -= 0.01;
-      sp.life--;
+      sp.mesh.position.x += sp.vx; sp.mesh.position.y += sp.vy; sp.mesh.position.z += sp.vz;
+      sp.vy -= 0.01; sp.life--;
       sp.mesh.material.opacity = sp.life / 30;
       if (sp.life <= 0) {
-        scene.remove(sp.mesh);
-        sp.mesh.geometry.dispose();
-        sp.mesh.material.dispose();
+        scene.remove(sp.mesh); sp.mesh.geometry.dispose(); sp.mesh.material.dispose();
         splashParticles.splice(i, 1);
       }
     }
   }
 
-  // ===================== HUD =====================
   function createHUD() {
     cleanupHUD();
     var container = document.getElementById('gameCanvas').parentElement;
@@ -377,33 +331,17 @@
       + '<div style="font-size:9px;text-transform:uppercase;letter-spacing:1px;opacity:0.7;">Entrada</div>'
       + '<div style="font-size:16px;font-weight:800;" id="hud-entry-val">R$ 0,00</div></div>';
 
-    html += '<div style="position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:100;background:rgba(0,0,0,0.55);color:#fff;padding:8px 16px;border-radius:12px;font-family:Inter,sans-serif;min-width:160px;text-align:center;backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,0.15);max-width:calc(100% - 140px);">'
+    html += '<div style="position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:100;background:rgba(0,0,0,0.55);color:#fff;padding:8px 16px;border-radius:12px;font-family:Inter,sans-serif;min-width:160px;text-align:center;backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,0.15);">'
       + '<div style="font-size:9px;text-transform:uppercase;letter-spacing:1px;opacity:0.7;">Progresso</div>'
-      + '<div style="font-size:14px;font-weight:800;" id="hud-progress-val">R$ 0,00 / R$ 0,00</div>'
-      + '<div style="width:100%;height:4px;background:rgba(255,255,255,0.15);border-radius:2px;margin-top:4px;overflow:hidden;">'
-      + '<div id="hud-progress-bar" style="width:0%;height:100%;background:linear-gradient(90deg,#00e676,#69f0ae);border-radius:2px;transition:width 0.3s;"></div></div></div>';
+      + '<div style="font-size:14px;font-weight:800;" id="hud-progress-val">R$ 0,00</div>'
+      + '<div style="width:100%;height:4px;background:rgba(255,255,255,0.15);border-radius:2px;margin-top:4px;overflow:hidden;"><div id="hud-progress-bar" style="width:0%;height:100%;background:#00e676;"></div></div></div>';
 
-    // A MÁGICA ACONTECE AQUI: onpointerdown e ontouchstart direto no HTML furam o bloqueio de delay do DevTools/Chrome
-    html += '<button id="hud-cashout" style="position:absolute;top:12px;right:12px;z-index:9999;pointer-events:auto;background:linear-gradient(135deg,#00e676,#00c853);color:#000;padding:16px 28px;border-radius:12px;font-family:Inter,sans-serif;cursor:pointer;font-weight:900;font-size:16px;text-transform:uppercase;letter-spacing:1px;border:none;box-shadow:0 4px 15px rgba(0,230,118,0.4);display:none;" onpointerdown="window.helixGameCashOut(event)" ontouchstart="window.helixGameCashOut(event)" onclick="window.helixGameCashOut(event)">RESGATAR</button>';
+    html += '<button id="hud-cashout" style="position:absolute;top:12px;right:12px;z-index:9999;pointer-events:auto;background:#00e676;color:#000;padding:16px 28px;border-radius:12px;font-family:Inter,sans-serif;cursor:pointer;font-weight:900;font-size:16px;border:none;display:none;" onpointerdown="window.helixGameCashOut(event)">RESGATAR</button>';
 
-    html += '<div id="hud-start" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:100;font-family:Inter,sans-serif;text-align:center;pointer-events:none;">'
-      + '<div style="font-size:20px;font-weight:700;color:rgba(0,0,0,0.6);">Toque para jogar</div>'
-      + '<div style="font-size:28px;margin-top:8px;color:rgba(0,0,0,0.4);animation:helixBounce 1s infinite;">&#8595;</div></div>';
-
-    html += '<div id="hud-combo" style="position:absolute;bottom:100px;left:50%;transform:translateX(-50%);z-index:100;pointer-events:none;font-family:Inter,sans-serif;font-size:24px;font-weight:800;color:#ffab00;text-shadow:0 2px 8px rgba(255,171,0,0.5);opacity:0;transition:all 0.3s;"></div>';
-
-    html += '<div id="hud-score-popup" style="position:absolute;top:45%;left:50%;transform:translate(-50%,-50%);z-index:100;pointer-events:none;font-family:Inter,sans-serif;font-size:36px;font-weight:900;color:#fff;text-shadow:0 2px 10px rgba(0,0,0,0.3);opacity:0;"></div>';
-
-    html += '<div style="position:absolute;bottom:30px;left:50%;transform:translateX(-50%);z-index:100;background:rgba(0,0,0,0.4);color:#fff;padding:6px 16px;border-radius:20px;font-family:Inter,sans-serif;backdrop-filter:blur(6px);font-size:13px;font-weight:600;">'
-      + '<span id="hud-platform-count">0</span> plataformas</div>';
+    html += '<div id="hud-start" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:100;font-family:Inter,sans-serif;text-align:center;"><div style="font-size:20px;font-weight:700;color:rgba(0,0,0,0.6);">Toque para jogar</div></div>';
 
     hudContainer.innerHTML = html;
-
-    var style = document.createElement('style');
-    style.textContent = '@keyframes helixBounce{0%,100%{transform:translateY(0)}50%{transform:translateY(10px)}}@keyframes helixFadeUp{0%{opacity:1;transform:translate(-50%,-50%) scale(1)}100%{opacity:0;transform:translate(-50%,-80%) scale(1.5)}}@keyframes helixPulse{0%,100%{box-shadow:0 4px 15px rgba(0,230,118,0.4)}50%{box-shadow:0 4px 25px rgba(0,230,118,0.7)}}';
-    hudContainer.appendChild(style);
     container.appendChild(hudContainer);
-    
     updateHUD();
   }
 
@@ -413,29 +351,15 @@
 
   function updateHUD() {
     if (!hudContainer) return;
-    var ev = document.getElementById('hud-entry-val');
-    var pv = document.getElementById('hud-progress-val');
-    var pb = document.getElementById('hud-progress-bar');
+    document.getElementById('hud-entry-val').textContent = 'R$ ' + fmtBRL(betAmount);
+    var prize = calcPrize();
+    document.getElementById('hud-progress-val').textContent = 'R$ ' + fmtBRL(prize);
+    
     var cb = document.getElementById('hud-cashout');
+    if (cb) cb.style.display = (gamePhase === 'playing' && prize > 0) ? 'block' : 'none';
+    
     var ss = document.getElementById('hud-start');
-    var pc = document.getElementById('hud-platform-count');
-
-    if (ev) ev.textContent = 'R$ ' + fmtBRL(betAmount);
-
-    var meta = betAmount * CONFIG.targetMultiplier;
-    var prize = calcPrize(); prizeAmount = prize;
-
-    if (pv) pv.textContent = 'R$ ' + fmtBRL(prize) + ' / R$ ' + fmtBRL(meta);
-    if (pb) pb.style.width = Math.min(100, (prize / (meta || 1)) * 100) + '%';
-
-    if (cb) {
-      var goalReached = prize >= meta && meta > 0;
-      cb.style.display = (gamePhase === 'playing' && goalReached) ? 'block' : 'none';
-      if (goalReached) cb.style.animation = 'helixPulse 1s infinite';
-    }
-
     if (ss) ss.style.display = gamePhase === 'ready' ? 'block' : 'none';
-    if (pc) pc.textContent = platformsPassed;
   }
 
   function calcPrize() {
@@ -445,77 +369,28 @@
     return Math.round(betAmount * m * 100) / 100;
   }
 
-  function fmtBRL(v) { return v.toFixed(2).replace('.', ','); }
-
-  function showScorePopup(text) {
-    var el = document.getElementById('hud-score-popup');
-    if (el) { el.textContent = text; el.style.opacity = '1'; el.style.animation = 'none'; el.offsetHeight; el.style.animation = 'helixFadeUp 0.8s ease-out forwards'; }
-  }
-
-  function showCombo(n) {
-    var el = document.getElementById('hud-combo');
-    if (el) { el.textContent = n + 'x COMBO!'; el.style.opacity = '1'; el.style.transform = 'translateX(-50%) scale(1.2)'; setTimeout(function(){el.style.opacity='0';el.style.transform='translateX(-50%) scale(1)';},800); }
-  }
+  function fmtBRL(v) { return parseFloat(v).toFixed(2).replace('.', ','); }
 
   function attachEvents() {
     var c = document.getElementById('gameCanvas');
     c.addEventListener('mousedown', onDown);
     c.addEventListener('mousemove', onMove);
     c.addEventListener('mouseup', onUp);
-    c.addEventListener('mouseleave', onUp);
     c.addEventListener('touchstart', onTouchDown, {passive:false});
     c.addEventListener('touchmove', onTouchMove, {passive:false});
     c.addEventListener('touchend', onUp);
     window.addEventListener('resize', onResize);
   }
 
-  function removeEvents() {
-    var c = document.getElementById('gameCanvas');
-    if (!c) return;
-    c.removeEventListener('mousedown', onDown);
-    c.removeEventListener('mousemove', onMove);
-    c.removeEventListener('mouseup', onUp);
-    c.removeEventListener('mouseleave', onUp);
-    c.removeEventListener('touchstart', onTouchDown);
-    c.removeEventListener('touchmove', onTouchMove);
-    c.removeEventListener('touchend', onUp);
-    window.removeEventListener('resize', onResize);
-  }
-
-  // Previne que clicar no HUD arraste a torre sem querer
-  function onDown(e) { 
-    if (e.target && e.target.id === 'hud-cashout') return;
-    if (gamePhase==='ready') startPlaying(); 
-    isDragging=true; 
-    lastDragX=e.clientX; 
-  }
-  function onMove(e) { 
-    if (!isDragging) return; 
-    var dx=e.clientX-lastDragX; 
-    helixRotation+=dx*CONFIG.rotationSensitivity; 
-    if(helixGroup)helixGroup.rotation.y=helixRotation; 
-    lastDragX=e.clientX; 
-  }
+  function onDown(e) { if(gamePhase==='ready')startPlaying(); isDragging=true; lastDragX=e.clientX; }
+  function onMove(e) { if(!isDragging)return; var dx=e.clientX-lastDragX; helixRotation+=dx*CONFIG.rotationSensitivity; if(helixGroup)helixGroup.rotation.y=helixRotation; lastDragX=e.clientX; }
   function onUp() { isDragging=false; }
-  function onTouchDown(e) { 
-    if (e.target && e.target.id === 'hud-cashout') return;
-    e.preventDefault(); 
-    if(gamePhase==='ready')startPlaying(); 
-    isDragging=true; 
-    lastDragX=e.touches[0].clientX; 
-  }
-  function onTouchMove(e) { 
-    e.preventDefault(); 
-    if(!isDragging)return; 
-    var dx=e.touches[0].clientX-lastDragX; 
-    helixRotation+=dx*CONFIG.rotationSensitivity; 
-    if(helixGroup)helixGroup.rotation.y=helixRotation; 
-    lastDragX=e.touches[0].clientX; 
-  }
+  function onTouchDown(e) { e.preventDefault(); if(gamePhase==='ready')startPlaying(); isDragging=true; lastDragX=e.touches[0].clientX; }
+  function onTouchMove(e) { e.preventDefault(); if(!isDragging)return; var dx=e.touches[0].clientX-lastDragX; helixRotation+=dx*CONFIG.rotationSensitivity; if(helixGroup)helixGroup.rotation.y=helixRotation; lastDragX=e.touches[0].clientX; }
   function onResize() {
     if(!renderer||!camera) return;
     var ct=document.getElementById('gameCanvas').parentElement;
-    var W=ct.clientWidth||window.innerWidth, H=ct.clientHeight||window.innerHeight;
+    var W=ct.clientWidth, H=ct.clientHeight;
     camera.aspect=W/H; camera.updateProjectionMatrix(); renderer.setSize(W,H);
   }
   function startPlaying() { gamePhase='playing'; ballVelY=0; updateHUD(); }
@@ -524,100 +399,45 @@
     if (!gameActive && gamePhase !== 'gameover') return;
     animFrame = requestAnimationFrame(animate);
     update();
-    if (renderer && scene && camera) renderer.render(scene, camera);
+    if (renderer) renderer.render(scene, camera);
   }
 
   function update() {
     if (gamePhase === 'playing') {
       ballVelY += CONFIG.gravity;
       ballWorldY -= ballVelY;
-      
-      if (ballMesh) {
-        ballMesh.position.y = ballWorldY;
-        var ballZ = (CONFIG.platformInnerRadius + CONFIG.platformOuterRadius) / 2;
-        ballMesh.position.z = ballZ;
-        ballMesh.position.x = 0;
-      }
-      
-      if (comboTimer > 0) { comboTimer--; if (comboTimer <= 0) comboCount = 0; }
+      if (ballMesh) { ballMesh.position.y = ballWorldY; }
       checkCollisions();
-      
-      // AUTO-WIN! Se o jogador passar todas as plataformas, ganha sozinho
-      if (ballWorldY < -(CONFIG.platformCount + 1) * CONFIG.platformSpacing) {
-          window.helixGameCashOut();
-      }
+      if (ballWorldY < -(CONFIG.platformCount + 1) * CONFIG.platformSpacing) window.helixGameCashOut();
     }
-
     if (camera && gamePhase !== 'ready') {
       cameraTargetY = ballWorldY + CONFIG.cameraHeight;
       camera.position.y += (cameraTargetY - camera.position.y) * CONFIG.cameraFollowSpeed;
       camera.lookAt(0, camera.position.y - CONFIG.cameraHeight - CONFIG.cameraOffsetDown, 0);
     }
-
     updateSplash();
-
-    var np = Math.min(Math.floor(platformsPassed / 5), PALETTES.length - 1);
-    if (np !== currentPaletteIndex) { currentPaletteIndex = np; updatePaletteColors(); }
     updateHUD();
   }
 
   function checkCollisions() {
     if (ballVelY <= 0) return;
-
     var ballAngle = normAngle((3 * Math.PI / 2) - helixRotation);
 
     for (var i = 0; i < platforms.length; i++) {
       var p = platforms[i];
       if (p.passed) continue;
-
       var platTop = p.y + CONFIG.platformHeight / 2;
-      var platBottom = p.y - CONFIG.platformHeight / 2;
-
-      // Hitbox refinada (ajuda a não matar o jogador milissegundos antes dele clicar no botão)
-      if (ballWorldY <= platTop + (CONFIG.ballRadius * 0.5) && ballWorldY >= platBottom && ballVelY > 0) {
-        var hEnd = p.holeStart + p.holeSize;
-        var inHole = isAngleInRange(ballAngle, p.holeStart, hEnd);
-
-        if (inHole) {
-          p.passed = true;
-          platformsPassed++;
-          comboCount++; comboTimer = 60;
-          if (comboCount >= 3) showCombo(comboCount);
-
-          var oldP = prizeAmount;
-          var newP = calcPrize();
-          showScorePopup('+R$ ' + fmtBRL(newP - oldP));
-
-          p.segments.forEach(function(seg) { seg.mesh.material.transparent = true; seg.mesh.material.opacity = 0.2; });
-          createSplash(p.y);
-
-          if (typeof onPlatformPassed === 'function') onPlatformPassed(platformsPassed);
+      
+      if (ballWorldY <= platTop + 0.1 && ballWorldY >= p.y - 0.1) {
+        if (isAngleInRange(ballAngle, p.holeStart, p.holeStart + p.holeSize)) {
+          p.passed = true; platformsPassed++;
+          p.segments.forEach(function(s){s.mesh.visible=false;});
         } else {
-          
           var hitDanger = false;
-          for (var s = 0; s < p.segments.length; s++) {
-            var seg = p.segments[s];
-            if (isAngleInRange(ballAngle, seg.startAngle, seg.endAngle)) {
-              if (seg.isKiller) {
-                  hitDanger = true;
-              }
-              break;
-            }
-          }
-
-          if (hitDanger) { 
-            triggerGameOver(); 
-            return; 
-          }
-
+          p.segments.forEach(function(s){ if(isAngleInRange(ballAngle, s.startAngle, s.endAngle) && s.isKiller) hitDanger=true; });
+          if (hitDanger) { triggerGameOver(); return; }
           ballWorldY = platTop + CONFIG.ballRadius;
           ballVelY = -CONFIG.ballBounceForce;
-          comboCount = 0; comboTimer = 0;
-          
-          if (ballMesh) {
-            ballMesh.scale.set(1.3, 0.6, 1.3);
-            setTimeout(function(){ if(ballMesh) ballMesh.scale.set(1,1,1); }, 100);
-          }
           break;
         }
       }
@@ -625,44 +445,16 @@
   }
 
   function triggerGameOver() {
-    if (gamePhase === 'gameover') return;
     gamePhase = 'gameover'; 
-    
-    // Some com o botão de resgatar imediatamente pra pessoa nem conseguir clicar se ela morrer
     var cb = document.getElementById('hud-cashout');
     if (cb) cb.style.display = 'none';
-    
     setTimeout(function() {
       gameActive = false;
       if (typeof window.onGameEnd === 'function') window.onGameEnd(platformsPassed, false);
-      else if (typeof onGameEnd === 'function') onGameEnd(platformsPassed, false);
     }, 500);
   }
 
-  function updatePaletteColors() {
-    var pal = PALETTES[currentPaletteIndex];
-    if (postMesh) {
-        postMesh.material.color.setHex(pal.pole);
-        postMesh.material.needsUpdate = true;
-    }
-    if (topCapMesh) topCapMesh.material.color.setHex(pal.topCap);
-    if (ballMesh) ballMesh.material.color.setHex(pal.ball);
-    updateBackground();
-    platforms.forEach(function(p) {
-      if (p.passed) return;
-      p.segments.forEach(function(seg, s) {
-        if (seg.isKiller) {
-            seg.mesh.material.color.setHex(pal.killer);
-            seg.mesh.material.emissive.setHex(pal.killer);
-        } else {
-            seg.mesh.material.color.setHex(s % 2 === 0 ? pal.platforms : pal.alt);
-        }
-      });
-    });
-  }
-
   function normAngle(a) { a = a % (Math.PI * 2); if (a < 0) a += Math.PI * 2; return a; }
-
   function isAngleInRange(angle, start, end) {
     angle = normAngle(angle); start = normAngle(start); end = normAngle(end);
     if (start <= end) return angle >= start && angle <= end;
