@@ -9,11 +9,16 @@
   <link rel="stylesheet" href="/css/style.css">
   <meta name="theme-color" content="#0a0a1a">
   <style>
-    /* Ajuste auxiliar para as imagens da logo não quebrarem o layout */
+    /* Isso garante que a logo apareça e não quebre o layout */
+    .logo {
+      display: flex;
+      align-items: center;
+      height: 40px;
+    }
     .logo img {
+      height: 100%; /* Ajusta a altura ao header */
+      width: auto;  /* Mantém a proporção da logo */
       display: block;
-      width: auto;
-      max-width: 100%;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
   </style>
