@@ -31,7 +31,22 @@ function navigate(hash) {
 }
 
 window.addEventListener('hashchange', () => navigate(location.hash));
-window.addEventListener('load', () => { navigate(location.hash); loadPublicStats(); });
+window.addEventListener('load', () => { 
+  // Captura código de indicação da URL se existir
+  const urlParams = new URLSearchParams(window.location.search);
+  const refCode = urlParams.get('ref');
+  if (refCode) {
+    localStorage.setItem('hc_pending_ref', refCode);
+    const refInput = document.getElementById('registerReferralInput');
+    if (refInput) refInput.value = refCode;
+    // Se estiver na landing, pula para o cadastro
+    if (!location.hash || location.hash === '#' || location.hash === 'page-landing') {
+        location.hash = '#cadastro';
+    }
+  }
+  navigate(location.hash); 
+  loadPublicStats(); 
+});
 
 // ===================== API HELPER =====================
 async function api(url, options = {}) {
@@ -65,6 +80,7 @@ document.getElementById('registerForm').addEventListener('submit', async (e) => 
     token = data.token; user = data.user;
     localStorage.setItem('hc_token', token);
     localStorage.setItem('hc_user', JSON.stringify(user));
+    localStorage.removeItem('hc_pending_ref');
     showToast('Conta criada com sucesso!');
     location.hash = '#painel';
   } catch (e) { errEl.textContent = e.message; errEl.classList.remove('hidden'); }
@@ -116,7 +132,14 @@ function updateUI() {
   document.getElementById('userBalance').textContent = formatMoney(user.balance);
   document.getElementById('userAvatar').textContent = user.name.charAt(0).toUpperCase();
   document.getElementById('withdrawBalance').textContent = 'R$ ' + formatMoney(user.balance);
-  document.getElementById('referralCode').textContent = user.referral_code;
+  
+  // Atualiza o link de indicação dinâmico
+  const referralLinkDisplay = document.getElementById('referralLinkDisplay');
+  if (referralLinkDisplay) {
+    const baseUrl = window.location.origin;
+    referralLinkDisplay.textContent = `${baseUrl}/#cadastro?ref=${user.referral_code}`;
+  }
+  
   document.getElementById('refCount').textContent = user.referrals || 0;
 }
 
@@ -216,7 +239,6 @@ document.getElementById('btnPlay').addEventListener('click', async () => {
 
 function onPlatformPassed(count) { }
 
-// CORREÇÃO: Função agora aceita 3 parâmetros enviados pelo game.js
 async function onGameEnd(platformsReached, cashed, prizeFromGame) {
   try {
     const data = await api('/api/game/finish', {
@@ -225,7 +247,7 @@ async function onGameEnd(platformsReached, cashed, prizeFromGame) {
         game_id: currentGameId,
         platforms_reached: platformsReached,
         cashed_out: cashed,
-        prize: prizeFromGame // Envia o valor exato calculado pelo jogo
+        prize: prizeFromGame
       })
     });
 
@@ -235,7 +257,6 @@ async function onGameEnd(platformsReached, cashed, prizeFromGame) {
     const overlay = document.getElementById('gameOverOverlay');
     overlay.classList.remove('hidden');
 
-    // Título e Ícone Dinâmico
     const resultTitle = document.getElementById('resultTitle');
     const resultIcon = document.getElementById('resultIcon');
 
@@ -253,7 +274,6 @@ async function onGameEnd(platformsReached, cashed, prizeFromGame) {
       resultIcon.textContent = '💥';
     }
 
-    // Exibição do Prêmio e Detalhes sem undefined
     document.getElementById('resultPrize').textContent = 'R$ ' + formatMoney(prizeFromGame || data.prize);
     
     const finalPlats = platformsReached !== undefined ? platformsReached : (data.platforms_reached || 0);
@@ -399,7 +419,7 @@ async function loadReferrals() {
     document.getElementById('refEarned').textContent = 'R$ ' + formatMoney(data.total_earned);
     const listEl = document.getElementById('referralList');
     if (data.referrals.length === 0) {
-      listEl.innerHTML = '<div class="referral-card" style="text-align:center;color:var(--text-secondary)">Nenhum indicado ainda. Compartilhe seu código!</div>';
+      listEl.innerHTML = '<div class="referral-card" style="text-align:center;color:var(--text-secondary)">Nenhum indicado ainda. Compartilhe seu link!</div>';
     } else {
       listEl.innerHTML = data.referrals.map(r =>
         '<div class="history-item"><div class="left"><span class="type">' + r.name + '</span><span class="date">' + new Date(r.created_at).toLocaleDateString('pt-BR') + '</span></div><span class="amount positive">+R$ ' + formatMoney(r.amount || 0) + '</span></div>'
