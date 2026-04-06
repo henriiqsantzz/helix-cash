@@ -120,6 +120,30 @@ function updateUI() {
   document.getElementById('refCount').textContent = user.referrals || 0;
 }
 
+// ===================== MENU LATERAL (PROFILE) =====================
+function toggleMenu() {
+  const menu = document.getElementById('sideMenu');
+  const overlay = document.getElementById('menuOverlay');
+  if (!menu || !overlay) return;
+
+  const isActive = menu.classList.toggle('active');
+  overlay.classList.toggle('active');
+
+  if (isActive) {
+    const currentUser = JSON.parse(localStorage.getItem('hc_user') || '{}');
+    if (document.getElementById('menuUserName')) document.getElementById('menuUserName').textContent = currentUser.name || 'Usuário';
+    if (document.getElementById('menuUserEmail')) document.getElementById('menuUserEmail').textContent = currentUser.email || '';
+    if (document.getElementById('menuBalance')) document.getElementById('menuBalance').textContent = formatMoney(currentUser.balance);
+    if (document.getElementById('menuBonus')) document.getElementById('menuBonus').textContent = formatMoney(currentUser.bonus_balance);
+    if (document.getElementById('menuAvatar')) document.getElementById('menuAvatar').textContent = (currentUser.name || 'U').charAt(0).toUpperCase();
+    
+    const adminArea = document.getElementById('adminMenuArea');
+    if (adminArea) {
+      adminArea.style.display = currentUser.is_admin ? 'block' : 'none';
+    }
+  }
+}
+
 // ===================== STATS =====================
 async function loadPublicStats() {
   try {
