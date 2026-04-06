@@ -103,7 +103,6 @@
 
   <main class="admin-main">
 
-    <!-- ===== DASHBOARD ===== -->
     <div id="section-dashboard" class="admin-section active">
       <div class="admin-header"><h1>📊 Dashboard</h1><p style="color:#a0a0c0">Visao geral completa da plataforma</p></div>
 
@@ -135,7 +134,6 @@
       </div>
     </div>
 
-    <!-- ===== USERS ===== -->
     <div id="section-users" class="admin-section">
       <div class="admin-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
         <div><h1>👥 Usuarios</h1><p style="color:#a0a0c0">Gerenciar todos os usuarios</p></div>
@@ -152,7 +150,6 @@
       </div>
     </div>
 
-    <!-- ===== INFLUENCERS ===== -->
     <div id="section-influencers" class="admin-section">
       <div class="admin-header">
         <h1>⭐ Influenciadores</h1>
@@ -169,7 +166,6 @@
       <p id="noInfluencers" style="text-align:center;color:#a0a0c0;padding:40px;display:none">Nenhum influenciador cadastrado. Marque usuarios como influenciador na aba Usuarios.</p>
     </div>
 
-    <!-- ===== DEPOSITS ===== -->
     <div id="section-deposits" class="admin-section">
       <div class="admin-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
         <div><h1>💰 Depositos</h1><p style="color:#a0a0c0">Aprovar ou rejeitar depositos PIX</p></div>
@@ -189,7 +185,6 @@
       </div>
     </div>
 
-    <!-- ===== WITHDRAWALS ===== -->
     <div id="section-withdrawals" class="admin-section">
       <div class="admin-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
         <div><h1>💸 Saques</h1><p style="color:#a0a0c0">Aprovar ou rejeitar saques PIX</p></div>
@@ -208,7 +203,6 @@
       </div>
     </div>
 
-    <!-- ===== GAMES ===== -->
     <div id="section-games" class="admin-section">
       <div class="admin-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
         <div><h1>🎮 Jogos</h1><p style="color:#a0a0c0">Historico completo de partidas</p></div>
@@ -222,7 +216,6 @@
       </div>
     </div>
 
-    <!-- ===== SETTINGS ===== -->
     <div id="section-settings" class="admin-section">
       <div class="admin-header"><h1>⚙️ Configuracoes</h1><p style="color:#a0a0c0">Parametros gerais da plataforma</p></div>
       <div class="settings-form">
@@ -243,7 +236,24 @@
           <p style="font-size:12px;color:#a0a0c0;margin-top:4px">House edge menor para influenciadores ganharem mais facilmente.</p>
         </div>
 
-        <h3 style="color:#b388ff;margin:24px 0 16px">Dificuldade do Jogo</h3>
+        <h3 style="color:#b388ff;margin:24px 0 16px">Dificuldade do Jogo (Dinâmica)</h3>
+        
+        <div class="form-group">
+          <label>Andar Inicial do Perigo (Andares seguros no começo)</label>
+          <input type="number" class="form-input" id="set-game_danger_start_level" step="1" min="0" placeholder="2">
+          <p style="font-size:12px;color:#a0a0c0;margin-top:4px">Quantos andares no começo são 100% seguros antes de aparecerem fatias vermelhas. Padrão: 2</p>
+        </div>
+        <div class="form-group">
+          <label>Taxa de Progressão</label>
+          <input type="number" class="form-input" id="set-game_danger_progression" step="1" min="1" placeholder="5">
+          <p style="font-size:12px;color:#a0a0c0;margin-top:4px">A cada quantos andares a quantidade de fatias vermelhas vai aumentar. Padrão: 5</p>
+        </div>
+        <div class="form-group">
+          <label>Máximo de Fatias Vermelhas (Limite)</label>
+          <input type="number" class="form-input" id="set-game_danger_max_slices" step="1" min="1" max="11" placeholder="6">
+          <p style="font-size:12px;color:#a0a0c0;margin-top:4px">Limite máximo de fatias vermelhas que o jogo pode gerar em uma plataforma para não ficar impossível. Padrão: 6 (de 12)</p>
+        </div>
+        <h3 style="color:#b388ff;margin:24px 0 16px">Física do Jogo</h3>
         <div class="form-group">
           <label>Quantidade de plataformas</label>
           <input type="number" class="form-input" id="set-game_platform_count" step="1" min="10" max="100" placeholder="25">
@@ -252,22 +262,17 @@
         <div class="form-group">
           <label>Gravidade (velocidade de queda)</label>
           <input type="number" class="form-input" id="set-game_gravity" step="0.001" min="0.005" max="0.05" placeholder="0.012">
-          <p style="font-size:12px;color:#a0a0c0;margin-top:4px">Maior = bola cai mais rapido. Padrao: 0.012</p>
+          <p style="font-size:12px;color:#a0a0c0;margin-top:4px">Maior = bola cai mais rapido. Padrao: 0.015</p>
         </div>
         <div class="form-group">
           <label>Forca do pulo</label>
           <input type="number" class="form-input" id="set-game_bounce_force" step="0.01" min="0.05" max="0.5" placeholder="0.18">
-          <p style="font-size:12px;color:#a0a0c0;margin-top:4px">Quanto a bola sobe ao quicar. Padrao: 0.18</p>
+          <p style="font-size:12px;color:#a0a0c0;margin-top:4px">Quanto a bola sobe ao quicar. Padrao: 0.22</p>
         </div>
         <div class="form-group">
           <label>Tamanho do buraco (segmentos)</label>
           <input type="number" class="form-input" id="set-game_hole_segments" step="0.1" min="0.5" max="4" placeholder="1.5">
-          <p style="font-size:12px;color:#a0a0c0;margin-top:4px">Maior = buraco maior = mais facil. Padrao: 1.5</p>
-        </div>
-        <div class="form-group">
-          <label>Chance de plataforma perigosa (%)</label>
-          <input type="number" class="form-input" id="set-game_danger_chance" step="0.01" min="0" max="1" placeholder="0.12">
-          <p style="font-size:12px;color:#a0a0c0;margin-top:4px">0.12 = 12% chance. Mais alto = mais dificil.</p>
+          <p style="font-size:12px;color:#a0a0c0;margin-top:4px">Maior = buraco maior = mais facil. Padrao: 2</p>
         </div>
         <div class="form-group">
           <label>Sensibilidade de rotacao</label>
@@ -282,7 +287,7 @@
         <div class="form-group">
           <label>Segmentos por plataforma</label>
           <input type="number" class="form-input" id="set-game_segments_per_platform" step="1" min="4" max="16" placeholder="8">
-          <p style="font-size:12px;color:#a0a0c0;margin-top:4px">Quantas fatias cada plataforma tem. Padrao: 8</p>
+          <p style="font-size:12px;color:#a0a0c0;margin-top:4px">Quantas fatias cada plataforma tem. Padrao: 12</p>
         </div>
 
         <h3 style="color:#b388ff;margin:24px 0 16px">Indicacao</h3>
@@ -298,7 +303,6 @@
   </main>
 </div>
 
-<!-- MODAL -->
 <div id="modal" class="modal-overlay" style="display:none"></div>
 <div id="toast" class="toast hidden"></div>
 
@@ -635,10 +639,13 @@ async function loadSettings() {
   } catch (e) { showToast(e.message, 'error'); }
 }
 
+// ===== ATUALIZADO: Lista de chaves agora inclui as variaveis novas de dificuldade =====
 async function saveSettings() {
   const keys = ['min_deposit', 'min_withdrawal', 'max_multiplier', 'referral_bonus', 'house_edge', 'influencer_house_edge', 'site_name',
-    'game_platform_count', 'game_gravity', 'game_bounce_force', 'game_hole_segments', 'game_danger_chance',
+    'game_platform_count', 'game_gravity', 'game_bounce_force', 'game_hole_segments', 
+    'game_danger_start_level', 'game_danger_progression', 'game_danger_max_slices', // As 3 variaveis novas
     'game_rotation_sensitivity', 'game_platform_spacing', 'game_segments_per_platform'];
+  
   const settings = {};
   keys.forEach(k => { const el = document.getElementById('set-' + k); if (el && el.value) settings[k] = el.value; });
   try {
