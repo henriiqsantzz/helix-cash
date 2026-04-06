@@ -1,5 +1,5 @@
 // ===================== HELIX JUMP 3D GAME =====================
-// Three.js WebGL Helix Jump - Hitboxes e Colisões 100% Precisas
+// Three.js WebGL Helix Jump - Versão Final (Hitbox, 3D, Dificuldade e Cashout)
 (function() {
   'use strict';
 
@@ -17,7 +17,7 @@
     segmentsPerPlatform: 12,
     holeSegments: 2,
     
-    // VARIÁVEIS DO PAINEL ADMIN
+    // VARIÁVEIS DO PAINEL ADMIN (Dificuldade Dinâmica)
     dangerStartLevel: 2,
     dangerProgression: 5,
     dangerMaxSlices: 6,
@@ -73,10 +73,22 @@
     animFrame = null; removeEvents(); cleanupHUD(); cleanupThree();
   };
 
-  window.helixGameCashOut = function() {
+  // === BOTÃO RESGATAR CORRIGIDO (Anti-Delay e Anti-Vazamento) ===
+  window.helixGameCashOut = function(e) {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    
     if (!gameActive || gamePhase !== 'playing') return;
-    isCashingOut = true; gameActive = false; gamePhase = 'gameover';
-    if (typeof onGameEnd === 'function') onGameEnd(platformsPassed, true);
+    
+    isCashingOut = true; 
+    gameActive = false; 
+    gamePhase = 'gameover'; 
+    
+    if (typeof onGameEnd === 'function') {
+      onGameEnd(platformsPassed, true);
+    }
   };
 
   function initGame() {
@@ -257,7 +269,6 @@
         }
 
         pData.group.add(mesh);
-        // SALVANDO A HITBOX CORRETA DA FATIA
         pData.segments.push({ mesh: mesh, startAngle: sStart, endAngle: sStart + segAngle, isKiller: isDanger });
       }
       platforms.push(pData);
@@ -346,7 +357,8 @@
       + '<div style="width:100%;height:4px;background:rgba(255,255,255,0.15);border-radius:2px;margin-top:4px;overflow:hidden;">'
       + '<div id="hud-progress-bar" style="width:0%;height:100%;background:linear-gradient(90deg,#00e676,#69f0ae);border-radius:2px;transition:width 0.3s;"></div></div></div>';
 
-    html += '<div id="hud-cashout" style="position:absolute;top:12px;right:12px;z-index:100;pointer-events:auto;background:linear-gradient(135deg,#00e676,#00c853);color:#000;padding:10px 16px;border-radius:12px;font-family:Inter,sans-serif;cursor:pointer;font-weight:800;font-size:12px;text-transform:uppercase;letter-spacing:1px;border:none;box-shadow:0 4px 15px rgba(0,230,118,0.4);display:none;" onclick="helixGameCashOut()">Resgatar</div>';
+    // === BOTÃO DE SAQUE ATUALIZADO (Eventos Mousedown e Touchstart rápidos) ===
+    html += '<div id="hud-cashout" style="position:absolute;top:12px;right:12px;z-index:100;pointer-events:auto;background:linear-gradient(135deg,#00e676,#00c853);color:#000;padding:14px 24px;border-radius:12px;font-family:Inter,sans-serif;cursor:pointer;font-weight:900;font-size:15px;text-transform:uppercase;letter-spacing:1px;border:none;box-shadow:0 4px 15px rgba(0,230,118,0.4);display:none;" onmousedown="helixGameCashOut(event)" ontouchstart="helixGameCashOut(event)">Resgatar</div>';
 
     html += '<div id="hud-start" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:100;font-family:Inter,sans-serif;text-align:center;pointer-events:none;">'
       + '<div style="font-size:20px;font-weight:700;color:rgba(0,0,0,0.6);">Toque para jogar</div>'
@@ -498,8 +510,6 @@
   function checkCollisions() {
     if (ballVelY <= 0) return;
 
-    // A mágica: No Three.js, a bola parada na frente da câmera fica exatamente no ângulo 270 graus (3*PI / 2). 
-    // Nós subtraímos a rotação do pilar para saber o ângulo exato da bola dentro do "relógio" da plataforma.
     var ballAngle = normAngle((3 * Math.PI / 2) - helixRotation);
 
     for (var i = 0; i < platforms.length; i++) {
@@ -509,12 +519,10 @@
       var platTop = p.y + CONFIG.platformHeight / 2;
       var platBottom = p.y - CONFIG.platformHeight / 2;
 
-      // Se a bola tocou a altura da plataforma atual
       if (ballWorldY <= platTop + CONFIG.ballRadius && ballWorldY >= platBottom - 0.15 && ballVelY > 0) {
         var hEnd = p.holeStart + p.holeSize;
         var inHole = isAngleInRange(ballAngle, p.holeStart, hEnd);
 
-        // Se o ângulo bate com o buraco, a bola cai liso!
         if (inHole) {
           p.passed = true;
           platformsPassed++;
@@ -531,8 +539,6 @@
           if (typeof onPlatformPassed === 'function') onPlatformPassed(platformsPassed);
         } else {
           
-          // Se não caiu no buraco, bateu em alguma fatia. 
-          // O CÓDIGO NOVO: Procura exatament qual fatia ela tocou para saber se é a vermelha!
           var hitDanger = false;
           for (var s = 0; s < p.segments.length; s++) {
             var seg = p.segments[s];
@@ -544,13 +550,11 @@
             }
           }
 
-          // Se a fatia lida era vermelha (killer), encerra a bet.
           if (hitDanger) { 
             triggerGameOver(); 
             return; 
           }
 
-          // Se a fatia era normal (segura), a bola quica e o jogo continua.
           ballWorldY = platTop + CONFIG.ballRadius;
           ballVelY = -CONFIG.ballBounceForce;
           comboCount = 0; comboTimer = 0;
@@ -559,7 +563,7 @@
             ballMesh.scale.set(1.3, 0.6, 1.3);
             setTimeout(function(){ if(ballMesh) ballMesh.scale.set(1,1,1); }, 100);
           }
-          break; // Achou a plataforma, não precisa testar os andares de baixo
+          break;
         }
       }
     }
