@@ -168,10 +168,10 @@
 
     <div id="section-affiliates" class="admin-section">
         <h1>🔗 Sistema de Afiliados</h1>
-        <p style="color:#a0a0c0">Gerencie links de convite e comissões.</p>
+        <p style="color:#a0a0c0">Acompanhe a conversão real dos seus influenciadores.</p>
         <div class="table-responsive">
             <table class="admin-table">
-              <thead><tr><th>Influenciador</th><th>Código</th><th>Link de Convite</th><th>Indicados</th><th>Ganhos</th></tr></thead>
+              <thead><tr><th>Influenciador</th><th>Link de Convite</th><th style="text-align:center">Cadastros</th><th style="text-align:center">Depositantes</th><th style="text-align:right">Total Depositado</th></tr></thead>
               <tbody id="affiliatesTable"></tbody>
             </table>
         </div>
@@ -330,14 +330,19 @@ async function loadAffiliates() {
     }
     table.innerHTML = affs.map(a => `
       <tr>
-        <td><strong style="color:#b388ff">${a.name}</strong></td>
-        <td><code style="background:rgba(124,77,255,0.1);padding:4px 8px;border-radius:4px">${a.code}</code></td>
         <td>
-          <input type="text" readonly value="${a.link}" class="form-input" style="font-size:11px; padding:5px; width:180px; display:inline-block" id="link-${a.code}">
+          <strong style="color:#b388ff">${a.name}</strong><br>
+          <small style="color:#a0a0c0">Cód: ${a.code}</small>
+        </td>
+        <td>
+          <input type="text" readonly value="${a.link}" class="form-input" style="font-size:10px; width:150px; display:inline-block; padding:5px" id="link-${a.code}">
           <button class="btn btn-sm" onclick="copyLink('${a.code}')">Copiar</button>
         </td>
-        <td style="text-align:center; font-weight:bold">${a.count}</td>
-        <td class="green">R$ ${fmt(a.earnings)}</td>
+        <td style="text-align:center; font-weight:bold">${a.count_total}</td>
+        <td style="text-align:center">
+          <span style="background:rgba(0,230,118,0.1); color:#00e676; padding:2px 8px; border-radius:4px; font-weight:bold">${a.count_depositors}</span>
+        </td>
+        <td style="text-align:right; font-weight:bold" class="green">R$ ${fmt(a.total_deposited)}</td>
       </tr>
     `).join('');
   } catch (e) { console.error(e); }
