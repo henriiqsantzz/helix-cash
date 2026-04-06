@@ -52,7 +52,10 @@ function createDefaultDB() {
     settings: {
       min_deposit: '10', min_withdrawal: '20', max_multiplier: '7',
       referral_bonus: '5', house_edge: '15', influencer_house_edge: '5',
-      site_name: 'Helix Cash'
+      site_name: 'Helix Cash',
+      game_platform_count: '25', game_danger_start_level: '2', game_danger_progression: '5',
+      game_danger_max_slices: '6', game_hole_segments: '1.5', game_rotation_sensitivity: '0.008',
+      inf_game_danger_max_slices: '1', inf_game_danger_start_level: '10', inf_game_hole_segments: '3.0'
     },
     next_id: { users: 2, deposits: 1, withdrawals: 1, games: 1, pending_games: 1, referral_earnings: 1 }
   };
@@ -301,7 +304,6 @@ module.exports = async function handler(req, res) {
           return respond(res, 400, { error: dataFromPhp.error || 'Erro ao gerar PIX na Paradise' });
         }
 
-        // SALVANDO DIRETAMENTE COM O NOME qr_code_base64
         var dep = {
           id: db.next_id.deposits++, 
           user_id: user.id, 
@@ -374,7 +376,7 @@ module.exports = async function handler(req, res) {
       return respond(res, 200, { received: true });
     }
 
-    // ==================== CHECK DEPOSIT STATUS (CORRIGIDO PARA PARADISE) ====================
+    // ==================== CHECK DEPOSIT STATUS ====================
     if (url === '/api/deposit/status' && method === 'POST') {
       var user = getUser(db, req);
       if (!user) return respond(res, 401, { error: 'Nao autorizado' });
@@ -383,28 +385,6 @@ module.exports = async function handler(req, res) {
 
       var dep = db.deposits.find(function(d) { return d.id === depId && d.user_id === user.id; });
       if (!dep) return respond(res, 404, { error: 'Deposito nao encontrado' });
-
-      if (dep.status === 'pending' && dep.transaction_id && PENGUIMPAY_KEY) {
-        try {
-          var checkRes = await fetch('https://api.penguimpay.com/api/external/pix/deposit/' + dep.transaction_id, {
-            headers: { 'Authorization': 'Bearer ' + PENGUIMPAY_KEY }
-          });
-          var checkData = await checkRes.json();
-          var txStatus = (checkData.status || '').toUpperCase();
-
-          if (txStatus === 'PAID_OUT' || txStatus === 'APPROVED' || txStatus === 'COMPLETED') {
-            dep.status = 'approved';
-            dep.updated_at = new Date().toISOString();
-            user.balance = num(user.balance) + num(dep.amount);
-            user.total_deposited = num(user.total_deposited) + num(dep.amount);
-            await saveDB(db);
-          } else if (txStatus === 'EXPIRED' || txStatus === 'FAILED') {
-            dep.status = 'rejected';
-            dep.updated_at = new Date().toISOString();
-            await saveDB(db);
-          }
-        } catch (e) { console.error('Status check error:', e.message); }
-      }
 
       return respond(res, 200, {
         status: dep.status,
@@ -438,12 +418,23 @@ module.exports = async function handler(req, res) {
       db.withdrawals.push(wd);
       await saveDB(db);
 
-      return respond(res, 200, { success: true, message: 'Saque solicitado! Aguardando o Administrador efetuar o envio.' });
+      return respond(res, 200, { success: true, message: 'Saque solicitado! Aguardando o Administrador.' });
     }
 
     // ==================== GAMES API ====================
     if (url === '/api/game/config' && method === 'GET') {
-      return respond(res, 200, db.settings);
+      var user = getUser(db, req);
+      var s = db.settings;
+      // Dificuldade diferenciada se for influencer
+      if (user && user.is_influencer) {
+        return respond(res, 200, {
+          ...s,
+          game_danger_max_slices: s.inf_game_danger_max_slices || s.game_danger_max_slices,
+          game_danger_start_level: s.inf_game_danger_start_level || s.game_danger_start_level,
+          game_hole_segments: s.inf_game_hole_segments || s.game_hole_segments
+        });
+      }
+      return respond(res, 200, s);
     }
 
     if (url === '/api/game/start' && method === 'POST') {
@@ -483,25 +474,18 @@ module.exports = async function handler(req, res) {
       if (pgIndex >= 0) db.pending_games.splice(pgIndex, 1);
 
       var cashedOut = !!body.cashed_out;
-      var maxMul = num(db.settings.max_multiplier) || 7;
-      var multiplier = Math.min(1 + (platformsReached * 0.5), maxMul);
+      var multiplier = 1 + (platformsReached * 0.5);
 
-      var clientPrize = 0;
-      for (var pp = 0; pp < platformsReached; pp++) clientPrize += 0.15 + (pp * 0.05);
-      clientPrize = Math.round(betAmount * clientPrize * 100) / 100;
+      // Algoritmo de House Edge (Dificuldade do Administrador)
+      var hEdge = user.is_influencer ? (100 - num(user.influencer_win_rate)) : num(db.settings.house_edge);
+      var isWin = (Math.random() * 100) >= hEdge;
 
-      var houseEdge = num(db.settings.house_edge) || 15;
-      if (user.is_influencer && num(user.influencer_win_rate) > 0) {
-        houseEdge = 100 - num(user.influencer_win_rate);
-      }
-
-      var isWin = (Math.random() * 100) >= houseEdge;
       var prize = 0;
       var result = 'loss';
 
       if (cashedOut && platformsReached > 0) {
         if (isWin) {
-          prize = clientPrize;
+          prize = Math.round(betAmount * multiplier * 100) / 100;
           result = 'win';
           user.balance = num(user.balance) + prize;
         } else {
@@ -523,7 +507,6 @@ module.exports = async function handler(req, res) {
 
       return respond(res, 200, {
         result: result, prize: prize, new_balance: num(user.balance),
-        balance: num(user.balance), platforms_reached: platformsReached,
         multiplier: multiplier, bet_amount: betAmount
       });
     }
@@ -567,6 +550,8 @@ module.exports = async function handler(req, res) {
       db.withdrawals.forEach(w => { if(w.status==='approved') totalWd += num(w.amount); });
       db.games.forEach(g => { totalBets += num(g.bet_amount); totalPrizes += num(g.prize); });
       
+      var today = new Date().toISOString().split('T')[0];
+      
       return respond(res, 200, {
         users: users.length, influencers: users.filter(u => u.is_influencer).length,
         deposits: { total: totalDep }, withdrawals: { total: totalWd },
@@ -577,7 +562,10 @@ module.exports = async function handler(req, res) {
           withdrawals: db.withdrawals.filter(w=>w.status==='pending').length
         },
         today: {
-          deposits: 0, withdrawals: 0, new_users: 0, games: 0 
+          new_users: db.users.filter(u => u.created_at.startsWith(today)).length,
+          deposits: db.deposits.filter(d => d.status === 'approved' && d.created_at.startsWith(today)).reduce((s,d) => s + num(d.amount), 0),
+          withdrawals: db.withdrawals.filter(w => w.status === 'approved' && w.created_at.startsWith(today)).reduce((s,w) => s + num(w.amount), 0),
+          games: db.games.filter(g => g.created_at.startsWith(today)).length
         }
       });
     }
@@ -587,6 +575,18 @@ module.exports = async function handler(req, res) {
       return respond(res, 200, db.users.filter(u => !u.is_admin));
     }
     
+    // ROTA DE BALANCO DIRETO (MODAL SALDO)
+    var balMatch = url.match(/^\/api\/admin\/user\/(\d+)\/balance$/);
+    if (balMatch && method === 'POST') {
+      if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
+      var user = db.users.find(u => u.id === parseInt(balMatch[1]));
+      if (!user) return respond(res, 404, { error: 'Usuario nao encontrado' });
+      var body = await parseBody(req);
+      user.balance = num(body.amount);
+      await saveDB(db);
+      return respond(res, 200, { success: true });
+    }
+
     var addBalMatch = url.match(/^\/api\/admin\/user\/(\d+)\/add-balance$/);
     if (addBalMatch && method === 'POST') {
       if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
@@ -598,6 +598,17 @@ module.exports = async function handler(req, res) {
       return respond(res, 200, { success: true });
     }
 
+    var blockMatch = url.match(/^\/api\/admin\/user\/(\d+)\/block$/);
+    if (blockMatch && method === 'POST') {
+      if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
+      var user = db.users.find(u => u.id === parseInt(blockMatch[1]));
+      if (!user) return respond(res, 404, { error: 'Usuario nao encontrado' });
+      var body = await parseBody(req);
+      user.is_blocked = !!body.blocked;
+      await saveDB(db);
+      return respond(res, 200, { success: true });
+    }
+
     var infMatch = url.match(/^\/api\/admin\/user\/(\d+)\/influencer$/);
     if (infMatch && method === 'POST') {
       if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
@@ -605,7 +616,7 @@ module.exports = async function handler(req, res) {
       if (!user) return respond(res, 404, { error: 'Usuario nao encontrado' });
       var body = await parseBody(req);
       user.is_influencer = !!body.is_influencer;
-      user.influencer_win_rate = num(body.influencer_win_rate) || 0;
+      user.influencer_win_rate = num(body.win_rate);
       await saveDB(db);
       return respond(res, 200, { success: true });
     }
@@ -651,47 +662,14 @@ module.exports = async function handler(req, res) {
       if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
       var wd = db.withdrawals.find(w => w.id === parseInt(wdMatch[1]));
       if (!wd) return respond(res, 404, { error: 'Saque nao encontrado' });
-      if (wd.status !== 'pending') return respond(res, 400, { error: 'Saque ja processado' });
-
+      
       var action = wdMatch[2];
-
-      if (action === 'approve') {
-        if (PENGUIMPAY_KEY) {
-          try {
-            var ppRes = await fetch('https://api.penguimpay.com/api/external/withdraw/pix', {
-              method: 'POST',
-              headers: {
-                'Authorization': 'Bearer ' + PENGUIMPAY_KEY,
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({
-                amount: num(wd.amount),
-                pix_key: wd.pix_key,
-                pix_key_type: wd.pix_key_type.toUpperCase() 
-              })
-            });
-            var rawText = await ppRes.text();
-            var ppData = {};
-            try { ppData = JSON.parse(rawText); } catch(e) {}
-
-            if (!ppRes.ok) {
-              return respond(res, 400, { error: 'Recusado pela Pagadora: ' + (ppData.message || ppData.error || 'Saldo ou chave invalida.') });
-            }
-            wd.transaction_id = ppData.transactionId || ppData.id || '';
-          } catch (e) {
-            console.error('API Out Error:', e.message);
-            return respond(res, 500, { error: 'Erro de conexao com gateway para efetuar o PIX.' });
-          }
-        }
-        
-        wd.status = 'approved';
+      wd.status = action === 'approve' ? 'approved' : 'rejected';
+      
+      // ESTORNO MANUAL: Se for rejeitado, o saldo NAO volta automaticamente (como solicitado)
+      if (wd.status === 'approved') {
         var user = db.users.find(u => u.id === wd.user_id);
         if (user) user.total_withdrawn = num(user.total_withdrawn) + num(wd.amount);
-
-      } else if (action === 'reject') {
-        wd.status = 'rejected';
-        var user = db.users.find(u => u.id === wd.user_id);
-        if (user) user.balance = num(user.balance) + num(wd.amount); 
       }
 
       wd.updated_at = new Date().toISOString();
@@ -723,7 +701,7 @@ module.exports = async function handler(req, res) {
     return respond(res, 404, { error: 'Rota nao encontrada: ' + url });
 
   } catch (err) {
-    console.error('API Error:', err.message, err.stack);
-    return respond(res, 500, { error: 'Erro interno: ' + err.message });
+    console.error('API Error:', err.message);
+    return respond(res, 500, { error: 'Erro interno' });
   }
 };
