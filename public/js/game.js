@@ -57,7 +57,6 @@
   window.startHelixGame = function(bet, serverConfig) {
     if (serverConfig) {
       Object.keys(serverConfig).forEach(function(k) {
-        // Mapeamento de variáveis do servidor para o CONFIG do jogo
         if (k === 'game_platform_count') CONFIG.platformCount = parseInt(serverConfig[k]);
         if (k === 'game_gravity') CONFIG.gravity = parseFloat(serverConfig[k]);
         if (k === 'game_bounce_force') CONFIG.ballBounceForce = parseFloat(serverConfig[k]);
@@ -67,8 +66,6 @@
         if (k === 'game_rotation_sensitivity') CONFIG.rotationSensitivity = parseFloat(serverConfig[k]);
         if (k === 'game_platform_spacing') CONFIG.platformSpacing = parseFloat(serverConfig[k]);
         if (k === 'max_multiplier') CONFIG.targetMultiplier = parseFloat(serverConfig[k]);
-        
-        // Aplica qualquer outra chave que bata com o CONFIG
         if (CONFIG.hasOwnProperty(k)) CONFIG[k] = serverConfig[k];
       });
     }
@@ -114,10 +111,11 @@
         cb.style.pointerEvents = 'none';
     }
     
+    var finalPlatforms = platformsPassed; // Garante o valor fixo
     if (typeof window.onGameEnd === 'function') {
-      window.onGameEnd(platformsPassed, true);
+      window.onGameEnd(finalPlatforms, true);
     } else if (typeof onGameEnd === 'function') {
-      onGameEnd(platformsPassed, true);
+      onGameEnd(finalPlatforms, true);
     }
   };
 
@@ -369,7 +367,6 @@
     }
   }
 
-  // ===================== HUD =====================
   function createHUD() {
     cleanupHUD();
     var container = document.getElementById('gameCanvas').parentElement;
@@ -432,7 +429,6 @@
     if (pb) pb.style.width = Math.min(100, (prize / (meta || 1)) * 100) + '%';
 
     if (cb) {
-      // REGRA: Só exibe se o prêmio atingiu a meta
       var goalReached = prize >= meta && meta > 0;
       cb.style.display = (gamePhase === 'playing' && goalReached) ? 'block' : 'none';
       if (goalReached) cb.style.animation = 'helixPulse 1s infinite';
@@ -632,10 +628,11 @@
     var cb = document.getElementById('hud-cashout');
     if (cb) cb.style.display = 'none';
     
+    var finalPlatforms = platformsPassed; // Captura o valor atual antes do delay
     setTimeout(function() {
       gameActive = false;
-      if (typeof window.onGameEnd === 'function') window.onGameEnd(platformsPassed, false);
-      else if (typeof onGameEnd === 'function') onGameEnd(platformsPassed, false);
+      if (typeof window.onGameEnd === 'function') window.onGameEnd(finalPlatforms, false);
+      else if (typeof onGameEnd === 'function') onGameEnd(finalPlatforms, false);
     }, 500);
   }
 
