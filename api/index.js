@@ -274,7 +274,7 @@ module.exports = async function handler(req, res) {
       return respond(res, 200, { balance: num(user.balance), bonus_balance: num(user.bonus_balance) });
     }
 
-    // ==================== DEPOSIT (PenguimPay PIX IN) ====================
+    // ==================== DEPOSIT (PenguimPay PIX IN - CORRIGIDO TIMEOUT) ====================
     if (url === '/api/deposit' && method === 'POST') {
       var user = getUser(db, req);
       if (!user) return respond(res, 401, { error: 'Nao autorizado' });
@@ -283,7 +283,6 @@ module.exports = async function handler(req, res) {
       var minDep = num(db.settings.min_deposit) || 10;
       var cpf = (body.cpf || '').trim();
       
-      // Sanitização do CPF
       var cpfRaw = cpf.replace(/\D/g, '');
 
       if (!amount || amount < minDep) return respond(res, 400, { error: 'Deposito minimo: R$' + minDep });
@@ -297,11 +296,16 @@ module.exports = async function handler(req, res) {
 
       if (PENGUIMPAY_KEY) {
         try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 14000); // 14 segundos de limite para Vercel
+
           var ppRes = await fetch('https://api.penguimpay.com/api/external/pix/deposit', {
             method: 'POST',
+            signal: controller.signal,
             headers: {
               'Authorization': 'Bearer ' + PENGUIMPAY_KEY,
-              'Content-Type': 'application/json'
+              'Content-Type': 'application/json',
+              'Accept': 'application/json'
             },
             body: JSON.stringify({
               amount: amount,
@@ -313,22 +317,20 @@ module.exports = async function handler(req, res) {
             })
           });
 
+          clearTimeout(timeoutId);
           var rawText = await ppRes.text();
-          console.log('PenguimPay RAW response status:', ppRes.status, 'body:', rawText);
           var ppData = {};
-          try { ppData = JSON.parse(rawText); } catch(e) { console.error('PenguimPay JSON parse error:', e.message); }
+          try { ppData = JSON.parse(rawText); } catch(e) {}
 
           if (!ppRes.ok) {
             return respond(res, 400, { error: 'Aviso PenguimPay: ' + (ppData.message || ppData.error || 'Verifique seus dados.') });
           }
 
-          // Deep-search helper: PenguimPay may nest fields under 'data', 'pix', 'result', etc.
           function findField(obj, keys) {
             if (!obj || typeof obj !== 'object') return '';
             for (var k = 0; k < keys.length; k++) {
               if (obj[keys[k]] !== undefined && obj[keys[k]] !== null && obj[keys[k]] !== '') return obj[keys[k]];
             }
-            // Search one level deeper (e.g. data.*, pix.*, result.*)
             var nested = ['data', 'pix', 'result', 'payment', 'transaction', 'deposit'];
             for (var n = 0; n < nested.length; n++) {
               if (obj[nested[n]] && typeof obj[nested[n]] === 'object') {
@@ -344,8 +346,10 @@ module.exports = async function handler(req, res) {
           dep.pix_code = findField(ppData, ['pixCopiaECola', 'pix_copia_e_cola', 'copiaecola', 'copia_e_cola', 'copiaECola', 'pixCode', 'pix_code', 'qrCode', 'qr_code', 'qrcode', 'brcode', 'brCode', 'emv', 'pix_key', 'pixKey', 'code', 'payload']);
           dep.qr_code_image = findField(ppData, ['qrCodeImage', 'qr_code_image', 'qrCodeBase64', 'qr_code_base64', 'qrcode_image', 'qrcodeImage', 'qr_image', 'qrImage', 'image', 'imageBase64', 'base64']);
 
-          console.log('PenguimPay mapped => transaction_id:', dep.transaction_id, 'pix_code length:', (dep.pix_code||'').length, 'qr_image length:', (dep.qr_code_image||'').length);
         } catch (e) {
+          if (e.name === 'AbortError') {
+            return respond(res, 400, { error: 'O servidor de pagamento demorou muito para responder. Tente novamente.' });
+          }
           console.error('PenguimPay error:', e.message);
           return respond(res, 500, { error: 'Falha tecnica ao comunicar com a pagadora.' });
         }
@@ -356,12 +360,12 @@ module.exports = async function handler(req, res) {
       db.deposits.push(dep);
       await saveDB(db);
 
-      // CORREÇÃO CRÍTICA: Enviar pix_code e qr_code_image na raiz para o front-end ler corretamente
       return respond(res, 200, {
         success: true,
         pix_code: dep.pix_code,
         qr_code_image: dep.qr_code_image || '',
         transaction_id: dep.transaction_id,
+        deposit_id: dep.id,
         deposit: dep
       });
     }
