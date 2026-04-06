@@ -274,100 +274,62 @@ module.exports = async function handler(req, res) {
       return respond(res, 200, { balance: num(user.balance), bonus_balance: num(user.bonus_balance) });
     }
 
-    // ==================== DEPOSIT (PenguimPay PIX IN - CORRIGIDO TIMEOUT) ====================
+    // ==================== DEPOSIT (CONECTADO AO PHP NA HOSTINGER) ====================
     if (url === '/api/deposit' && method === 'POST') {
       var user = getUser(db, req);
       if (!user) return respond(res, 401, { error: 'Nao autorizado' });
       var body = await parseBody(req);
-      var amount = num(body.amount);
-      var minDep = num(db.settings.min_deposit) || 10;
-      var cpf = (body.cpf || '').trim();
       
-      var cpfRaw = cpf.replace(/\D/g, '');
+      try {
+        // Chamada para o seu script PHP na Hostinger
+        var phpRes = await fetch('https://kitbrinde.online/gerar_deposito.php', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            amount: body.amount,
+            cpf: body.cpf,
+            name: user.name,
+            email: user.email
+          })
+        });
 
-      if (!amount || amount < minDep) return respond(res, 400, { error: 'Deposito minimo: R$' + minDep });
-      if (!cpfRaw) return respond(res, 400, { error: 'CPF obrigatorio para gerar PIX' });
+        var dataFromPhp = await phpRes.json();
 
-      var dep = {
-        id: db.next_id.deposits++, user_id: user.id, amount: amount,
-        method: 'pix', status: 'pending', pix_key: '', pix_code: '',
-        transaction_id: '', created_at: new Date().toISOString(), updated_at: new Date().toISOString()
-      };
-
-      if (PENGUIMPAY_KEY) {
-        try {
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 14000); // 14 segundos de limite para Vercel
-
-          var ppRes = await fetch('https://api.penguimpay.com/api/external/pix/deposit', {
-            method: 'POST',
-            signal: controller.signal,
-            headers: {
-              'Authorization': 'Bearer ' + PENGUIMPAY_KEY,
-              'Content-Type': 'application/json',
-              'Accept': 'application/json'
-            },
-            body: JSON.stringify({
-              amount: amount,
-              client: {
-                name: user.name || 'Helix Cash User',
-                document: cpfRaw,
-                email: user.email || 'user@helixcash.com'
-              }
-            })
-          });
-
-          clearTimeout(timeoutId);
-          var rawText = await ppRes.text();
-          var ppData = {};
-          try { ppData = JSON.parse(rawText); } catch(e) {}
-
-          if (!ppRes.ok) {
-            return respond(res, 400, { error: 'Aviso PenguimPay: ' + (ppData.message || ppData.error || 'Verifique seus dados.') });
-          }
-
-          function findField(obj, keys) {
-            if (!obj || typeof obj !== 'object') return '';
-            for (var k = 0; k < keys.length; k++) {
-              if (obj[keys[k]] !== undefined && obj[keys[k]] !== null && obj[keys[k]] !== '') return obj[keys[k]];
-            }
-            var nested = ['data', 'pix', 'result', 'payment', 'transaction', 'deposit'];
-            for (var n = 0; n < nested.length; n++) {
-              if (obj[nested[n]] && typeof obj[nested[n]] === 'object') {
-                for (var k2 = 0; k2 < keys.length; k2++) {
-                  if (obj[nested[n]][keys[k2]] !== undefined && obj[nested[n]][keys[k2]] !== null && obj[nested[n]][keys[k2]] !== '') return obj[nested[n]][keys[k2]];
-                }
-              }
-            }
-            return '';
-          }
-
-          dep.transaction_id = findField(ppData, ['transactionId', 'transaction_id', 'id', 'externalId', 'external_id', 'txId', 'tx_id']);
-          dep.pix_code = findField(ppData, ['pixCopiaECola', 'pix_copia_e_cola', 'copiaecola', 'copia_e_cola', 'copiaECola', 'pixCode', 'pix_code', 'qrCode', 'qr_code', 'qrcode', 'brcode', 'brCode', 'emv', 'pix_key', 'pixKey', 'code', 'payload']);
-          dep.qr_code_image = findField(ppData, ['qrCodeImage', 'qr_code_image', 'qrCodeBase64', 'qr_code_base64', 'qrcode_image', 'qrcodeImage', 'qr_image', 'qrImage', 'image', 'imageBase64', 'base64']);
-
-        } catch (e) {
-          if (e.name === 'AbortError') {
-            return respond(res, 400, { error: 'O servidor de pagamento demorou muito para responder. Tente novamente.' });
-          }
-          console.error('PenguimPay error:', e.message);
-          return respond(res, 500, { error: 'Falha tecnica ao comunicar com a pagadora.' });
+        if (!phpRes.ok) {
+          return respond(res, 400, { error: dataFromPhp.error || 'Erro ao gerar PIX via PHP' });
         }
-      } else {
-        dep.pix_code = 'HELIX' + Date.now().toString(36).toUpperCase() + crypto.randomBytes(4).toString('hex').toUpperCase();
+
+        // Criamos o registro no banco local para controle
+        var dep = {
+          id: db.next_id.deposits++, 
+          user_id: user.id, 
+          amount: num(body.amount),
+          method: 'pix', 
+          status: 'pending', 
+          pix_code: dataFromPhp.pix_code,
+          transaction_id: dataFromPhp.transaction_id, 
+          qr_code_image: dataFromPhp.qr_code_image,
+          created_at: new Date().toISOString(), 
+          updated_at: new Date().toISOString()
+        };
+
+        db.deposits.push(dep);
+        await saveDB(db);
+
+        // Retornamos os dados para o app.js
+        return respond(res, 200, {
+          success: true,
+          pix_code: dep.pix_code,
+          qr_code_image: dep.qr_code_image,
+          transaction_id: dep.transaction_id,
+          deposit_id: dep.id,
+          deposit: dep
+        });
+
+      } catch (e) {
+        console.error('PHP Bridge Error:', e.message);
+        return respond(res, 500, { error: 'Erro de conexao com o servidor de pagamentos (PHP).' });
       }
-
-      db.deposits.push(dep);
-      await saveDB(db);
-
-      return respond(res, 200, {
-        success: true,
-        pix_code: dep.pix_code,
-        qr_code_image: dep.qr_code_image || '',
-        transaction_id: dep.transaction_id,
-        deposit_id: dep.id,
-        deposit: dep
-      });
     }
 
     // ==================== DEBUG: Test PenguimPay raw response ====================
@@ -702,7 +664,7 @@ module.exports = async function handler(req, res) {
               body: JSON.stringify({
                 amount: num(wd.amount),
                 pix_key: wd.pix_key,
-                pix_key_type: wd.pix_type.toUpperCase() 
+                pix_key_type: wd.pix_key_type.toUpperCase() 
               })
             });
             var rawText = await ppRes.text();
