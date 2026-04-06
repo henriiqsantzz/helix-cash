@@ -1,33 +1,32 @@
 // ===================== HELIX JUMP 3D GAME =====================
-// Three.js WebGL Helix Jump - ring-shaped platforms, fixed collision, full-screen
+// Three.js WebGL Helix Jump - Premium UI & Physics
 (function() {
   'use strict';
 
-  // CONFIG is loaded from server settings or defaults
+  // CONFIGURAÇÕES MELHORADAS (Proporções mais próximas do original)
   var CONFIG = {
-    platformCount: 25,
-    platformSpacing: 2.2,
-    platformOuterRadius: 2.5,
-    platformInnerRadius: 0.45,
-    platformHeight: 0.30,
-    postRadius: 0.30,
+    platformCount: 30,
+    platformSpacing: 2.5,     // Espaço maior entre andares
+    platformOuterRadius: 2.4, // Tamanho do disco
+    platformInnerRadius: 0.6, // Encaixa certinho no pilar
+    platformHeight: 0.35,     // Plataforma mais grossa
+    postRadius: 0.6,          // Pilar central mais grosso
     postHeight: 200,
-    ballRadius: 0.28,
-    ballBounceForce: 0.18,
-    gravity: 0.012,
-    segmentsPerPlatform: 8,
-    holeSegments: 1.5,
-    cameraFov: 55,
-    cameraDistance: 7,
-    cameraHeight: 3.5,
-    cameraFollowSpeed: 0.06,
+    ballRadius: 0.35,         // Bola ligeiramente maior
+    ballBounceForce: 0.22,    // Pulo mais dinâmico
+    gravity: 0.015,           // Gravidade um pouco mais rápida
+    segmentsPerPlatform: 12,  // Mais fatias para ficar arredondado
+    holeSegments: 2,          // Tamanho do buraco
+    cameraFov: 60,            // Campo de visão mais aberto
+    cameraDistance: 7.5,      // Câmera um pouco mais longe
+    cameraHeight: 5.0,        // Câmera mais alta (olhando de cima)
+    cameraFollowSpeed: 0.08,
     rotationSensitivity: 0.008,
     dangerChance: 0.12,
     targetMultiplier: 8,
     latheSegments: 32
   };
 
-  // Allow admin to override config
   window.helixGameConfig = CONFIG;
 
   var PALETTES = [
@@ -43,15 +42,13 @@
   var isCashingOut = false, gamePhase = 'ready', prizeAmount = 0;
   var currentPaletteIndex = 0, comboCount = 0, comboTimer = 0;
   var scene, camera, renderer, helixGroup, postMesh, ballMesh, topCapMesh;
-  var platforms = [], animFrame = null, cloudMeshes = [];
+  var platforms = [], animFrame = null, splashParticles = [];
   var ballVelY = 0, ballWorldY = 0;
   var isDragging = false, lastDragX = 0, helixRotation = 0;
   var cameraTargetY = 0, hudContainer = null;
-  var splashParticles = [];
 
   // ===================== PUBLIC API =====================
   window.startHelixGame = function(bet, serverConfig) {
-    // Apply server config if provided
     if (serverConfig) {
       Object.keys(serverConfig).forEach(function(k) {
         if (CONFIG.hasOwnProperty(k)) CONFIG[k] = serverConfig[k];
@@ -86,28 +83,31 @@
 
     scene = new THREE.Scene();
     camera = new THREE.PerspectiveCamera(CONFIG.cameraFov, W / H, 0.1, 1000);
-    // Position camera higher and looking down at an angle - shows full helix from start
-    camera.position.set(0, CONFIG.cameraHeight, CONFIG.cameraDistance);
-    camera.lookAt(0, 0, 0);
-
+    
     renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: false });
     renderer.setSize(W, H);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    
+    // Sombras Premium ativadas
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
-    // Lighting - softer, more realistic
-    var ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+    // Iluminação Realista (Fundamental para o visual)
+    var ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
     scene.add(ambientLight);
-    var dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-    dirLight.position.set(4, 12, 6);
+    
+    var dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
+    dirLight.position.set(10, 20, 10);
     dirLight.castShadow = true;
     dirLight.shadow.mapSize.width = 1024;
     dirLight.shadow.mapSize.height = 1024;
+    dirLight.shadow.camera.near = 0.5;
+    dirLight.shadow.camera.far = 50;
+    dirLight.shadow.camera.left = -10;
+    dirLight.shadow.camera.right = 10;
+    dirLight.shadow.camera.top = 10;
+    dirLight.shadow.camera.bottom = -10;
     scene.add(dirLight);
-    var rimLight = new THREE.DirectionalLight(0xffffff, 0.3);
-    rimLight.position.set(-3, 5, -5);
-    scene.add(rimLight);
 
     updateBackground();
 
@@ -119,11 +119,10 @@
     createPlatforms();
     createBall();
 
-    // Ball starts on top of the first platform area
-    ballWorldY = CONFIG.ballRadius + CONFIG.platformHeight / 2 + 0.05;
-    if (ballMesh) ballMesh.position.y = ballWorldY;
+    // Ajuste da Câmera Inicial (Olhando de cima para baixo na bola)
+    camera.position.set(0, CONFIG.cameraHeight, CONFIG.cameraDistance);
+    camera.lookAt(0, ballWorldY - 1, 0);
     cameraTargetY = CONFIG.cameraHeight;
-    camera.position.y = CONFIG.cameraHeight;
 
     createHUD();
     attachEvents();
@@ -142,31 +141,31 @@
     }
     scene = null; camera = null; renderer = null;
     helixGroup = null; postMesh = null; ballMesh = null; topCapMesh = null;
-    platforms = []; cloudMeshes = []; splashParticles = [];
+    platforms = []; splashParticles = [];
   }
 
   // ===================== CREATE OBJECTS =====================
   function createPost() {
     var pal = PALETTES[currentPaletteIndex];
-    var geo = new THREE.CylinderGeometry(CONFIG.postRadius, CONFIG.postRadius, CONFIG.postHeight, 24, 1, false);
-    var mat = new THREE.MeshPhongMaterial({ color: pal.pole, shininess: 60, specular: 0x222222 });
+    var geo = new THREE.CylinderGeometry(CONFIG.postRadius, CONFIG.postRadius, CONFIG.postHeight, 32, 1, false);
+    // Alterado para MeshStandardMaterial
+    var mat = new THREE.MeshStandardMaterial({ color: pal.pole, roughness: 0.3, metalness: 0.1 });
     postMesh = new THREE.Mesh(geo, mat);
     postMesh.position.y = -CONFIG.postHeight / 2;
     postMesh.receiveShadow = true;
+    postMesh.castShadow = true;
     helixGroup.add(postMesh);
   }
 
   function createTopCap() {
     var pal = PALETTES[currentPaletteIndex];
-    // Create a rounded top cap on the pole
-    var capGeo = new THREE.SphereGeometry(CONFIG.postRadius * 1.3, 16, 16, 0, Math.PI * 2, 0, Math.PI / 2);
-    var capMat = new THREE.MeshPhongMaterial({ color: pal.topCap, shininess: 80, specular: 0x444444 });
+    var capGeo = new THREE.SphereGeometry(CONFIG.postRadius, 32, 32, 0, Math.PI * 2, 0, Math.PI / 2);
+    var capMat = new THREE.MeshStandardMaterial({ color: pal.topCap, roughness: 0.3, metalness: 0.1 });
     topCapMesh = new THREE.Mesh(capGeo, capMat);
-    topCapMesh.position.y = 0.5;
+    topCapMesh.position.y = 0; // Alinhado com o topo
     helixGroup.add(topCapMesh);
   }
 
-  // Create ring-shaped platform segment using LatheGeometry
   function createRingSegment(innerR, outerR, height, startAngle, arcAngle, color) {
     var pts = [
       new THREE.Vector2(innerR, -height / 2),
@@ -175,7 +174,7 @@
       new THREE.Vector2(innerR, height / 2)
     ];
     var geo = new THREE.LatheGeometry(pts, CONFIG.latheSegments, startAngle, arcAngle);
-    var mat = new THREE.MeshPhongMaterial({ color: color, shininess: 40, specular: 0x111111 });
+    var mat = new THREE.MeshStandardMaterial({ color: color, roughness: 0.4, metalness: 0.1 });
     var mesh = new THREE.Mesh(geo, mat);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
@@ -189,9 +188,10 @@
     var holeArc = CONFIG.holeSegments * segAngle;
 
     for (var i = 0; i < CONFIG.platformCount; i++) {
-      var y = -(i + 1) * CONFIG.platformSpacing;
+      // CORREÇÃO: O primeiro andar (i=0) agora fica em Y=0, não no buraco!
+      var y = -i * CONFIG.platformSpacing; 
       var holeStart = Math.random() * Math.PI * 2;
-      var isDanger = i > 2 && Math.random() < CONFIG.dangerChance;
+      var isDanger = i > 1 && Math.random() < CONFIG.dangerChance;
 
       var pData = {
         y: y, holeStart: holeStart, holeSize: holeArc,
@@ -206,7 +206,6 @@
       for (var s = 0; s < CONFIG.segmentsPerPlatform; s++) {
         var sStart = s * segAngle;
         var sMid = sStart + segAngle / 2;
-
         if (isAngleInRange(sMid, holeStart, holeEnd)) continue;
 
         var col = isDanger ? pal.killer : (s % 2 === 0 ? pal.platforms : pal.alt);
@@ -214,6 +213,13 @@
           CONFIG.platformInnerRadius, CONFIG.platformOuterRadius,
           CONFIG.platformHeight, sStart, segAngle, col
         );
+        
+        // Fazer a zona vermelha brilhar um pouco (neon)
+        if(isDanger) {
+            mesh.material.emissive = new THREE.Color(pal.killer);
+            mesh.material.emissiveIntensity = 0.2;
+        }
+
         pData.group.add(mesh);
         pData.segments.push({ mesh: mesh, startAngle: sStart, endAngle: sStart + segAngle, isKiller: isDanger });
       }
@@ -224,14 +230,16 @@
   function createBall() {
     var pal = PALETTES[currentPaletteIndex];
     var geo = new THREE.SphereGeometry(CONFIG.ballRadius, 32, 32);
-    var mat = new THREE.MeshPhongMaterial({ color: pal.ball, shininess: 100, specular: 0x888888 });
+    // Material plastico/liso para a bola
+    var mat = new THREE.MeshStandardMaterial({ color: pal.ball, roughness: 0.1, metalness: 0.2 });
     ballMesh = new THREE.Mesh(geo, mat);
     ballMesh.castShadow = true;
-    // Place ball on outer part of the ring
+    
     var ballZ = (CONFIG.platformInnerRadius + CONFIG.platformOuterRadius) / 2;
-    ballMesh.position.set(0, CONFIG.ballRadius + 0.1, ballZ);
+    // CORREÇÃO: Bola nasce colada no andar 0
+    ballWorldY = (CONFIG.platformHeight / 2) + CONFIG.ballRadius; 
+    ballMesh.position.set(0, ballWorldY, ballZ);
     scene.add(ballMesh);
-    ballWorldY = ballMesh.position.y;
   }
 
   function updateBackground() {
@@ -247,11 +255,10 @@
     scene.background = tex;
   }
 
-  // ===================== SPLASH PARTICLES =====================
   function createSplash(y) {
     var pal = PALETTES[currentPaletteIndex];
     for (var i = 0; i < 8; i++) {
-      var geo = new THREE.SphereGeometry(0.06, 4, 4);
+      var geo = new THREE.SphereGeometry(0.08, 8, 8);
       var mat = new THREE.MeshBasicMaterial({ color: pal.platforms, transparent: true, opacity: 0.9 });
       var p = new THREE.Mesh(geo, mat);
       var angle = Math.random() * Math.PI * 2;
@@ -260,9 +267,9 @@
       scene.add(p);
       splashParticles.push({
         mesh: p,
-        vx: (Math.random() - 0.5) * 0.15,
-        vy: Math.random() * 0.12 + 0.05,
-        vz: (Math.random() - 0.5) * 0.15,
+        vx: (Math.random() - 0.5) * 0.2,
+        vy: Math.random() * 0.15 + 0.05,
+        vz: (Math.random() - 0.5) * 0.2,
         life: 30
       });
     }
@@ -274,7 +281,7 @@
       sp.mesh.position.x += sp.vx;
       sp.mesh.position.y += sp.vy;
       sp.mesh.position.z += sp.vz;
-      sp.vy -= 0.005;
+      sp.vy -= 0.01;
       sp.life--;
       sp.mesh.material.opacity = sp.life / 30;
       if (sp.life <= 0) {
@@ -294,33 +301,26 @@
     hudContainer.id = 'helix-hud';
     hudContainer.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:100;';
 
-    // Entry value - top left
     var html = '<div style="position:absolute;top:12px;left:12px;z-index:100;pointer-events:auto;background:rgba(0,0,0,0.55);color:#fff;padding:6px 14px;border-radius:12px;font-family:Inter,sans-serif;backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,0.15);">'
       + '<div style="font-size:9px;text-transform:uppercase;letter-spacing:1px;opacity:0.7;">Entrada</div>'
       + '<div style="font-size:16px;font-weight:800;" id="hud-entry-val">R$ 0,00</div></div>';
 
-    // Progress - top center
     html += '<div style="position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:100;background:rgba(0,0,0,0.55);color:#fff;padding:8px 16px;border-radius:12px;font-family:Inter,sans-serif;min-width:160px;text-align:center;backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,0.15);max-width:calc(100% - 140px);">'
       + '<div style="font-size:9px;text-transform:uppercase;letter-spacing:1px;opacity:0.7;">Progresso</div>'
       + '<div style="font-size:14px;font-weight:800;" id="hud-progress-val">R$ 0,00 / R$ 0,00</div>'
       + '<div style="width:100%;height:4px;background:rgba(255,255,255,0.15);border-radius:2px;margin-top:4px;overflow:hidden;">'
       + '<div id="hud-progress-bar" style="width:0%;height:100%;background:linear-gradient(90deg,#00e676,#69f0ae);border-radius:2px;transition:width 0.3s;"></div></div></div>';
 
-    // Cashout button - top right (hidden by default, only shows after reaching goal)
     html += '<div id="hud-cashout" style="position:absolute;top:12px;right:12px;z-index:100;pointer-events:auto;background:linear-gradient(135deg,#00e676,#00c853);color:#000;padding:10px 16px;border-radius:12px;font-family:Inter,sans-serif;cursor:pointer;font-weight:800;font-size:12px;text-transform:uppercase;letter-spacing:1px;border:none;box-shadow:0 4px 15px rgba(0,230,118,0.4);display:none;" onclick="helixGameCashOut()">Resgatar</div>';
 
-    // Start message
     html += '<div id="hud-start" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:100;font-family:Inter,sans-serif;text-align:center;pointer-events:none;">'
       + '<div style="font-size:20px;font-weight:700;color:rgba(0,0,0,0.6);">Toque para jogar</div>'
       + '<div style="font-size:28px;margin-top:8px;color:rgba(0,0,0,0.4);animation:helixBounce 1s infinite;">&#8595;</div></div>';
 
-    // Combo display
     html += '<div id="hud-combo" style="position:absolute;bottom:100px;left:50%;transform:translateX(-50%);z-index:100;pointer-events:none;font-family:Inter,sans-serif;font-size:24px;font-weight:800;color:#ffab00;text-shadow:0 2px 8px rgba(255,171,0,0.5);opacity:0;transition:all 0.3s;"></div>';
 
-    // Score popup
     html += '<div id="hud-score-popup" style="position:absolute;top:45%;left:50%;transform:translate(-50%,-50%);z-index:100;pointer-events:none;font-family:Inter,sans-serif;font-size:36px;font-weight:900;color:#fff;text-shadow:0 2px 10px rgba(0,0,0,0.3);opacity:0;"></div>';
 
-    // Platform counter - bottom center
     html += '<div style="position:absolute;bottom:30px;left:50%;transform:translateX(-50%);z-index:100;background:rgba(0,0,0,0.4);color:#fff;padding:6px 16px;border-radius:20px;font-family:Inter,sans-serif;backdrop-filter:blur(6px);font-size:13px;font-weight:600;">'
       + '<span id="hud-platform-count">0</span> plataformas</div>';
 
@@ -354,7 +354,6 @@
     if (pv) pv.textContent = 'R$ ' + fmtBRL(prize) + ' / R$ ' + fmtBRL(meta);
     if (pb) pb.style.width = Math.min(100, (prize / (meta || 1)) * 100) + '%';
 
-    // Cashout only visible when prize >= meta (goal reached)
     if (cb) {
       var goalReached = prize >= meta && meta > 0;
       cb.style.display = (gamePhase === 'playing' && goalReached) ? 'block' : 'none';
@@ -435,28 +434,29 @@
     if (gamePhase === 'playing') {
       ballVelY += CONFIG.gravity;
       ballWorldY -= ballVelY;
+      
       if (ballMesh) {
         ballMesh.position.y = ballWorldY;
         var ballZ = (CONFIG.platformInnerRadius + CONFIG.platformOuterRadius) / 2;
         ballMesh.position.z = ballZ;
         ballMesh.position.x = 0;
       }
+      
       if (comboTimer > 0) { comboTimer--; if (comboTimer <= 0) comboCount = 0; }
       checkCollisions();
+      
       if (ballWorldY < -(CONFIG.platformCount + 2) * CONFIG.platformSpacing) triggerGameOver();
     }
 
-    // Camera follows ball - smooth tracking with offset
+    // CORREÇÃO: Câmera acompanha focando na bola, mantendo o aspecto superior
     if (camera && gamePhase !== 'ready') {
-      cameraTargetY = ballWorldY + CONFIG.cameraHeight;
+      cameraTargetY = ballWorldY + CONFIG.cameraHeight - 1;
       camera.position.y += (cameraTargetY - camera.position.y) * CONFIG.cameraFollowSpeed;
-      camera.lookAt(0, camera.position.y - CONFIG.cameraHeight + 0.5, 0);
+      camera.lookAt(0, camera.position.y - CONFIG.cameraHeight, 0);
     }
 
-    // Animate splash particles
     updateSplash();
 
-    // Palette changes
     var np = Math.min(Math.floor(platformsPassed / 5), PALETTES.length - 1);
     if (np !== currentPaletteIndex) { currentPaletteIndex = np; updatePaletteColors(); }
     updateHUD();
@@ -465,8 +465,6 @@
   function checkCollisions() {
     if (ballVelY <= 0) return;
 
-    // Ball angle in helix-local space using LatheGeometry convention
-    // LatheGeo: x = r*sin(phi), z = r*cos(phi) => phi = atan2(x, z)
     var bz = (CONFIG.platformInnerRadius + CONFIG.platformOuterRadius) / 2;
     var localX = -bz * Math.sin(helixRotation);
     var localZ = bz * Math.cos(helixRotation);
@@ -480,7 +478,6 @@
       var platBottom = p.y - CONFIG.platformHeight / 2;
 
       if (ballWorldY <= platTop + CONFIG.ballRadius && ballWorldY >= platBottom - 0.15 && ballVelY > 0) {
-        // Check if in hole
         var hEnd = p.holeStart + p.holeSize;
         var inHole = isAngleInRange(ballAngle, p.holeStart, hEnd);
 
@@ -494,7 +491,6 @@
           var newP = calcPrize();
           showScorePopup('+R$ ' + fmtBRL(newP - oldP));
 
-          // Fade out passed platform
           p.segments.forEach(function(seg) { seg.mesh.material.transparent = true; seg.mesh.material.opacity = 0.2; });
           createSplash(p.y);
 
@@ -504,9 +500,9 @@
           ballWorldY = platTop + CONFIG.ballRadius;
           ballVelY = -CONFIG.ballBounceForce;
           comboCount = 0; comboTimer = 0;
-          // Squash & stretch
+          
           if (ballMesh) {
-            ballMesh.scale.set(1.2, 0.7, 1.2);
+            ballMesh.scale.set(1.3, 0.6, 1.3);
             setTimeout(function(){ if(ballMesh) ballMesh.scale.set(1,1,1); }, 100);
           }
           break;
@@ -526,20 +522,26 @@
 
   function updatePaletteColors() {
     var pal = PALETTES[currentPaletteIndex];
-    if (postMesh) postMesh.material.color.setHex(pal.pole);
+    if (postMesh) {
+        postMesh.material.color.setHex(pal.pole);
+        postMesh.material.needsUpdate = true;
+    }
     if (topCapMesh) topCapMesh.material.color.setHex(pal.topCap);
     if (ballMesh) ballMesh.material.color.setHex(pal.ball);
     updateBackground();
     platforms.forEach(function(p) {
       if (p.passed) return;
       p.segments.forEach(function(seg, s) {
-        if (seg.isKiller) seg.mesh.material.color.setHex(pal.killer);
-        else seg.mesh.material.color.setHex(s % 2 === 0 ? pal.platforms : pal.alt);
+        if (seg.isKiller) {
+            seg.mesh.material.color.setHex(pal.killer);
+            seg.mesh.material.emissive.setHex(pal.killer);
+        } else {
+            seg.mesh.material.color.setHex(s % 2 === 0 ? pal.platforms : pal.alt);
+        }
       });
     });
   }
 
-  // ===================== HELPERS =====================
   function normAngle(a) { a = a % (Math.PI * 2); if (a < 0) a += Math.PI * 2; return a; }
 
   function isAngleInRange(angle, start, end) {
