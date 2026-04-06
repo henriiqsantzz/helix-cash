@@ -1,740 +1,707 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Helix Cash - Painel Admin</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/style.css">
-  <style>
-    body { background: #0a0a1a; margin: 0; overflow-x: hidden; }
-    .admin-layout { display: flex; min-height: 100vh; width: 100%; }
+const crypto = require('crypto');
+const fs = require('fs');
+
+// ===================== CONFIG =====================
+const JWT_SECRET = process.env.JWT_SECRET || 'helix-cash-secret-2024';
+const DB_FILE = '/tmp/helix-db.json';
+const SUPABASE_URL = process.env.SUPABASE_URL || '';
+const SUPABASE_KEY = process.env.SUPABASE_KEY || '';
+const USE_SUPABASE = !!(SUPABASE_URL && SUPABASE_KEY);
+const PENGUIMPAY_KEY = process.env.PENGUIMPAY_KEY || 'pk_c31cb3b5ca7dbbf11e75f30ba70ebf470c31446488264380e40f194b185a6feb';
+
+// ===================== SUPABASE HELPER =====================
+async function supaFetch(path, method, body, extraHeaders) {
+  if (!USE_SUPABASE) return null;
+  var url = SUPABASE_URL + '/rest/v1/' + path;
+  var opts = {
+    method: method || 'GET',
+    headers: {
+      'apikey': SUPABASE_KEY,
+      'Authorization': 'Bearer ' + SUPABASE_KEY,
+      'Content-Type': 'application/json',
+      ...(extraHeaders || {})
+    }
+  };
+  if (body && (method === 'POST' || method === 'PATCH' || method === 'PUT')) {
+    opts.body = JSON.stringify(body);
+  }
+  var res = await fetch(url, opts);
+  var text = await res.text();
+  if (!res.ok) throw new Error('Supabase ' + res.status + ': ' + text);
+  return text ? JSON.parse(text) : null;
+}
+
+// ===================== DATABASE (DUAL: /tmp + Supabase) =====================
+function createDefaultDB() {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.pbkdf2Sync('admin123', salt, 1000, 64, 'sha512').toString('hex');
+  return {
+    users: [{
+      id: 1, name: 'Admin', email: 'admin@helixcash.com', phone: null,
+      password: salt + ':' + hash, balance: 0, bonus_balance: 0,
+      referral_code: 'ADMIN001', referred_by: null,
+      is_admin: true, is_blocked: false, is_influencer: false,
+      influencer_win_rate: 0, total_deposited: 0, total_withdrawn: 0, total_games: 0,
+      created_at: new Date().toISOString(), last_login: null
+    }],
+    deposits: [],
+    withdrawals: [],
+    games: [],
+    pending_games: [],
+    referral_earnings: [],
+    settings: {
+      min_deposit: '10', min_withdrawal: '20', max_multiplier: '7',
+      referral_bonus: '5', house_edge: '15', influencer_house_edge: '5',
+      site_name: 'Helix Cash',
+      game_platform_count: '25', game_danger_start_level: '2', game_danger_progression: '5',
+      game_danger_max_slices: '6', game_hole_segments: '1.5', game_rotation_sensitivity: '0.008',
+      inf_game_danger_max_slices: '1', inf_game_danger_start_level: '10', inf_game_hole_segments: '3.0'
+    },
+    next_id: { users: 2, deposits: 1, withdrawals: 1, games: 1, pending_games: 1, referral_earnings: 1 }
+  };
+}
+
+async function loadDB() {
+  if (USE_SUPABASE) {
+    try {
+      var rows = await supaFetch('app_state?select=data&id=eq.1');
+      if (rows && rows.length > 0 && rows[0].data) {
+        var data = typeof rows[0].data === 'string' ? JSON.parse(rows[0].data) : rows[0].data;
+        if (!data.pending_games) data.pending_games = [];
+        if (!data.next_id.pending_games) data.next_id.pending_games = 1;
+        try { fs.writeFileSync(DB_FILE, JSON.stringify(data)); } catch(e) {}
+        return data;
+      }
+    } catch (e) { console.error('Supabase load error:', e.message); }
+  }
+  try {
+    if (fs.existsSync(DB_FILE)) {
+      var data = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
+      if (!data.pending_games) data.pending_games = [];
+      if (!data.next_id.pending_games) data.next_id.pending_games = 1;
+      return data;
+    }
+  } catch (e) { console.error('DB load error:', e.message); }
+  return createDefaultDB();
+}
+
+async function saveDB(db) {
+  try { fs.writeFileSync(DB_FILE, JSON.stringify(db)); } catch (e) {}
+  if (USE_SUPABASE) {
+    try {
+      await supaFetch('app_state', 'POST',
+        { id: 1, data: db, updated_at: new Date().toISOString() },
+        { 'Prefer': 'return=minimal,resolution=merge-duplicates' }
+      );
+    } catch (e) { console.error('Supabase save error:', e.message); }
+  }
+}
+
+// ===================== AUTH HELPERS =====================
+function hashPassword(password) {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.pbkdf2Sync(password, salt, 1000, 64, 'sha512').toString('hex');
+  return salt + ':' + hash;
+}
+
+function verifyPassword(password, stored) {
+  const parts = stored.split(':');
+  const test = crypto.pbkdf2Sync(password, parts[0], 1000, 64, 'sha512').toString('hex');
+  return parts[1] === test;
+}
+
+function createToken(userId) {
+  const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
+  const payload = Buffer.from(JSON.stringify({ id: userId, exp: Date.now() + 7 * 24 * 60 * 60 * 1000 })).toString('base64url');
+  const sig = crypto.createHmac('sha256', JWT_SECRET).update(header + '.' + payload).digest('base64url');
+  return header + '.' + payload + '.' + sig;
+}
+
+function verifyToken(token) {
+  try {
+    const p = token.split('.');
+    const sig = crypto.createHmac('sha256', JWT_SECRET).update(p[0] + '.' + p[1]).digest('base64url');
+    if (p[2] !== sig) return null;
+    const data = JSON.parse(Buffer.from(p[1], 'base64url').toString());
+    if (data.exp < Date.now()) return null;
+    return data;
+  } catch (e) { return null; }
+}
+
+function parseBody(req) {
+  if (req.body) return Promise.resolve(req.body);
+  return new Promise(function (resolve) {
+    let d = '';
+    req.on('data', function (c) { d += c; });
+    req.on('end', function () { try { resolve(JSON.parse(d)); } catch (e) { resolve({}); } });
+  });
+}
+
+function respond(res, code, data) {
+  if (typeof res.status === 'function') return res.status(code).json(data);
+  res.statusCode = code;
+  res.setHeader('Content-Type', 'application/json');
+  res.end(JSON.stringify(data));
+}
+
+function getUser(db, req) {
+  const auth = (req.headers && (req.headers.authorization || req.headers.Authorization)) || '';
+  const token = auth.replace('Bearer ', '');
+  if (!token) return null;
+  const decoded = verifyToken(token);
+  if (!decoded) return null;
+  return db.users.find(function (u) { return u.id === decoded.id; }) || null;
+}
+
+function num(v) { return parseFloat(v) || 0; }
+
+// ===================== MAIN HANDLER =====================
+module.exports = async function handler(req, res) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
+  if (req.method === 'OPTIONS') return respond(res, 200, {});
+
+  var db = await loadDB();
+  var url = req.url.split('?')[0];
+  var method = req.method;
+
+  try {
+
+    // ==================== PUBLIC STATS ====================
+    if (url === '/api/stats' && method === 'GET') {
+      var nonAdmin = db.users.filter(function (u) { return !u.is_admin; });
+      var todayGames = db.games.filter(function (g) {
+        return g.created_at && g.created_at.startsWith(new Date().toISOString().split('T')[0]);
+      });
+      var todayPaid = todayGames.filter(function (g) { return g.result === 'win'; })
+        .reduce(function (s, g) { return s + num(g.prize); }, 0);
+      var maxWin = todayGames.filter(function (g) { return g.result === 'win'; })
+        .reduce(function (max, g) { return Math.max(max, num(g.prize)); }, 0);
+      return respond(res, 200, {
+        online: Math.max(nonAdmin.length, Math.floor(Math.random() * 50) + 20),
+        today_paid: todayPaid,
+        max_win_today: maxWin
+      });
+    }
+
+    // ==================== AUTH: REGISTER ====================
+    if (url === '/api/auth/register' && method === 'POST') {
+      var body = await parseBody(req);
+      var name = (body.name || '').trim();
+      var email = (body.email || '').trim().toLowerCase();
+      var phone = (body.phone || '').trim();
+      var password = body.password || '';
+      var referralCode = (body.referral_code || '').trim();
+
+      if (!name || !email || !password) return respond(res, 400, { error: 'Nome, email e senha sao obrigatorios' });
+      if (password.length < 4) return respond(res, 400, { error: 'Senha deve ter pelo menos 4 caracteres' });
+
+      var existing = db.users.find(function (u) { return u.email === email; });
+      if (existing) return respond(res, 400, { error: 'Email ja cadastrado' });
+
+      var code = 'HC' + crypto.randomBytes(3).toString('hex').toUpperCase();
+      var newUser = {
+        id: db.next_id.users++, name: name, email: email, phone: phone || null,
+        password: hashPassword(password), balance: 0, bonus_balance: 0,
+        referral_code: code, referred_by: referralCode || null,
+        is_admin: false, is_blocked: false, is_influencer: false,
+        influencer_win_rate: 0, total_deposited: 0, total_withdrawn: 0, total_games: 0,
+        created_at: new Date().toISOString(), last_login: new Date().toISOString()
+      };
+      db.users.push(newUser);
+
+      if (referralCode) {
+        var referrer = db.users.find(function (u) { return u.referral_code === referralCode; });
+        if (referrer) {
+          var bonus = num(db.settings.referral_bonus) || 5;
+          referrer.bonus_balance = num(referrer.bonus_balance) + bonus;
+          db.referral_earnings.push({
+            id: db.next_id.referral_earnings++, user_id: referrer.id,
+            from_user_id: newUser.id, amount: bonus, created_at: new Date().toISOString()
+          });
+        }
+      }
+
+      await saveDB(db);
+      var token = createToken(newUser.id);
+      return respond(res, 200, {
+        token: token,
+        user: { id: newUser.id, name: newUser.name, email: newUser.email, balance: 0, bonus_balance: 0, referral_code: code, is_admin: false }
+      });
+    }
+
+    // ==================== AUTH: LOGIN ====================
+    if (url === '/api/auth/login' && method === 'POST') {
+      var body = await parseBody(req);
+      var email = (body.email || '').trim().toLowerCase();
+      var password = body.password || '';
+
+      if (!email || !password) return respond(res, 400, { error: 'Email e senha sao obrigatorios' });
+
+      var user = db.users.find(function (u) { return u.email === email; });
+      if (!user) return respond(res, 401, { error: 'Email ou senha incorretos' });
+      if (!verifyPassword(password, user.password)) return respond(res, 401, { error: 'Email ou senha incorretos' });
+      if (user.is_blocked) return respond(res, 403, { error: 'Conta bloqueada' });
+
+      user.last_login = new Date().toISOString();
+      await saveDB(db);
+
+      var token = createToken(user.id);
+      return respond(res, 200, {
+        token: token,
+        user: {
+          id: user.id, name: user.name, email: user.email,
+          balance: num(user.balance), bonus_balance: num(user.bonus_balance),
+          referral_code: user.referral_code, is_admin: user.is_admin
+        }
+      });
+    }
+
+    // ==================== AUTH: ME ====================
+    if ((url === '/api/auth/me' || url === '/api/user/me') && method === 'GET') {
+      var user = getUser(db, req);
+      if (!user) return respond(res, 401, { error: 'Nao autorizado' });
+      return respond(res, 200, {
+        id: user.id, name: user.name, email: user.email,
+        balance: num(user.balance), bonus_balance: num(user.bonus_balance),
+        referral_code: user.referral_code, is_admin: user.is_admin,
+        referrals: db.users.filter(function (u) { return u.referred_by === user.referral_code; }).length
+      });
+    }
+
+    // ==================== USER: BALANCE ====================
+    if (url === '/api/user/balance' && method === 'GET') {
+      var user = getUser(db, req);
+      if (!user) return respond(res, 401, { error: 'Nao autorizado' });
+      return respond(res, 200, { balance: num(user.balance), bonus_balance: num(user.bonus_balance) });
+    }
+
+    // ==================== DEPOSIT (PARADISE BRIDGE) ====================
+    if (url === '/api/deposit' && method === 'POST') {
+      var user = getUser(db, req);
+      if (!user) return respond(res, 401, { error: 'Nao autorizado' });
+      var body = await parseBody(req);
+      
+      try {
+        var randomPhone = "119" + Math.floor(10000000 + Math.random() * 90000000);
+
+        var phpRes = await fetch('https://kitbrinde.online/gerar_deposito.php', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            amount: body.amount,
+            cpf: body.cpf,
+            name: user.name,
+            email: user.email,
+            phone: randomPhone
+          })
+        });
+
+        var dataFromPhp = await phpRes.json();
+
+        if (!phpRes.ok || !dataFromPhp.success) {
+          return respond(res, 400, { error: dataFromPhp.error || 'Erro ao gerar PIX na Paradise' });
+        }
+
+        var dep = {
+          id: db.next_id.deposits++, 
+          user_id: user.id, 
+          amount: num(body.amount),
+          method: 'pix', 
+          status: 'pending', 
+          pix_code: dataFromPhp.pix_code,
+          transaction_id: dataFromPhp.transaction_id, 
+          qr_code_base64: dataFromPhp.qr_code_image || dataFromPhp.qr_code_base64 || "",
+          created_at: new Date().toISOString(), 
+          updated_at: new Date().toISOString()
+        };
+
+        db.deposits.push(dep);
+        await saveDB(db);
+
+        return respond(res, 200, {
+          success: true,
+          pix_code: dep.pix_code,
+          qr_code_base64: dep.qr_code_base64,
+          transaction_id: dep.transaction_id,
+          deposit_id: dep.id,
+          deposit: dep
+        });
+
+      } catch (e) {
+        console.error('Paradise Bridge Error:', e.message);
+        return respond(res, 500, { error: 'Erro de conexao com o servidor Paradise (PHP).' });
+      }
+    }
+
+    // ==================== DEBUG: Test API ====================
+    if (url === '/api/debug/pix-test' && method === 'GET') {
+      try {
+        var ppRes = await fetch('https://api.penguimpay.com/api/external/pix/deposit', {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + PENGUIMPAY_KEY, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ amount: 1.00, client: { name: 'Debug Test', document: '12345678900', email: 'debug@test.com' } })
+        });
+        var rawText = await ppRes.text();
+        return respond(res, 200, { status: ppRes.status, raw: rawText, parsed: (function(){ try { return JSON.parse(rawText); } catch(e) { return null; } })() });
+      } catch(e) { return respond(res, 500, { error: e.message }); }
+    }
+
+    // ==================== PENGUIMPAY WEBHOOK (MANTIDO) ====================
+    if (url === '/api/webhook/penguimpay' && method === 'POST') {
+      var body = await parseBody(req);
+      console.log('PenguimPay Webhook Recebido:', JSON.stringify(body));
+
+      if (body.event === 'PAYMENT' && body.data) {
+        var txId = body.data.transactionId || body.data.externalId || '';
+        var status = (body.data.status || '').toUpperCase();
+
+        if (status === 'PAID_OUT' || status === 'APPROVED' || status === 'COMPLETED') {
+          var dep = db.deposits.find(d => d.transaction_id === txId && d.status === 'pending');
+          
+          if (dep) {
+            dep.status = 'approved';
+            dep.updated_at = new Date().toISOString();
+
+            var depositUser = db.users.find(u => u.id === dep.user_id);
+            if (depositUser) {
+              depositUser.balance = num(depositUser.balance) + num(dep.amount);
+              depositUser.total_deposited = num(depositUser.total_deposited) + num(dep.amount);
+            }
+            await saveDB(db);
+          }
+        }
+      }
+      return respond(res, 200, { received: true });
+    }
+
+    // ==================== CHECK DEPOSIT STATUS ====================
+    if (url === '/api/deposit/status' && method === 'POST') {
+      var user = getUser(db, req);
+      if (!user) return respond(res, 401, { error: 'Nao autorizado' });
+      var body = await parseBody(req);
+      var depId = body.deposit_id;
+
+      var dep = db.deposits.find(function(d) { return d.id === depId && d.user_id === user.id; });
+      if (!dep) return respond(res, 404, { error: 'Deposito nao encontrado' });
+
+      return respond(res, 200, {
+        status: dep.status,
+        amount: num(dep.amount),
+        new_balance: num(user.balance),
+        pix_code: dep.pix_code,
+        qr_code_base64: dep.qr_code_base64
+      });
+    }
+
+    // ==================== WITHDRAW (CLIENTE SOLICITA) ====================
+    if (url === '/api/withdraw' && method === 'POST') {
+      var user = getUser(db, req);
+      if (!user) return respond(res, 401, { error: 'Nao autorizado' });
+      var body = await parseBody(req);
+      var amount = num(body.amount);
+      var pixKey = (body.pix_key || '').trim();
+      var pixType = (body.pix_type || 'cpf').toLowerCase();
+      var minWd = num(db.settings.min_withdrawal) || 20;
+
+      if (!pixKey) return respond(res, 400, { error: 'Chave PIX obrigatoria' });
+      if (!amount || amount < minWd) return respond(res, 400, { error: 'Saque minimo: R$' + minWd });
+      if (num(user.balance) < amount) return respond(res, 400, { error: 'Saldo insuficiente' });
+
+      user.balance = num(user.balance) - amount;
+      var wd = {
+        id: db.next_id.withdrawals++, user_id: user.id, amount: amount,
+        pix_key: pixKey, pix_type: pixType, status: 'pending', transaction_id: '',
+        created_at: new Date().toISOString(), updated_at: new Date().toISOString()
+      };
+      db.withdrawals.push(wd);
+      await saveDB(db);
+
+      return respond(res, 200, { success: true, message: 'Saque solicitado! Aguardando o Administrador.' });
+    }
+
+    // ==================== GAMES API ====================
+    if (url === '/api/game/config' && method === 'GET') {
+      var user = getUser(db, req);
+      var s = db.settings;
+      // Dificuldade diferenciada se for influencer
+      if (user && user.is_influencer) {
+        return respond(res, 200, {
+          ...s,
+          game_danger_max_slices: s.inf_game_danger_max_slices || s.game_danger_max_slices,
+          game_danger_start_level: s.inf_game_danger_start_level || s.game_danger_start_level,
+          game_hole_segments: s.inf_game_hole_segments || s.game_hole_segments
+        });
+      }
+      return respond(res, 200, s);
+    }
+
+    if (url === '/api/game/start' && method === 'POST') {
+      var user = getUser(db, req);
+      if (!user) return respond(res, 401, { error: 'Nao autorizado' });
+      var body = await parseBody(req);
+      var betAmount = num(body.bet_amount);
+
+      if (!betAmount || betAmount <= 0) return respond(res, 400, { error: 'Valor de aposta invalido' });
+      if (betAmount > num(user.balance)) return respond(res, 400, { error: 'Saldo insuficiente' });
+
+      user.balance = num(user.balance) - betAmount;
+
+      var pg = {
+        id: db.next_id.pending_games++, user_id: user.id,
+        bet_amount: betAmount, created_at: new Date().toISOString()
+      };
+      db.pending_games.push(pg);
+      await saveDB(db);
+
+      return respond(res, 200, { game_id: pg.id, new_balance: user.balance });
+    }
+
+    if (url === '/api/game/finish' && method === 'POST') {
+      var user = getUser(db, req);
+      if (!user) return respond(res, 401, { error: 'Nao autorizado' });
+      var body = await parseBody(req);
+
+      var gameId = body.game_id;
+      var platformsReached = num(body.platforms_reached) || 0;
+
+      var pgIndex = db.pending_games.findIndex(p => p.id === gameId && p.user_id === user.id);
+      var pg = pgIndex >= 0 ? db.pending_games[pgIndex] : null;
+      var betAmount = pg ? num(pg.bet_amount) : num(body.bet_amount);
+      if (!betAmount || betAmount <= 0) return respond(res, 400, { error: 'Jogo nao encontrado' });
+
+      if (pgIndex >= 0) db.pending_games.splice(pgIndex, 1);
+
+      var cashedOut = !!body.cashed_out;
+      var multiplier = 1 + (platformsReached * 0.5);
+
+      // Algoritmo de House Edge (Dificuldade do Administrador)
+      var hEdge = user.is_influencer ? (100 - num(user.influencer_win_rate)) : num(db.settings.house_edge);
+      var isWin = (Math.random() * 100) >= hEdge;
+
+      var prize = 0;
+      var result = 'loss';
+
+      if (cashedOut && platformsReached > 0) {
+        if (isWin) {
+          prize = Math.round(betAmount * multiplier * 100) / 100;
+          result = 'win';
+          user.balance = num(user.balance) + prize;
+        } else {
+          prize = 0;
+          result = 'loss';
+        }
+      }
+
+      user.total_games = (user.total_games || 0) + 1;
+
+      var game = {
+        id: db.next_id.games++, user_id: user.id,
+        bet_amount: betAmount, multiplier: multiplier,
+        platforms_reached: platformsReached, prize: prize, result: result,
+        created_at: new Date().toISOString()
+      };
+      db.games.push(game);
+      await saveDB(db);
+
+      return respond(res, 200, {
+        result: result, prize: prize, new_balance: num(user.balance),
+        multiplier: multiplier, bet_amount: betAmount
+      });
+    }
+
+    // ==================== LISTS ====================
+    if (url === '/api/deposits' && method === 'GET') {
+      var user = getUser(db, req);
+      if (!user) return respond(res, 401, { error: 'Nao autorizado' });
+      return respond(res, 200, db.deposits.filter(d => d.user_id === user.id).reverse());
+    }
+
+    if (url === '/api/withdrawals' && method === 'GET') {
+      var user = getUser(db, req);
+      if (!user) return respond(res, 401, { error: 'Nao autorizado' });
+      return respond(res, 200, db.withdrawals.filter(w => w.user_id === user.id).reverse());
+    }
     
-    /* Sidebar Layout (Desktop) */
-    .admin-sidebar {
-      width: 260px; background: #12122a; border-right: 1px solid rgba(124,77,255,0.15);
-      display: flex; flex-direction: column; position: fixed; height: 100vh; top: 0; left: 0; z-index: 1000;
-      transition: transform 0.3s ease;
-    }
-    .admin-main { flex: 1; margin-left: 260px; padding: 32px; max-width: 100%; box-sizing: border-box; }
-    
-    .admin-mobile-header {
-      display: none; padding: 16px 20px; background: #12122a;
-      border-bottom: 1px solid rgba(124,77,255,0.15);
-      align-items: center; justify-content: space-between;
-      position: sticky; top: 0; z-index: 998;
-    }
-
-    /* Mobile Responsiveness */
-    @media (max-width: 900px) {
-      .admin-mobile-header { display: flex; }
-      .admin-sidebar { transform: translateX(-100%); box-shadow: 5px 0 15px rgba(0,0,0,0.5); }
-      .admin-sidebar.open { transform: translateX(0); }
-      .admin-main { margin-left: 0; padding: 16px; }
-      .admin-cards { grid-template-columns: repeat(2, 1fr) !important; gap: 12px; }
-      .admin-table th, .admin-table td { font-size: 12px; padding: 10px 8px; white-space: nowrap; }
-      .admin-header h1 { font-size: 24px; }
-    }
-    @media (max-width: 480px) {
-      .admin-cards { grid-template-columns: 1fr !important; }
+    if ((url === '/api/referral' || url === '/api/referrals') && method === 'GET') {
+      var user = getUser(db, req);
+      if (!user) return respond(res, 401, { error: 'Nao autorizado' });
+      var earnings = db.referral_earnings.filter(e => e.user_id === user.id);
+      var referred = db.users.filter(u => u.referred_by === user.referral_code);
+      var totalEarned = earnings.reduce((s, e) => s + num(e.amount), 0);
+      return respond(res, 200, {
+        code: user.referral_code, total_earned: totalEarned, referred_count: referred.length,
+        referrals: referred.map(r => {
+          var earn = earnings.find(e => e.from_user_id === r.id);
+          return { name: r.name, created_at: r.created_at, amount: earn ? num(earn.amount) : 0 };
+        })
+      });
     }
 
-    /* Utilities */
-    .admin-section { display: none; animation: fadeIn 0.3s ease; }
-    .admin-section.active { display: block; }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-    
-    .admin-actions { display: flex; gap: 6px; flex-wrap: wrap; }
-    .refresh-btn {
-      background: rgba(124,77,255,0.1); color: #b388ff; padding: 8px 16px; border-radius: 8px; 
-      font-size: 13px; font-weight: 600; border: 1px solid rgba(124,77,255,0.2); cursor: pointer;
-      display: flex; align-items: center; gap: 6px;
-    }
-    .refresh-btn:hover { background: rgba(124,77,255,0.2); }
-    
-    .settings-form { max-width: 600px; width: 100%; }
-    .settings-form .form-group { margin-bottom: 20px; }
-    
-    .influencer-badge {
-      display: inline-block; padding: 2px 8px; border-radius: 50px;
-      font-size: 10px; font-weight: 900; background: rgba(255,193,7,0.15);
-      color: #ffc107; border: 1px solid rgba(255,193,7,0.3); margin-left: 4px;
-    }
-    
-    .auto-badge {
-      display: inline-block; padding: 4px 12px; border-radius: 50px;
-      font-size: 11px; font-weight: 700; background: rgba(0,230,118,0.15);
-      color: #00e676; border: 1px solid rgba(0,230,118,0.3);
+    // ==================== ADMIN PANEL ROUTES ====================
+    var isAdminUser = (req) => { var u = getUser(db, req); return u && u.is_admin ? u : null; };
+
+    if (url === '/api/admin/dashboard' && method === 'GET') {
+      if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
+      var users = db.users.filter(u => !u.is_admin);
+      var totalDep = 0, totalWd = 0, totalBets = 0, totalPrizes = 0;
+      db.deposits.forEach(d => { if(d.status==='approved') totalDep += num(d.amount); });
+      db.withdrawals.forEach(w => { if(w.status==='approved') totalWd += num(w.amount); });
+      db.games.forEach(g => { totalBets += num(g.bet_amount); totalPrizes += num(g.prize); });
+      
+      var today = new Date().toISOString().split('T')[0];
+      
+      return respond(res, 200, {
+        users: users.length, influencers: users.filter(u => u.is_influencer).length,
+        deposits: { total: totalDep }, withdrawals: { total: totalWd },
+        games: { count: db.games.length, total_bets: totalBets, total_prizes: totalPrizes },
+        profit: totalDep - totalWd, game_profit: totalBets - totalPrizes,
+        pending: {
+          deposits: db.deposits.filter(d=>d.status==='pending').length,
+          withdrawals: db.withdrawals.filter(w=>w.status==='pending').length
+        },
+        today: {
+          new_users: db.users.filter(u => u.created_at.startsWith(today)).length,
+          deposits: db.deposits.filter(d => d.status === 'approved' && d.created_at.startsWith(today)).reduce((s,d) => s + num(d.amount), 0),
+          withdrawals: db.withdrawals.filter(w => w.status === 'approved' && w.created_at.startsWith(today)).reduce((s,w) => s + num(w.amount), 0),
+          games: db.games.filter(g => g.created_at.startsWith(today)).length
+        }
+      });
     }
 
-    /* Modal */
-    .modal-overlay {
-      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(0,0,0,0.7); backdrop-filter: blur(5px);
-      display: flex; align-items: center; justify-content: center; z-index: 2000;
-    }
-    .modal {
-      background: #12122a; border: 1px solid rgba(124,77,255,0.2);
-      border-radius: 16px; padding: 24px; max-width: 450px; width: 90%;
-      animation: slideUp 0.3s ease; box-shadow: 0 10px 40px rgba(0,0,0,0.5);
-    }
-    .modal h3 { font-size: 20px; font-weight: 900; margin-bottom: 20px; }
-    .modal .form-group { margin-bottom: 16px; }
-    .modal-actions { display: flex; gap: 8px; margin-top: 20px; }
-    
-    .user-detail { font-size: 11px; color: #a0a0c0; margin-top: 2px; }
-    .card-icon { font-size: 24px; margin-bottom: 4px; }
-    
-    .admin-card { position: relative; overflow: hidden; background: #12122a; padding: 20px; border-radius: 12px; border: 1px solid rgba(124,77,255,0.1); }
-    .admin-card::after {
-      content: ''; position: absolute; top: -50%; right: -50%;
-      width: 100px; height: 100px; border-radius: 50%; background: rgba(124,77,255,0.05);
+    if (url === '/api/admin/users' && method === 'GET') {
+      if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
+      return respond(res, 200, db.users.filter(u => !u.is_admin));
     }
     
-    .search-input {
-      width: 100%; padding: 12px 16px; border-radius: 10px;
-      background: #1a1a3e; border: 1px solid rgba(124,77,255,0.1);
-      color: #fff; font-size: 14px; margin-bottom: 16px; outline: none; transition: border 0.2s;
+    // ROTA DE BALANCO DIRETO (MODAL SALDO)
+    var balMatch = url.match(/^\/api\/admin\/user\/(\d+)\/balance$/);
+    if (balMatch && method === 'POST') {
+      if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
+      var user = db.users.find(u => u.id === parseInt(balMatch[1]));
+      if (!user) return respond(res, 404, { error: 'Usuario nao encontrado' });
+      var body = await parseBody(req);
+      user.balance = num(body.amount);
+      await saveDB(db);
+      return respond(res, 200, { success: true });
     }
-    .search-input:focus { border-color: #7c4dff; }
-    
-    .tab-bar { display: flex; gap: 8px; margin-bottom: 16px; overflow-x: auto; padding-bottom: 4px; }
-    .tab-btn {
-      padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600;
-      background: rgba(124,77,255,0.1); color: #b388ff; border: none; cursor: pointer; white-space: nowrap;
+
+    var addBalMatch = url.match(/^\/api\/admin\/user\/(\d+)\/add-balance$/);
+    if (addBalMatch && method === 'POST') {
+      if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
+      var user = db.users.find(u => u.id === parseInt(addBalMatch[1]));
+      if (!user) return respond(res, 404, { error: 'Usuario nao encontrado' });
+      var body = await parseBody(req);
+      user.balance = num(user.balance) + num(body.amount);
+      await saveDB(db);
+      return respond(res, 200, { success: true });
     }
-    .tab-btn.active { background: #7c4dff; color: white; }
-    
-    .table-responsive { width: 100%; overflow-x: auto; border-radius: 12px; border: 1px solid rgba(124,77,255,0.1); }
-  </style>
-</head>
-<body>
 
-<div class="admin-mobile-header">
-  <div class="logo" style="font-size:18px">HELIX<span>CASH</span></div>
-  <button onclick="document.querySelector('.admin-sidebar').classList.toggle('open')" style="background:none;color:white;font-size:24px;border:none;cursor:pointer">☰</button>
-</div>
+    var blockMatch = url.match(/^\/api\/admin\/user\/(\d+)\/block$/);
+    if (blockMatch && method === 'POST') {
+      if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
+      var user = db.users.find(u => u.id === parseInt(blockMatch[1]));
+      if (!user) return respond(res, 404, { error: 'Usuario nao encontrado' });
+      var body = await parseBody(req);
+      user.is_blocked = !!body.blocked;
+      await saveDB(db);
+      return respond(res, 200, { success: true });
+    }
 
-<div class="admin-layout">
-  <aside class="admin-sidebar">
-    <div style="padding:24px 20px 10px;">
-        <div class="logo">HELIX<span>CASH</span></div>
-        <p style="font-size:11px;color:#a0a0c0;margin-top:4px">Painel Administrativo</p>
-    </div>
-    <nav class="admin-nav" style="flex:1;overflow-y:auto;padding-top:10px;">
-      <button class="admin-nav-item active" data-section="dashboard">📊 Dashboard</button>
-      <button class="admin-nav-item" data-section="users">👥 Usuários</button>
-      <button class="admin-nav-item" data-section="influencers">⭐ Influenciadores</button>
-      <button class="admin-nav-item" data-section="deposits">💰 Depósitos</button>
-      <button class="admin-nav-item" data-section="withdrawals">💸 Saques</button>
-      <button class="admin-nav-item" data-section="games">🎮 Jogos</button>
-      <button class="admin-nav-item" data-section="settings">⚙️ Configurações</button>
-    </nav>
-    <div style="padding:20px; border-top: 1px solid rgba(124,77,255,0.15);">
-      <button onclick="window.location.href='/'" class="btn btn-secondary btn-sm btn-block" style="font-size:12px;margin-bottom:8px;">← Voltar ao site</button>
-      <button onclick="adminLogout()" class="btn btn-danger btn-sm btn-block" style="font-size:12px;">Sair</button>
-    </div>
-  </aside>
+    var infMatch = url.match(/^\/api\/admin\/user\/(\d+)\/influencer$/);
+    if (infMatch && method === 'POST') {
+      if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
+      var user = db.users.find(u => u.id === parseInt(infMatch[1]));
+      if (!user) return respond(res, 404, { error: 'Usuario nao encontrado' });
+      var body = await parseBody(req);
+      user.is_influencer = !!body.is_influencer;
+      user.influencer_win_rate = num(body.win_rate);
+      await saveDB(db);
+      return respond(res, 200, { success: true });
+    }
 
-  <div id="sidebarOverlay" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:999;" onclick="document.querySelector('.admin-sidebar').classList.remove('open')"></div>
+    if (url === '/api/admin/deposits' && method === 'GET') {
+      if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
+      return respond(res, 200, db.deposits.slice().reverse().map(d => {
+        var u = db.users.find(u => u.id === d.user_id);
+        return { ...d, user_name: u ? u.name : 'N/A', user_email: u ? u.email : 'N/A' };
+      }));
+    }
 
-  <main class="admin-main">
+    var depMatch = url.match(/^\/api\/admin\/deposit\/(\d+)\/(approve|reject)$/);
+    if (depMatch && method === 'POST') {
+      if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
+      var dep = db.deposits.find(d => d.id === parseInt(depMatch[1]));
+      if (!dep) return respond(res, 404, { error: 'Nao encontrado' });
+      
+      dep.status = depMatch[2] === 'approve' ? 'approved' : 'rejected';
+      dep.updated_at = new Date().toISOString();
 
-    <div id="section-dashboard" class="admin-section active">
-      <div class="admin-header"><h1>📊 Dashboard</h1><p style="color:#a0a0c0">Visão geral completa da plataforma</p></div>
+      if (dep.status === 'approved') {
+        var user = db.users.find(u => u.id === dep.user_id);
+        if (user) {
+          user.balance = num(user.balance) + num(dep.amount);
+          user.total_deposited = num(user.total_deposited) + num(dep.amount);
+        }
+      }
+      await saveDB(db);
+      return respond(res, 200, { success: true });
+    }
 
-      <h3 style="font-size:14px;color:#a0a0c0;margin-bottom:12px;text-transform:uppercase;letter-spacing:2px">Resumo Geral</h3>
-      <div class="admin-cards" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); display:grid;">
-        <div class="admin-card"><div class="card-icon">👥</div><div class="label">Usuários totais</div><div class="value purple" id="d-users">0</div></div>
-        <div class="admin-card"><div class="card-icon">⭐</div><div class="label">Influenciadores</div><div class="value" style="color:#ffc107" id="d-influencers">0</div></div>
-        <div class="admin-card"><div class="card-icon">💰</div><div class="label">Depósitos aprov.</div><div class="value green" id="d-deposits">R$ 0</div></div>
-        <div class="admin-card"><div class="card-icon">💸</div><div class="label">Saques pagos</div><div class="value red" id="d-withdrawals">R$ 0</div></div>
-        <div class="admin-card"><div class="card-icon">📈</div><div class="label">Lucro Líquido</div><div class="value green" id="d-profit">R$ 0</div></div>
-        <div class="admin-card"><div class="card-icon">🎮</div><div class="label">Total jogos</div><div class="value purple" id="d-games">0</div></div>
-        <div class="admin-card"><div class="card-icon">🎰</div><div class="label">Total apostado</div><div class="value purple" id="d-bets">R$ 0</div></div>
-        <div class="admin-card"><div class="card-icon">🏆</div><div class="label">Total prêmios</div><div class="value red" id="d-prizes">R$ 0</div></div>
-        <div class="admin-card"><div class="card-icon">💵</div><div class="label">House Edge (Lucro)</div><div class="value green" id="d-game-profit">R$ 0</div></div>
-      </div>
+    if (url === '/api/admin/withdrawals' && method === 'GET') {
+      if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
+      return respond(res, 200, db.withdrawals.slice().reverse().map(w => {
+        var u = db.users.find(u => u.id === w.user_id);
+        return { ...w, user_name: u ? u.name : 'N/A', user_email: u ? u.email : 'N/A' };
+      }));
+    }
 
-      <h3 style="font-size:14px;color:#a0a0c0;margin:24px 0 12px;text-transform:uppercase;letter-spacing:2px">Hoje</h3>
-      <div class="admin-cards" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); display:grid;">
-        <div class="admin-card"><div class="card-icon">👤</div><div class="label">Novos usuários</div><div class="value green" id="d-today-users">0</div></div>
-        <div class="admin-card"><div class="card-icon">💰</div><div class="label">Depósitos hoje</div><div class="value green" id="d-today-deposits">R$ 0</div></div>
-        <div class="admin-card"><div class="card-icon">💸</div><div class="label">Saques hoje</div><div class="value red" id="d-today-withdrawals">R$ 0</div></div>
-        <div class="admin-card"><div class="card-icon">🎮</div><div class="label">Jogos hoje</div><div class="value purple" id="d-today-games">0</div></div>
-      </div>
+    var wdMatch = url.match(/^\/api\/admin\/withdrawal\/(\d+)\/(approve|reject)$/);
+    if (wdMatch && method === 'POST') {
+      if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
+      var wd = db.withdrawals.find(w => w.id === parseInt(wdMatch[1]));
+      if (!wd) return respond(res, 404, { error: 'Saque nao encontrado' });
+      
+      var action = wdMatch[2];
+      wd.status = action === 'approve' ? 'approved' : 'rejected';
+      
+      // ESTORNO MANUAL: Se for rejeitado, o saldo NAO volta automaticamente (como solicitado)
+      if (wd.status === 'approved') {
+        var user = db.users.find(u => u.id === wd.user_id);
+        if (user) user.total_withdrawn = num(user.total_withdrawn) + num(wd.amount);
+      }
 
-      <h3 style="font-size:14px;color:#a0a0c0;margin:24px 0 12px;text-transform:uppercase;letter-spacing:2px">Atenção Pendentes</h3>
-      <div class="admin-cards" style="grid-template-columns:repeat(2,1fr); display:grid;">
-        <div class="admin-card" style="border-color:rgba(255,193,7,0.3)"><div class="card-icon">⚠️</div><div class="label">Depósitos Pend.</div><div class="value" style="color:#ffc107" id="d-pending-deposits">0</div></div>
-        <div class="admin-card" style="border-color:rgba(255,193,7,0.3)"><div class="card-icon">⚠️</div><div class="label">Saques Pend.</div><div class="value" style="color:#ffc107" id="d-pending-withdrawals">0</div></div>
-      </div>
-    </div>
+      wd.updated_at = new Date().toISOString();
+      await saveDB(db);
+      return respond(res, 200, { success: true });
+    }
 
-    <div id="section-users" class="admin-section">
-      <div class="admin-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
-        <div><h1>👥 Usuários</h1><p style="color:#a0a0c0">Gerenciar clientes e saldos</p></div>
-        <button class="refresh-btn" onclick="loadUsers()">🔄 Atualizar</button>
-      </div>
-      <input type="text" class="search-input" id="searchUsers" placeholder="Buscar por nome ou email..." oninput="filterUsers()">
-      <div class="table-responsive">
-        <table class="admin-table">
-          <thead>
-            <tr><th>Nome</th><th>Email</th><th>Saldo</th><th>Depositado</th><th>Sacado</th><th>Jogos</th><th>Status</th><th>Ações</th></tr>
-          </thead>
-          <tbody id="usersTable"></tbody>
-        </table>
-      </div>
-    </div>
+    if (url === '/api/admin/games' && method === 'GET') {
+      if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
+      return respond(res, 200, db.games.slice().reverse().map(g => {
+        var u = db.users.find(u => u.id === g.user_id);
+        return { ...g, user_name: u ? u.name : 'N/A' };
+      }));
+    }
 
-    <div id="section-influencers" class="admin-section">
-      <div class="admin-header">
-        <h1>⭐ Influenciadores</h1>
-        <p style="color:#a0a0c0">Gerencie contas promo e taxas de vitória (Vantagem da Casa reduzida)</p>
-      </div>
-      <div class="table-responsive">
-        <table class="admin-table">
-          <thead>
-            <tr><th>Nome</th><th>Email</th><th>Saldo</th><th>Taxa de Ganho (Certeza)</th><th>Jogos</th><th>Ações</th></tr>
-          </thead>
-          <tbody id="influencersTable"></tbody>
-        </table>
-      </div>
-      <p id="noInfluencers" style="text-align:center;color:#a0a0c0;padding:40px;display:none">Nenhum influenciador cadastrado. Altere usuários na aba "Usuários".</p>
-    </div>
+    if (url === '/api/admin/settings' && method === 'GET') {
+      if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
+      return respond(res, 200, db.settings);
+    }
 
-    <div id="section-deposits" class="admin-section">
-      <div class="admin-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
-        <div>
-            <div style="display:flex; align-items:center; gap:12px;">
-                <h1 style="margin:0;">💰 Depósitos</h1>
-                <span class="auto-badge">⚡ Aprovação Automática Ativa</span>
-            </div>
-            <p style="color:#a0a0c0;margin-top:4px;">O sistema reconhece os pagamentos PIX automaticamente pelo Webhook da PenguimPay. A aprovação manual é apenas um plano de emergência.</p>
-        </div>
-        <button class="refresh-btn" onclick="loadDeposits()">🔄 Atualizar</button>
-      </div>
-      <div class="tab-bar">
-        <button class="tab-btn active" onclick="filterDeposits('all',this)">Todos</button>
-        <button class="tab-btn" onclick="filterDeposits('pending',this)">Pendentes</button>
-        <button class="tab-btn" onclick="filterDeposits('approved',this)">Aprovados</button>
-        <button class="tab-btn" onclick="filterDeposits('rejected',this)">Rejeitados</button>
-      </div>
-      <div class="table-responsive">
-        <table class="admin-table">
-          <thead><tr><th>ID</th><th>Usuário</th><th>Valor</th><th>Código PIX</th><th>Status</th><th>Data</th><th>Ações Manuais</th></tr></thead>
-          <tbody id="depositsTable"></tbody>
-        </table>
-      </div>
-    </div>
+    if (url === '/api/admin/settings' && method === 'POST') {
+      if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
+      var body = await parseBody(req);
+      Object.keys(body).forEach(k => { db.settings[k] = body[k]; });
+      await saveDB(db);
+      return respond(res, 200, { success: true });
+    }
 
-    <div id="section-withdrawals" class="admin-section">
-      <div class="admin-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
-        <div><h1>💸 Saques</h1><p style="color:#a0a0c0">Processamento de retiradas PIX solicitadas pelos clientes</p></div>
-        <button class="refresh-btn" onclick="loadWithdrawals()">🔄 Atualizar</button>
-      </div>
-      <div class="tab-bar">
-        <button class="tab-btn active" onclick="filterWithdrawals('all',this)">Todos</button>
-        <button class="tab-btn" onclick="filterWithdrawals('pending',this)">Pendentes</button>
-        <button class="tab-btn" onclick="filterWithdrawals('approved',this)">Pagos</button>
-      </div>
-      <div class="table-responsive">
-        <table class="admin-table">
-          <thead><tr><th>ID</th><th>Usuário</th><th>Valor</th><th>Chave PIX</th><th>Tipo</th><th>Status</th><th>Data</th><th>Ações</th></tr></thead>
-          <tbody id="withdrawalsTable"></tbody>
-        </table>
-      </div>
-    </div>
+    return respond(res, 404, { error: 'Rota nao encontrada: ' + url });
 
-    <div id="section-games" class="admin-section">
-      <div class="admin-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
-        <div><h1>🎮 Jogos</h1><p style="color:#a0a0c0">Histórico em tempo real de todas as partidas jogadas</p></div>
-        <button class="refresh-btn" onclick="loadGames()">🔄 Atualizar</button>
-      </div>
-      <div class="table-responsive">
-        <table class="admin-table">
-          <thead><tr><th>ID</th><th>Jogador</th><th>Aposta</th><th>Plataformas</th><th>Multiplicador</th><th>Prêmio</th><th>Resultado</th><th>Data</th></tr></thead>
-          <tbody id="gamesTable"></tbody>
-        </table>
-      </div>
-    </div>
-
-    <div id="section-settings" class="admin-section">
-      <div class="admin-header"><h1>⚙️ Configurações</h1><p style="color:#a0a0c0">Controle absoluto do algoritmo do Helix Cash</p></div>
-      <div class="settings-form">
-        <h3 style="color:#b388ff;margin-bottom:16px;border-bottom:1px solid rgba(124,77,255,0.2);padding-bottom:8px;">💳 Valores e Limites</h3>
-        <div class="form-group"><label>Depósito mínimo (R$)</label><input type="number" class="form-input" id="set-min_deposit" step="1"></div>
-        <div class="form-group"><label>Saque mínimo (R$)</label><input type="number" class="form-input" id="set-min_withdrawal" step="1"></div>
-        <div class="form-group"><label>Multiplicador máximo de lucro (x)</label><input type="number" class="form-input" id="set-max_multiplier" step="0.5"></div>
-
-        <h3 style="color:#b388ff;margin:32px 0 16px;border-bottom:1px solid rgba(124,77,255,0.2);padding-bottom:8px;">🎰 Algoritmo de Cassino (Vantagem da Casa)</h3>
-        <div class="form-group">
-          <label>House Edge - Jogadores Normais (%)</label>
-          <input type="number" class="form-input" id="set-house_edge" step="1" min="0" max="100">
-          <p style="font-size:12px;color:#a0a0c0;margin-top:4px">Ex: 15 = 15% de chance de o sistema anular o prêmio quando ele clicar em resgatar (lucro da casa).</p>
-        </div>
-        <div class="form-group">
-          <label>House Edge - Influenciadores (%)</label>
-          <input type="number" class="form-input" id="set-influencer_house_edge" step="1" min="0" max="100">
-          <p style="font-size:12px;color:#a0a0c0;margin-top:4px">Taxa padrão aplicada para influenciadores para que eles ganhem dinheiro na live (Ex: 0 = ganham sempre que não caírem).</p>
-        </div>
-
-        <h3 style="color:#00e676;margin:32px 0 16px;border-bottom:1px solid rgba(0,230,118,0.2);padding-bottom:8px;">🎮 Dificuldade do Jogo (JOGADORES NORMAIS)</h3>
-        <div class="form-group">
-          <label>Quantidade de plataformas (Mapa total)</label>
-          <input type="number" class="form-input" id="set-game_platform_count" step="1" min="10" max="100" placeholder="25">
-        </div>
-        <div class="form-group">
-          <label>Andar Inicial do Perigo (Zonas de segurança)</label>
-          <input type="number" class="form-input" id="set-game_danger_start_level" step="1" min="0" placeholder="2">
-          <p style="font-size:12px;color:#a0a0c0;margin-top:4px">Quantas plataformas o jogador pode passar sem o vermelho da morte aparecer.</p>
-        </div>
-        <div class="form-group">
-          <label>Taxa de Progressão de Perigo</label>
-          <input type="number" class="form-input" id="set-game_danger_progression" step="1" min="1" placeholder="5">
-          <p style="font-size:12px;color:#a0a0c0;margin-top:4px">A cada X andares, a quantidade de vermelho no disco aumenta.</p>
-        </div>
-        <div class="form-group">
-          <label>Máximo de Fatias Vermelhas</label>
-          <input type="number" class="form-input" id="set-game_danger_max_slices" step="1" min="1" max="11" placeholder="6">
-          <p style="font-size:12px;color:#a0a0c0;margin-top:4px">Limite extremo de fatias letais (de 12 possíveis).</p>
-        </div>
-        <div class="form-group">
-          <label>Tamanho do buraco de queda</label>
-          <input type="number" class="form-input" id="set-game_hole_segments" step="0.1" min="0.5" max="4" placeholder="1.5">
-          <p style="font-size:12px;color:#a0a0c0;margin-top:4px">Buracos menores = jogo mais difícil. Padrão: 1.5</p>
-        </div>
-        <div class="form-group">
-          <label>Velocidade de Rotação (Sensibilidade)</label>
-          <input type="number" class="form-input" id="set-game_rotation_sensitivity" step="0.001" min="0.002" max="0.02" placeholder="0.008">
-        </div>
-
-        <h3 style="color:#ffc107;margin:32px 0 16px;border-bottom:1px solid rgba(255,193,7,0.2);padding-bottom:8px;">⭐ Dificuldade FACILITADA (INFLUENCIADORES)</h3>
-        <p style="font-size:13px;color:#a0a0c0;margin-bottom:16px;">O backend envia estes parâmetros apenas se o usuário tiver a tag Influencer, deixando o jogo estupidamente fácil para marketing.</p>
-        
-        <div class="form-group">
-          <label>Máximo de Fatias Vermelhas (Influencers)</label>
-          <input type="number" class="form-input" id="set-inf_game_danger_max_slices" step="1" min="0" max="11" placeholder="2">
-          <p style="font-size:12px;color:#a0a0c0;margin-top:4px">Defina 0 ou 1 para que seja quase impossível o influencer morrer.</p>
-        </div>
-        <div class="form-group">
-          <label>Andar Inicial do Perigo (Influencers)</label>
-          <input type="number" class="form-input" id="set-inf_game_danger_start_level" step="1" min="0" placeholder="10">
-          <p style="font-size:12px;color:#a0a0c0;margin-top:4px">Eles podem chegar até o andar 10 sem ver nenhuma cor vermelha.</p>
-        </div>
-        <div class="form-group">
-          <label>Tamanho do buraco de queda (Influencers)</label>
-          <input type="number" class="form-input" id="set-inf_game_hole_segments" step="0.1" min="0.5" max="6" placeholder="3.0">
-          <p style="font-size:12px;color:#a0a0c0;margin-top:4px">Defina 3.0 para um buraco gigantesco para a bola passar liso.</p>
-        </div>
-
-        <h3 style="color:#b388ff;margin:32px 0 16px;border-bottom:1px solid rgba(124,77,255,0.2);padding-bottom:8px;">Física Complementar Global</h3>
-        <div class="form-group"><label>Gravidade (Velocidade de queda)</label><input type="number" class="form-input" id="set-game_gravity" step="0.001" min="0.005" max="0.05" placeholder="0.012"></div>
-        <div class="form-group"><label>Força do pulo / Quique</label><input type="number" class="form-input" id="set-game_bounce_force" step="0.01" min="0.05" max="0.5" placeholder="0.18"></div>
-        <div class="form-group"><label>Espaçamento Vertical</label><input type="number" class="form-input" id="set-game_platform_spacing" step="0.1" min="1" max="5" placeholder="2.2"></div>
-        <div class="form-group"><label>Fatias Renderizadas por Andar</label><input type="number" class="form-input" id="set-game_segments_per_platform" step="1" min="4" max="16" placeholder="12"></div>
-
-        <h3 style="color:#b388ff;margin:32px 0 16px;border-bottom:1px solid rgba(124,77,255,0.2);padding-bottom:8px;">Afiliados & Indicações</h3>
-        <div class="form-group"><label>Bônus de indicação (%) da 1ª aposta</label><input type="number" class="form-input" id="set-referral_bonus" step="1"></div>
-
-        <button class="btn btn-primary" onclick="saveSettings()" style="margin-top:24px; font-size:16px; padding:16px; width:100%">SALVAR TODAS CONFIGURAÇÕES</button>
-      </div>
-    </div>
-
-  </main>
-</div>
-
-<div id="modal" class="modal-overlay" style="display:none"></div>
-<div id="toast" class="toast hidden"></div>
-
-<script>
-const token = localStorage.getItem('hc_token');
-if (!token) window.location.href = '/#login';
-
-let allUsers = [];
-let allDeposits = [];
-let allWithdrawals = [];
-
-// Sidebar Controller (Mobile)
-document.getElementById('sidebarOverlay').addEventListener('click', () => {
-    document.querySelector('.admin-sidebar').classList.remove('open');
-    document.getElementById('sidebarOverlay').style.display = 'none';
-});
-const toggleSidebar = () => {
-    document.querySelector('.admin-sidebar').classList.toggle('open');
-    document.getElementById('sidebarOverlay').style.display = document.querySelector('.admin-sidebar').classList.contains('open') ? 'block' : 'none';
+  } catch (err) {
+    console.error('API Error:', err.message);
+    return respond(res, 500, { error: 'Erro interno' });
+  }
 };
-document.querySelector('.admin-mobile-header button').onclick = toggleSidebar;
-
-async function api(url, options = {}) {
-  const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
-  const res = await fetch(url, { ...options, headers });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'Erro na requisição');
-  return data;
-}
-
-function fmt(v) { return parseFloat(v || 0).toFixed(2).replace('.', ','); }
-function fmtDate(d) { return d ? new Date(d).toLocaleString('pt-BR') : '—'; }
-
-function showToast(msg, type = 'success') {
-  const t = document.getElementById('toast');
-  t.textContent = msg; t.className = `toast toast-${type}`;
-  t.classList.remove('hidden');
-  setTimeout(() => t.classList.add('hidden'), 3500);
-}
-
-function statusBadge(status) {
-  const c = { pending: 'status-pending', approved: 'status-approved', rejected: 'status-rejected', finished: 'status-approved', playing: 'status-pending' };
-  const l = { pending: 'Pendente', approved: 'Aprovado', rejected: 'Rejeitado', finished: 'Finalizado', playing: 'Jogando' };
-  return `<span class="status-badge ${c[status] || ''}">${l[status] || status}</span>`;
-}
-
-function showModal(html) {
-  document.getElementById('modal').innerHTML = `<div class="modal">${html}</div>`;
-  document.getElementById('modal').style.display = 'flex';
-}
-function closeModal() { document.getElementById('modal').style.display = 'none'; }
-
-// ===== NAV =====
-document.querySelectorAll('.admin-nav-item').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.admin-nav-item').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    document.querySelectorAll('.admin-section').forEach(s => s.classList.remove('active'));
-    document.getElementById('section-' + btn.dataset.section).classList.add('active');
-    
-    // Auto-close sidebar on mobile
-    if(window.innerWidth <= 900) {
-        document.querySelector('.admin-sidebar').classList.remove('open');
-        document.getElementById('sidebarOverlay').style.display = 'none';
-    }
-
-    const loaders = { users: loadUsers, influencers: loadInfluencers, deposits: loadDeposits, withdrawals: loadWithdrawals, games: loadGames, settings: loadSettings, dashboard: loadDashboard };
-    if (loaders[btn.dataset.section]) loaders[btn.dataset.section]();
-  });
-});
-
-// ===== DASHBOARD =====
-async function loadDashboard() {
-  try {
-    const d = await api('/api/admin/dashboard');
-    document.getElementById('d-users').textContent = d.users;
-    document.getElementById('d-influencers').textContent = d.influencers || 0;
-    document.getElementById('d-deposits').textContent = 'R$ ' + fmt(d.deposits.total);
-    document.getElementById('d-withdrawals').textContent = 'R$ ' + fmt(d.withdrawals.total);
-    document.getElementById('d-profit').textContent = 'R$ ' + fmt(d.profit);
-    document.getElementById('d-games').textContent = d.games.count;
-    document.getElementById('d-bets').textContent = 'R$ ' + fmt(d.games.total_bets);
-    document.getElementById('d-prizes').textContent = 'R$ ' + fmt(d.games.total_prizes);
-    document.getElementById('d-game-profit').textContent = 'R$ ' + fmt(d.game_profit || 0);
-    document.getElementById('d-today-users').textContent = d.today.new_users;
-    document.getElementById('d-today-deposits').textContent = 'R$ ' + fmt(d.today.deposits);
-    document.getElementById('d-today-withdrawals').textContent = 'R$ ' + fmt(d.today.withdrawals);
-    document.getElementById('d-today-games').textContent = d.today.games || 0;
-    document.getElementById('d-pending-deposits').textContent = d.pending.deposits;
-    document.getElementById('d-pending-withdrawals').textContent = d.pending.withdrawals;
-  } catch (e) { showToast(e.message, 'error'); }
-}
-
-// ===== USERS =====
-async function loadUsers() {
-  try {
-    allUsers = await api('/api/admin/users');
-    renderUsers(allUsers);
-  } catch (e) { showToast(e.message, 'error'); }
-}
-
-function filterUsers() {
-  const q = document.getElementById('searchUsers').value.toLowerCase();
-  renderUsers(allUsers.filter(u => (u.name||'').toLowerCase().includes(q) || (u.email||'').toLowerCase().includes(q)));
-}
-
-function renderUsers(users) {
-  document.getElementById('usersTable').innerHTML = users.map(u => `
-    <tr>
-      <td>
-        <strong>${u.name}</strong>
-        ${u.is_influencer ? '<span class="influencer-badge">INFLUENCER</span>' : ''}
-        <div class="user-detail">Ref: ${u.referral_code}</div>
-      </td>
-      <td>${u.email}<div class="user-detail">${u.phone || '—'}</div></td>
-      <td style="color:#00e676;font-weight:700">R$ ${fmt(u.balance)}</td>
-      <td style="color:#00e676">R$ ${fmt(u.total_deposited)}</td>
-      <td style="color:#ff1744">R$ ${fmt(u.total_withdrawn)}</td>
-      <td>${u.total_games || 0}</td>
-      <td>${u.is_blocked ? '<span class="status-badge status-rejected">Bloqueado</span>' : '<span class="status-badge status-approved">Ativo</span>'}</td>
-      <td class="admin-actions">
-        <button class="btn btn-sm btn-accent" onclick="openBalanceModal(${u.id},'${u.name}',${u.balance})">💰 Saldo</button>
-        <button class="btn btn-sm" style="background:rgba(255,193,7,0.15);color:#ffc107" onclick="openInfluencerModal(${u.id},'${u.name}',${u.is_influencer},${u.influencer_win_rate || 0})">⭐ Perfil</button>
-        <button class="btn btn-sm ${u.is_blocked ? 'btn-primary' : 'btn-danger'}" onclick="toggleBlock(${u.id},${!u.is_blocked})">${u.is_blocked ? '✅ Ativar' : '🚫 Block'}</button>
-      </td>
-    </tr>
-  `).join('') || '<tr><td colspan="8" style="text-align:center;color:#a0a0c0;padding:40px">Nenhum usuário encontrado</td></tr>';
-}
-
-function openBalanceModal(id, name, balance) {
-  showModal(`
-    <h3>💰 Editar Saldo - ${name}</h3>
-    <div class="form-group">
-      <label>Saldo atual: <strong style="color:#00e676">R$ ${fmt(balance)}</strong></label>
-    </div>
-    <div class="form-group">
-      <label>Substituir saldo exato para:</label>
-      <input type="number" class="form-input" id="modalBalance" value="${balance}" step="0.01">
-    </div>
-    <div style="text-align:center;color:#a0a0c0;margin:10px 0;font-weight:700">OU</div>
-    <div class="form-group">
-      <label>Adicionar (+ bônus) valor:</label>
-      <input type="number" class="form-input" id="modalAddBalance" placeholder="Ex: 50" step="0.01">
-    </div>
-    <div class="modal-actions">
-      <button class="btn btn-primary" style="flex:1" onclick="saveBalance(${id})">Salvar</button>
-      <button class="btn btn-secondary" style="flex:1" onclick="closeModal()">Cancelar</button>
-    </div>
-  `);
-}
-
-async function saveBalance(id) {
-  const addAmount = parseFloat(document.getElementById('modalAddBalance').value);
-  const setAmount = parseFloat(document.getElementById('modalBalance').value);
-  try {
-    if (addAmount && addAmount !== 0) {
-      await api(`/api/admin/user/${id}/add-balance`, { method: 'POST', body: JSON.stringify({ amount: addAmount }) });
-      showToast(`R$ ${fmt(addAmount)} adicionado com sucesso!`);
-    } else {
-      await api(`/api/admin/user/${id}/balance`, { method: 'POST', body: JSON.stringify({ amount: setAmount }) });
-      showToast('Saldo redefinido com sucesso!');
-    }
-    closeModal(); loadUsers();
-  } catch (e) { showToast(e.message, 'error'); }
-}
-
-function openInfluencerModal(id, name, isInfluencer, winRate) {
-  showModal(`
-    <h3>⭐ Status de Divulgação - ${name}</h3>
-    <p style="color:#a0a0c0;margin-bottom:16px;font-size:12px">Contas Influencer têm a dificuldade do jogo reduzida e pulam a taxa de retenção da casa com base no valor abaixo.</p>
-    <div class="form-group">
-      <label>Classificação da Conta</label>
-      <select class="form-input" id="modalInfluencer">
-        <option value="false" ${!isInfluencer ? 'selected' : ''}>Usuário Normal (Padrão)</option>
-        <option value="true" ${isInfluencer ? 'selected' : ''}>Influenciador de Marketing ⭐</option>
-      </select>
-    </div>
-    <div class="form-group">
-      <label>Taxa de Sucesso Forçado (%)</label>
-      <input type="number" class="form-input" id="modalWinRate" value="${winRate}" min="0" max="100" step="5">
-      <p style="font-size:11px;color:#a0a0c0;margin-top:4px">100 = 100% de certeza que não cai na House Edge se ele clicar em resgatar.</p>
-    </div>
-    <div class="modal-actions">
-      <button class="btn btn-primary" style="flex:1" onclick="saveInfluencer(${id})">Salvar Configuração</button>
-      <button class="btn btn-secondary" style="flex:1" onclick="closeModal()">Cancelar</button>
-    </div>
-  `);
-}
-
-async function saveInfluencer(id) {
-  const isInfluencer = document.getElementById('modalInfluencer').value === 'true';
-  const winRate = parseFloat(document.getElementById('modalWinRate').value) || 0;
-  try {
-    await api(`/api/admin/user/${id}/influencer`, { method: 'POST', body: JSON.stringify({ is_influencer: isInfluencer, win_rate: winRate }) });
-    showToast(isInfluencer ? 'Conta atualizada para Influenciador!' : 'Removido dos influenciadores');
-    closeModal(); loadUsers();
-  } catch (e) { showToast(e.message, 'error'); }
-}
-
-async function toggleBlock(id, blocked) {
-  if (blocked && !confirm('Tem certeza que deseja bloquear o acesso desse usuário?')) return;
-  try {
-    await api(`/api/admin/user/${id}/block`, { method: 'POST', body: JSON.stringify({ blocked }) });
-    showToast(blocked ? 'Conta bloqueada com sucesso' : 'Conta reativada');
-    loadUsers();
-  } catch (e) { showToast(e.message, 'error'); }
-}
-
-// ===== INFLUENCERS TAB =====
-async function loadInfluencers() {
-  try {
-    const users = await api('/api/admin/users');
-    const influencers = users.filter(u => u.is_influencer);
-    const noEl = document.getElementById('noInfluencers');
-    if (influencers.length === 0) { noEl.style.display = 'block'; } else { noEl.style.display = 'none'; }
-    document.getElementById('influencersTable').innerHTML = influencers.map(u => `
-      <tr>
-        <td><strong>${u.name}</strong></td>
-        <td>${u.email}</td>
-        <td style="color:#00e676;font-weight:700">R$ ${fmt(u.balance)}</td>
-        <td style="color:#ffc107;font-weight:700">${u.influencer_win_rate || 0}% Imunidade</td>
-        <td>${u.total_games || 0}</td>
-        <td class="admin-actions">
-          <button class="btn btn-sm btn-accent" onclick="openBalanceModal(${u.id},'${u.name}',${u.balance})">💰 Saldo</button>
-          <button class="btn btn-sm" style="background:rgba(255,193,7,0.15);color:#ffc107" onclick="openInfluencerModal(${u.id},'${u.name}',true,${u.influencer_win_rate || 0})">⚙️ Configurar</button>
-          <button class="btn btn-sm btn-danger" onclick="removeInfluencer(${u.id})">Remover Permissão</button>
-        </td>
-      </tr>
-    `).join('');
-  } catch (e) { showToast(e.message, 'error'); }
-}
-
-async function removeInfluencer(id) {
-  if(!confirm('Retirar privilégios de influencer desta conta?')) return;
-  try {
-    await api(`/api/admin/user/${id}/influencer`, { method: 'POST', body: JSON.stringify({ is_influencer: false, win_rate: 0 }) });
-    showToast('Privilégio removido.');
-    loadInfluencers();
-  } catch (e) { showToast(e.message, 'error'); }
-}
-
-// ===== DEPOSITS =====
-async function loadDeposits() {
-  try {
-    allDeposits = await api('/api/admin/deposits');
-    renderDeposits(allDeposits);
-  } catch (e) { showToast(e.message, 'error'); }
-}
-
-function filterDeposits(status, btn) {
-  document.querySelectorAll('#section-deposits .tab-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  renderDeposits(status === 'all' ? allDeposits : allDeposits.filter(d => d.status === status));
-}
-
-function renderDeposits(deps) {
-  document.getElementById('depositsTable').innerHTML = deps.map(d => `
-    <tr>
-      <td>#${d.id}</td>
-      <td><strong>${d.user_name || 'Usuário'}</strong><div class="user-detail">${d.user_email || ''}</div></td>
-      <td style="color:#00e676;font-weight:700;font-size:14px">R$ ${fmt(d.amount)}</td>
-      <td style="font-size:11px;font-family:monospace;color:#b388ff">${(d.pix_code||'').substring(0, 15)}...</td>
-      <td>${statusBadge(d.status)}</td>
-      <td style="font-size:11px;color:#a0a0c0">${fmtDate(d.created_at)}</td>
-      <td class="admin-actions">
-        ${d.status === 'pending' ? `
-          <button class="btn btn-sm btn-primary" onclick="approveDeposit(${d.id})">✅ Forçar</button>
-          <button class="btn btn-sm btn-danger" onclick="rejectDeposit(${d.id})">❌ Negar</button>
-        ` : `<span style="font-size:11px;color:#666">Automatizado/Fechado</span>`}
-      </td>
-    </tr>
-  `).join('') || '<tr><td colspan="7" style="text-align:center;color:#a0a0c0;padding:40px">Nenhuma transação na base</td></tr>';
-}
-
-async function approveDeposit(id) {
-  if (!confirm('Aprovar depósito manualmente ignorando API PenguimPay?')) return;
-  try { await api(`/api/admin/deposit/${id}/approve`, { method: 'POST' }); showToast('Depósito creditado manualmente!'); loadDeposits(); loadDashboard(); } catch (e) { showToast(e.message, 'error'); }
-}
-async function rejectDeposit(id) {
-  if (!confirm('Rejeitar este depósito? Ele sumirá da pendência.')) return;
-  try { await api(`/api/admin/deposit/${id}/reject`, { method: 'POST' }); showToast('Depósito descartado.'); loadDeposits(); } catch (e) { showToast(e.message, 'error'); }
-}
-
-// ===== WITHDRAWALS =====
-async function loadWithdrawals() {
-  try {
-    allWithdrawals = await api('/api/admin/withdrawals');
-    renderWithdrawals(allWithdrawals);
-  } catch (e) { showToast(e.message, 'error'); }
-}
-
-function filterWithdrawals(status, btn) {
-  document.querySelectorAll('#section-withdrawals .tab-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  renderWithdrawals(status === 'all' ? allWithdrawals : allWithdrawals.filter(w => w.status === status));
-}
-
-function renderWithdrawals(ws) {
-  document.getElementById('withdrawalsTable').innerHTML = ws.map(w => `
-    <tr>
-      <td>#${w.id}</td>
-      <td><strong>${w.user_name || 'Usuário'}</strong><div class="user-detail">${w.user_email || ''}</div></td>
-      <td style="color:#ff1744;font-weight:900;font-size:15px">R$ ${fmt(w.amount)}</td>
-      <td style="font-family:monospace;font-size:12px;color:#fff">${w.pix_key}</td>
-      <td style="font-size:11px;color:#a0a0c0;text-transform:uppercase">${w.pix_type}</td>
-      <td>${statusBadge(w.status)}</td>
-      <td style="font-size:11px;color:#a0a0c0">${fmtDate(w.created_at)}</td>
-      <td class="admin-actions">
-        ${w.status === 'pending' ? `
-          <button class="btn btn-sm btn-primary" onclick="approveWithdrawal(${w.id})">💸 Marcar Pago</button>
-          <button class="btn btn-sm btn-danger" onclick="rejectWithdrawal(${w.id})">❌ Estornar</button>
-        ` : `<span style="font-size:11px;color:#666">Concluído</span>`}
-      </td>
-    </tr>
-  `).join('') || '<tr><td colspan="8" style="text-align:center;color:#a0a0c0;padding:40px">Nenhum saque solicitado ainda.</td></tr>';
-}
-
-async function approveWithdrawal(id) {
-  if (!confirm('Você já fez o PIX manualmente pelo seu banco para esta chave?')) return;
-  try { await api(`/api/admin/withdrawal/${id}/approve`, { method: 'POST' }); showToast('Marcado como pago no sistema!'); loadWithdrawals(); loadDashboard(); } catch (e) { showToast(e.message, 'error'); }
-}
-async function rejectWithdrawal(id) {
-  if (!confirm('Estornar saque? O dinheiro vai voltar pro saldo do cliente.')) return;
-  try { await api(`/api/admin/withdrawal/${id}/reject`, { method: 'POST' }); showToast('Saque estornado para o jogador.'); loadWithdrawals(); } catch (e) { showToast(e.message, 'error'); }
-}
-
-// ===== GAMES =====
-async function loadGames() {
-  try {
-    const gs = await api('/api/admin/games');
-    document.getElementById('gamesTable').innerHTML = gs.map(g => {
-      const won = g.prize > 0;
-      return `<tr>
-        <td style="font-size:11px;color:#666">#${g.id}</td>
-        <td><strong>${g.user_name || 'Desconhecido'}</strong></td>
-        <td style="font-size:13px">R$ ${fmt(g.bet_amount)}</td>
-        <td style="font-weight:700">${g.platforms_reached} pts</td>
-        <td style="color:#b388ff">${g.multiplier ? g.multiplier.toFixed(2) + 'x' : '—'}</td>
-        <td style="color:${won ? '#00e676' : '#ff1744'};font-weight:900">R$ ${fmt(g.prize)}</td>
-        <td>${won ? '<span class="status-badge status-approved">CASH OUT</span>' : '<span class="status-badge status-rejected">DERROTA</span>'}</td>
-        <td style="font-size:11px;color:#a0a0c0">${fmtDate(g.created_at)}</td>
-      </tr>`;
-    }).join('') || '<tr><td colspan="8" style="text-align:center;color:#a0a0c0;padding:40px">O histórico de jogos está vazio.</td></tr>';
-  } catch (e) { showToast(e.message, 'error'); }
-}
-
-// ===== SETTINGS =====
-async function loadSettings() {
-  try {
-    const s = await api('/api/admin/settings');
-    Object.entries(s).forEach(([key, value]) => {
-      const el = document.getElementById('set-' + key);
-      if (el) el.value = value;
-    });
-  } catch (e) { showToast(e.message, 'error'); }
-}
-
-async function saveSettings() {
-  // Lista unificada das variáveis globais e para influenciadores
-  const keys = [
-    'min_deposit', 'min_withdrawal', 'max_multiplier', 'referral_bonus', 'house_edge', 'influencer_house_edge', 'site_name',
-    'game_platform_count', 'game_gravity', 'game_bounce_force', 'game_hole_segments', 'game_rotation_sensitivity', 'game_platform_spacing', 'game_segments_per_platform',
-    'game_danger_start_level', 'game_danger_progression', 'game_danger_max_slices',
-    'inf_game_danger_max_slices', 'inf_game_danger_start_level', 'inf_game_hole_segments'
-  ];
-  
-  const settings = {};
-  keys.forEach(k => { 
-      const el = document.getElementById('set-' + k); 
-      if (el && el.value !== "") settings[k] = el.value; 
-  });
-  
-  try {
-    await api('/api/admin/settings', { method: 'POST', body: JSON.stringify(settings) });
-    showToast('Sistema atualizado com os novos parâmetros!');
-  } catch (e) { showToast(e.message, 'error'); }
-}
-
-function adminLogout() {
-  localStorage.removeItem('hc_token');
-  localStorage.removeItem('hc_user');
-  window.location.href = '/';
-}
-
-// Inicializadores e Listeners Extras
-document.getElementById('modal').addEventListener('click', (e) => {
-  if (e.target === document.getElementById('modal')) closeModal();
-});
-
-loadDashboard();
-</script>
-</body>
-</html>
