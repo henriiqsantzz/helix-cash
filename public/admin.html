@@ -8,71 +8,105 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/style.css">
   <style>
-    body { background: #0a0a1a; }
-    .admin-layout { display: flex; min-height: 100vh; }
+    body { background: #0a0a1a; margin: 0; overflow-x: hidden; }
+    .admin-layout { display: flex; min-height: 100vh; width: 100%; }
+    
+    /* Sidebar Layout (Desktop) */
+    .admin-sidebar {
+      width: 260px; background: #12122a; border-right: 1px solid rgba(124,77,255,0.15);
+      display: flex; flex-direction: column; position: fixed; height: 100vh; top: 0; left: 0; z-index: 1000;
+      transition: transform 0.3s ease;
+    }
+    .admin-main { flex: 1; margin-left: 260px; padding: 32px; max-width: 100%; box-sizing: border-box; }
+    
     .admin-mobile-header {
-      display: none; padding: 12px 16px; background: #12122a;
+      display: none; padding: 16px 20px; background: #12122a;
       border-bottom: 1px solid rgba(124,77,255,0.15);
       align-items: center; justify-content: space-between;
+      position: sticky; top: 0; z-index: 998;
     }
-    @media (max-width: 768px) {
+
+    /* Mobile Responsiveness */
+    @media (max-width: 900px) {
       .admin-mobile-header { display: flex; }
-      .admin-sidebar { transform: translateX(-100%); transition: transform 0.3s; position: fixed; z-index: 999; }
+      .admin-sidebar { transform: translateX(-100%); box-shadow: 5px 0 15px rgba(0,0,0,0.5); }
       .admin-sidebar.open { transform: translateX(0); }
-      .admin-main { margin-left: 0 !important; padding: 16px !important; }
-      .admin-cards { grid-template-columns: repeat(2, 1fr) !important; }
-      .admin-table { font-size: 12px; }
+      .admin-main { margin-left: 0; padding: 16px; }
+      .admin-cards { grid-template-columns: repeat(2, 1fr) !important; gap: 12px; }
+      .admin-table th, .admin-table td { font-size: 12px; padding: 10px 8px; white-space: nowrap; }
+      .admin-header h1 { font-size: 24px; }
     }
-    .admin-section { display: none; }
+    @media (max-width: 480px) {
+      .admin-cards { grid-template-columns: 1fr !important; }
+    }
+
+    /* Utilities */
+    .admin-section { display: none; animation: fadeIn 0.3s ease; }
     .admin-section.active { display: block; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    
     .admin-actions { display: flex; gap: 6px; flex-wrap: wrap; }
     .refresh-btn {
-      background: rgba(124,77,255,0.1); color: #b388ff;
-      padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600;
-      border: 1px solid rgba(124,77,255,0.2); cursor: pointer;
+      background: rgba(124,77,255,0.1); color: #b388ff; padding: 8px 16px; border-radius: 8px; 
+      font-size: 13px; font-weight: 600; border: 1px solid rgba(124,77,255,0.2); cursor: pointer;
+      display: flex; align-items: center; gap: 6px;
     }
     .refresh-btn:hover { background: rgba(124,77,255,0.2); }
-    .settings-form { max-width: 600px; }
+    
+    .settings-form { max-width: 600px; width: 100%; }
     .settings-form .form-group { margin-bottom: 20px; }
+    
     .influencer-badge {
       display: inline-block; padding: 2px 8px; border-radius: 50px;
-      font-size: 10px; font-weight: 700; background: rgba(255,193,7,0.15);
-      color: #ffc107; border: 1px solid rgba(255,193,7,0.3);
+      font-size: 10px; font-weight: 900; background: rgba(255,193,7,0.15);
+      color: #ffc107; border: 1px solid rgba(255,193,7,0.3); margin-left: 4px;
     }
+    
+    .auto-badge {
+      display: inline-block; padding: 4px 12px; border-radius: 50px;
+      font-size: 11px; font-weight: 700; background: rgba(0,230,118,0.15);
+      color: #00e676; border: 1px solid rgba(0,230,118,0.3);
+    }
+
+    /* Modal */
     .modal-overlay {
       position: fixed; top: 0; left: 0; right: 0; bottom: 0;
       background: rgba(0,0,0,0.7); backdrop-filter: blur(5px);
-      display: flex; align-items: center; justify-content: center;
-      z-index: 2000;
+      display: flex; align-items: center; justify-content: center; z-index: 2000;
     }
     .modal {
       background: #12122a; border: 1px solid rgba(124,77,255,0.2);
-      border-radius: 16px; padding: 32px; max-width: 450px; width: 90%;
-      animation: slideUp 0.3s ease;
+      border-radius: 16px; padding: 24px; max-width: 450px; width: 90%;
+      animation: slideUp 0.3s ease; box-shadow: 0 10px 40px rgba(0,0,0,0.5);
     }
     .modal h3 { font-size: 20px; font-weight: 900; margin-bottom: 20px; }
     .modal .form-group { margin-bottom: 16px; }
     .modal-actions { display: flex; gap: 8px; margin-top: 20px; }
-    .user-detail { font-size: 12px; color: #a0a0c0; }
+    
+    .user-detail { font-size: 11px; color: #a0a0c0; margin-top: 2px; }
     .card-icon { font-size: 24px; margin-bottom: 4px; }
-    .admin-card { position: relative; overflow: hidden; }
+    
+    .admin-card { position: relative; overflow: hidden; background: #12122a; padding: 20px; border-radius: 12px; border: 1px solid rgba(124,77,255,0.1); }
     .admin-card::after {
       content: ''; position: absolute; top: -50%; right: -50%;
-      width: 100px; height: 100px; border-radius: 50%;
-      background: rgba(124,77,255,0.05);
+      width: 100px; height: 100px; border-radius: 50%; background: rgba(124,77,255,0.05);
     }
+    
     .search-input {
-      width: 100%; padding: 10px 16px; border-radius: 10px;
+      width: 100%; padding: 12px 16px; border-radius: 10px;
       background: #1a1a3e; border: 1px solid rgba(124,77,255,0.1);
-      color: #fff; font-size: 14px; margin-bottom: 16px; outline: none;
+      color: #fff; font-size: 14px; margin-bottom: 16px; outline: none; transition: border 0.2s;
     }
     .search-input:focus { border-color: #7c4dff; }
-    .tab-bar { display: flex; gap: 8px; margin-bottom: 16px; }
+    
+    .tab-bar { display: flex; gap: 8px; margin-bottom: 16px; overflow-x: auto; padding-bottom: 4px; }
     .tab-btn {
       padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600;
-      background: rgba(124,77,255,0.1); color: #b388ff; border: none; cursor: pointer;
+      background: rgba(124,77,255,0.1); color: #b388ff; border: none; cursor: pointer; white-space: nowrap;
     }
     .tab-btn.active { background: #7c4dff; color: white; }
+    
+    .table-responsive { width: 100%; overflow-x: auto; border-radius: 12px; border: 1px solid rgba(124,77,255,0.1); }
   </style>
 </head>
 <body>
@@ -83,10 +117,12 @@
 </div>
 
 <div class="admin-layout">
-  <aside class="admin-sidebar" style="display:flex;flex-direction:column">
-    <div class="logo" style="padding:0 20px">HELIX<span>CASH</span></div>
-    <p style="padding:0 20px;font-size:11px;color:#a0a0c0;margin-bottom:24px">Painel Administrativo</p>
-    <nav class="admin-nav">
+  <aside class="admin-sidebar">
+    <div style="padding:24px 20px 10px;">
+        <div class="logo">HELIX<span>CASH</span></div>
+        <p style="font-size:11px;color:#a0a0c0;margin-top:4px">Painel Administrativo</p>
+    </div>
+    <nav class="admin-nav" style="flex:1;overflow-y:auto;padding-top:10px;">
       <button class="admin-nav-item active" data-section="dashboard">📊 Dashboard</button>
       <button class="admin-nav-item" data-section="users">👥 Usuários</button>
       <button class="admin-nav-item" data-section="influencers">⭐ Influenciadores</button>
@@ -95,55 +131,57 @@
       <button class="admin-nav-item" data-section="games">🎮 Jogos</button>
       <button class="admin-nav-item" data-section="settings">⚙️ Configurações</button>
     </nav>
-    <div style="margin-top:auto;padding:20px">
-      <button onclick="window.location.href='/'" class="btn btn-secondary btn-sm btn-block" style="font-size:12px">← Voltar ao site</button>
-      <button onclick="adminLogout()" class="btn btn-danger btn-sm btn-block" style="font-size:12px;margin-top:8px">Sair</button>
+    <div style="padding:20px; border-top: 1px solid rgba(124,77,255,0.15);">
+      <button onclick="window.location.href='/'" class="btn btn-secondary btn-sm btn-block" style="font-size:12px;margin-bottom:8px;">← Voltar ao site</button>
+      <button onclick="adminLogout()" class="btn btn-danger btn-sm btn-block" style="font-size:12px;">Sair</button>
     </div>
   </aside>
+
+  <div id="sidebarOverlay" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:999;" onclick="document.querySelector('.admin-sidebar').classList.remove('open')"></div>
 
   <main class="admin-main">
 
     <div id="section-dashboard" class="admin-section active">
-      <div class="admin-header"><h1>📊 Dashboard</h1><p style="color:#a0a0c0">Visao geral completa da plataforma</p></div>
+      <div class="admin-header"><h1>📊 Dashboard</h1><p style="color:#a0a0c0">Visão geral completa da plataforma</p></div>
 
       <h3 style="font-size:14px;color:#a0a0c0;margin-bottom:12px;text-transform:uppercase;letter-spacing:2px">Resumo Geral</h3>
-      <div class="admin-cards" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr))">
-        <div class="admin-card"><div class="card-icon">👥</div><div class="label">Usuarios totais</div><div class="value purple" id="d-users">0</div></div>
+      <div class="admin-cards" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); display:grid;">
+        <div class="admin-card"><div class="card-icon">👥</div><div class="label">Usuários totais</div><div class="value purple" id="d-users">0</div></div>
         <div class="admin-card"><div class="card-icon">⭐</div><div class="label">Influenciadores</div><div class="value" style="color:#ffc107" id="d-influencers">0</div></div>
-        <div class="admin-card"><div class="card-icon">💰</div><div class="label">Depositos aprovados</div><div class="value green" id="d-deposits">R$ 0</div></div>
+        <div class="admin-card"><div class="card-icon">💰</div><div class="label">Depósitos aprov.</div><div class="value green" id="d-deposits">R$ 0</div></div>
         <div class="admin-card"><div class="card-icon">💸</div><div class="label">Saques pagos</div><div class="value red" id="d-withdrawals">R$ 0</div></div>
-        <div class="admin-card"><div class="card-icon">📈</div><div class="label">Lucro (Dep - Saq)</div><div class="value green" id="d-profit">R$ 0</div></div>
+        <div class="admin-card"><div class="card-icon">📈</div><div class="label">Lucro Líquido</div><div class="value green" id="d-profit">R$ 0</div></div>
         <div class="admin-card"><div class="card-icon">🎮</div><div class="label">Total jogos</div><div class="value purple" id="d-games">0</div></div>
         <div class="admin-card"><div class="card-icon">🎰</div><div class="label">Total apostado</div><div class="value purple" id="d-bets">R$ 0</div></div>
-        <div class="admin-card"><div class="card-icon">🏆</div><div class="label">Total premios</div><div class="value red" id="d-prizes">R$ 0</div></div>
-        <div class="admin-card"><div class="card-icon">💵</div><div class="label">Lucro dos jogos</div><div class="value green" id="d-game-profit">R$ 0</div></div>
+        <div class="admin-card"><div class="card-icon">🏆</div><div class="label">Total prêmios</div><div class="value red" id="d-prizes">R$ 0</div></div>
+        <div class="admin-card"><div class="card-icon">💵</div><div class="label">House Edge (Lucro)</div><div class="value green" id="d-game-profit">R$ 0</div></div>
       </div>
 
       <h3 style="font-size:14px;color:#a0a0c0;margin:24px 0 12px;text-transform:uppercase;letter-spacing:2px">Hoje</h3>
-      <div class="admin-cards" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr))">
-        <div class="admin-card"><div class="card-icon">👤</div><div class="label">Novos usuarios hoje</div><div class="value green" id="d-today-users">0</div></div>
-        <div class="admin-card"><div class="card-icon">💰</div><div class="label">Depositos hoje</div><div class="value green" id="d-today-deposits">R$ 0</div></div>
+      <div class="admin-cards" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); display:grid;">
+        <div class="admin-card"><div class="card-icon">👤</div><div class="label">Novos usuários</div><div class="value green" id="d-today-users">0</div></div>
+        <div class="admin-card"><div class="card-icon">💰</div><div class="label">Depósitos hoje</div><div class="value green" id="d-today-deposits">R$ 0</div></div>
         <div class="admin-card"><div class="card-icon">💸</div><div class="label">Saques hoje</div><div class="value red" id="d-today-withdrawals">R$ 0</div></div>
         <div class="admin-card"><div class="card-icon">🎮</div><div class="label">Jogos hoje</div><div class="value purple" id="d-today-games">0</div></div>
       </div>
 
-      <h3 style="font-size:14px;color:#a0a0c0;margin:24px 0 12px;text-transform:uppercase;letter-spacing:2px">Pendentes</h3>
-      <div class="admin-cards" style="grid-template-columns:repeat(2,1fr)">
-        <div class="admin-card" style="border-color:rgba(255,193,7,0.3)"><div class="card-icon">⚠️</div><div class="label">Depositos pendentes</div><div class="value" style="color:#ffc107" id="d-pending-deposits">0</div></div>
-        <div class="admin-card" style="border-color:rgba(255,193,7,0.3)"><div class="card-icon">⚠️</div><div class="label">Saques pendentes</div><div class="value" style="color:#ffc107" id="d-pending-withdrawals">0</div></div>
+      <h3 style="font-size:14px;color:#a0a0c0;margin:24px 0 12px;text-transform:uppercase;letter-spacing:2px">Atenção Pendentes</h3>
+      <div class="admin-cards" style="grid-template-columns:repeat(2,1fr); display:grid;">
+        <div class="admin-card" style="border-color:rgba(255,193,7,0.3)"><div class="card-icon">⚠️</div><div class="label">Depósitos Pend.</div><div class="value" style="color:#ffc107" id="d-pending-deposits">0</div></div>
+        <div class="admin-card" style="border-color:rgba(255,193,7,0.3)"><div class="card-icon">⚠️</div><div class="label">Saques Pend.</div><div class="value" style="color:#ffc107" id="d-pending-withdrawals">0</div></div>
       </div>
     </div>
 
     <div id="section-users" class="admin-section">
       <div class="admin-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
-        <div><h1>👥 Usuarios</h1><p style="color:#a0a0c0">Gerenciar todos os usuarios</p></div>
+        <div><h1>👥 Usuários</h1><p style="color:#a0a0c0">Gerenciar clientes e saldos</p></div>
         <button class="refresh-btn" onclick="loadUsers()">🔄 Atualizar</button>
       </div>
       <input type="text" class="search-input" id="searchUsers" placeholder="Buscar por nome ou email..." oninput="filterUsers()">
-      <div style="overflow-x:auto">
+      <div class="table-responsive">
         <table class="admin-table">
           <thead>
-            <tr><th>Nome</th><th>Email</th><th>Saldo</th><th>Depositado</th><th>Sacado</th><th>Jogos</th><th>Status</th><th>Acoes</th></tr>
+            <tr><th>Nome</th><th>Email</th><th>Saldo</th><th>Depositado</th><th>Sacado</th><th>Jogos</th><th>Status</th><th>Ações</th></tr>
           </thead>
           <tbody id="usersTable"></tbody>
         </table>
@@ -153,22 +191,28 @@
     <div id="section-influencers" class="admin-section">
       <div class="admin-header">
         <h1>⭐ Influenciadores</h1>
-        <p style="color:#a0a0c0">Gerencie influenciadores com taxa de ganho personalizada</p>
+        <p style="color:#a0a0c0">Gerencie contas promo e taxas de vitória (Vantagem da Casa reduzida)</p>
       </div>
-      <div style="overflow-x:auto">
+      <div class="table-responsive">
         <table class="admin-table">
           <thead>
-            <tr><th>Nome</th><th>Email</th><th>Saldo</th><th>Taxa de Ganho</th><th>Jogos</th><th>Acoes</th></tr>
+            <tr><th>Nome</th><th>Email</th><th>Saldo</th><th>Taxa de Ganho (Certeza)</th><th>Jogos</th><th>Ações</th></tr>
           </thead>
           <tbody id="influencersTable"></tbody>
         </table>
       </div>
-      <p id="noInfluencers" style="text-align:center;color:#a0a0c0;padding:40px;display:none">Nenhum influenciador cadastrado. Marque usuarios como influenciador na aba Usuarios.</p>
+      <p id="noInfluencers" style="text-align:center;color:#a0a0c0;padding:40px;display:none">Nenhum influenciador cadastrado. Altere usuários na aba "Usuários".</p>
     </div>
 
     <div id="section-deposits" class="admin-section">
       <div class="admin-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
-        <div><h1>💰 Depositos</h1><p style="color:#a0a0c0">Aprovar ou rejeitar depositos PIX</p></div>
+        <div>
+            <div style="display:flex; align-items:center; gap:12px;">
+                <h1 style="margin:0;">💰 Depósitos</h1>
+                <span class="auto-badge">⚡ Aprovação Automática Ativa</span>
+            </div>
+            <p style="color:#a0a0c0;margin-top:4px;">O sistema reconhece os pagamentos PIX automaticamente pelo Webhook da PenguimPay. A aprovação manual é apenas um plano de emergência.</p>
+        </div>
         <button class="refresh-btn" onclick="loadDeposits()">🔄 Atualizar</button>
       </div>
       <div class="tab-bar">
@@ -177,9 +221,9 @@
         <button class="tab-btn" onclick="filterDeposits('approved',this)">Aprovados</button>
         <button class="tab-btn" onclick="filterDeposits('rejected',this)">Rejeitados</button>
       </div>
-      <div style="overflow-x:auto">
+      <div class="table-responsive">
         <table class="admin-table">
-          <thead><tr><th>ID</th><th>Usuario</th><th>Valor</th><th>Codigo PIX</th><th>Status</th><th>Data</th><th>Acoes</th></tr></thead>
+          <thead><tr><th>ID</th><th>Usuário</th><th>Valor</th><th>Código PIX</th><th>Status</th><th>Data</th><th>Ações Manuais</th></tr></thead>
           <tbody id="depositsTable"></tbody>
         </table>
       </div>
@@ -187,17 +231,17 @@
 
     <div id="section-withdrawals" class="admin-section">
       <div class="admin-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
-        <div><h1>💸 Saques</h1><p style="color:#a0a0c0">Aprovar ou rejeitar saques PIX</p></div>
+        <div><h1>💸 Saques</h1><p style="color:#a0a0c0">Processamento de retiradas PIX solicitadas pelos clientes</p></div>
         <button class="refresh-btn" onclick="loadWithdrawals()">🔄 Atualizar</button>
       </div>
       <div class="tab-bar">
         <button class="tab-btn active" onclick="filterWithdrawals('all',this)">Todos</button>
         <button class="tab-btn" onclick="filterWithdrawals('pending',this)">Pendentes</button>
-        <button class="tab-btn" onclick="filterWithdrawals('approved',this)">Aprovados</button>
+        <button class="tab-btn" onclick="filterWithdrawals('approved',this)">Pagos</button>
       </div>
-      <div style="overflow-x:auto">
+      <div class="table-responsive">
         <table class="admin-table">
-          <thead><tr><th>ID</th><th>Usuario</th><th>Valor</th><th>Chave PIX</th><th>Tipo</th><th>Status</th><th>Data</th><th>Acoes</th></tr></thead>
+          <thead><tr><th>ID</th><th>Usuário</th><th>Valor</th><th>Chave PIX</th><th>Tipo</th><th>Status</th><th>Data</th><th>Ações</th></tr></thead>
           <tbody id="withdrawalsTable"></tbody>
         </table>
       </div>
@@ -205,98 +249,96 @@
 
     <div id="section-games" class="admin-section">
       <div class="admin-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
-        <div><h1>🎮 Jogos</h1><p style="color:#a0a0c0">Historico completo de partidas</p></div>
+        <div><h1>🎮 Jogos</h1><p style="color:#a0a0c0">Histórico em tempo real de todas as partidas jogadas</p></div>
         <button class="refresh-btn" onclick="loadGames()">🔄 Atualizar</button>
       </div>
-      <div style="overflow-x:auto">
+      <div class="table-responsive">
         <table class="admin-table">
-          <thead><tr><th>ID</th><th>Jogador</th><th>Tipo</th><th>Aposta</th><th>Plataformas</th><th>Multi.</th><th>Premio</th><th>Resultado</th><th>Data</th></tr></thead>
+          <thead><tr><th>ID</th><th>Jogador</th><th>Aposta</th><th>Plataformas</th><th>Multiplicador</th><th>Prêmio</th><th>Resultado</th><th>Data</th></tr></thead>
           <tbody id="gamesTable"></tbody>
         </table>
       </div>
     </div>
 
     <div id="section-settings" class="admin-section">
-      <div class="admin-header"><h1>⚙️ Configuracoes</h1><p style="color:#a0a0c0">Parametros gerais da plataforma</p></div>
+      <div class="admin-header"><h1>⚙️ Configurações</h1><p style="color:#a0a0c0">Controle absoluto do algoritmo do Helix Cash</p></div>
       <div class="settings-form">
-        <h3 style="color:#b388ff;margin-bottom:16px">Valores</h3>
-        <div class="form-group"><label>Deposito minimo (R$)</label><input type="number" class="form-input" id="set-min_deposit" step="1"></div>
-        <div class="form-group"><label>Saque minimo (R$)</label><input type="number" class="form-input" id="set-min_withdrawal" step="1"></div>
-        <div class="form-group"><label>Multiplicador maximo (x)</label><input type="number" class="form-input" id="set-max_multiplier" step="0.5"></div>
+        <h3 style="color:#b388ff;margin-bottom:16px;border-bottom:1px solid rgba(124,77,255,0.2);padding-bottom:8px;">💳 Valores e Limites</h3>
+        <div class="form-group"><label>Depósito mínimo (R$)</label><input type="number" class="form-input" id="set-min_deposit" step="1"></div>
+        <div class="form-group"><label>Saque mínimo (R$)</label><input type="number" class="form-input" id="set-min_withdrawal" step="1"></div>
+        <div class="form-group"><label>Multiplicador máximo de lucro (x)</label><input type="number" class="form-input" id="set-max_multiplier" step="0.5"></div>
 
-        <h3 style="color:#b388ff;margin:24px 0 16px">Taxas do Jogo</h3>
+        <h3 style="color:#b388ff;margin:32px 0 16px;border-bottom:1px solid rgba(124,77,255,0.2);padding-bottom:8px;">🎰 Algoritmo de Cassino (Vantagem da Casa)</h3>
         <div class="form-group">
-          <label>House Edge - Jogadores normais (%)</label>
+          <label>House Edge - Jogadores Normais (%)</label>
           <input type="number" class="form-input" id="set-house_edge" step="1" min="0" max="100">
-          <p style="font-size:12px;color:#a0a0c0;margin-top:4px">% de chance do premio ser reduzido. Ex: 15 = 15% de chance de perder mais.</p>
+          <p style="font-size:12px;color:#a0a0c0;margin-top:4px">Ex: 15 = 15% de chance de o sistema anular o prêmio quando ele clicar em resgatar (lucro da casa).</p>
         </div>
         <div class="form-group">
           <label>House Edge - Influenciadores (%)</label>
           <input type="number" class="form-input" id="set-influencer_house_edge" step="1" min="0" max="100">
-          <p style="font-size:12px;color:#a0a0c0;margin-top:4px">House edge menor para influenciadores ganharem mais facilmente.</p>
+          <p style="font-size:12px;color:#a0a0c0;margin-top:4px">Taxa padrão aplicada para influenciadores para que eles ganhem dinheiro na live (Ex: 0 = ganham sempre que não caírem).</p>
         </div>
 
-        <h3 style="color:#b388ff;margin:24px 0 16px">Dificuldade do Jogo (Dinâmica)</h3>
+        <h3 style="color:#00e676;margin:32px 0 16px;border-bottom:1px solid rgba(0,230,118,0.2);padding-bottom:8px;">🎮 Dificuldade do Jogo (JOGADORES NORMAIS)</h3>
+        <div class="form-group">
+          <label>Quantidade de plataformas (Mapa total)</label>
+          <input type="number" class="form-input" id="set-game_platform_count" step="1" min="10" max="100" placeholder="25">
+        </div>
+        <div class="form-group">
+          <label>Andar Inicial do Perigo (Zonas de segurança)</label>
+          <input type="number" class="form-input" id="set-game_danger_start_level" step="1" min="0" placeholder="2">
+          <p style="font-size:12px;color:#a0a0c0;margin-top:4px">Quantas plataformas o jogador pode passar sem o vermelho da morte aparecer.</p>
+        </div>
+        <div class="form-group">
+          <label>Taxa de Progressão de Perigo</label>
+          <input type="number" class="form-input" id="set-game_danger_progression" step="1" min="1" placeholder="5">
+          <p style="font-size:12px;color:#a0a0c0;margin-top:4px">A cada X andares, a quantidade de vermelho no disco aumenta.</p>
+        </div>
+        <div class="form-group">
+          <label>Máximo de Fatias Vermelhas</label>
+          <input type="number" class="form-input" id="set-game_danger_max_slices" step="1" min="1" max="11" placeholder="6">
+          <p style="font-size:12px;color:#a0a0c0;margin-top:4px">Limite extremo de fatias letais (de 12 possíveis).</p>
+        </div>
+        <div class="form-group">
+          <label>Tamanho do buraco de queda</label>
+          <input type="number" class="form-input" id="set-game_hole_segments" step="0.1" min="0.5" max="4" placeholder="1.5">
+          <p style="font-size:12px;color:#a0a0c0;margin-top:4px">Buracos menores = jogo mais difícil. Padrão: 1.5</p>
+        </div>
+        <div class="form-group">
+          <label>Velocidade de Rotação (Sensibilidade)</label>
+          <input type="number" class="form-input" id="set-game_rotation_sensitivity" step="0.001" min="0.002" max="0.02" placeholder="0.008">
+        </div>
+
+        <h3 style="color:#ffc107;margin:32px 0 16px;border-bottom:1px solid rgba(255,193,7,0.2);padding-bottom:8px;">⭐ Dificuldade FACILITADA (INFLUENCIADORES)</h3>
+        <p style="font-size:13px;color:#a0a0c0;margin-bottom:16px;">O backend envia estes parâmetros apenas se o usuário tiver a tag Influencer, deixando o jogo estupidamente fácil para marketing.</p>
         
         <div class="form-group">
-          <label>Andar Inicial do Perigo (Andares seguros no começo)</label>
-          <input type="number" class="form-input" id="set-game_danger_start_level" step="1" min="0" placeholder="2">
-          <p style="font-size:12px;color:#a0a0c0;margin-top:4px">Quantos andares no começo são 100% seguros antes de aparecerem fatias vermelhas. Padrão: 2</p>
+          <label>Máximo de Fatias Vermelhas (Influencers)</label>
+          <input type="number" class="form-input" id="set-inf_game_danger_max_slices" step="1" min="0" max="11" placeholder="2">
+          <p style="font-size:12px;color:#a0a0c0;margin-top:4px">Defina 0 ou 1 para que seja quase impossível o influencer morrer.</p>
         </div>
         <div class="form-group">
-          <label>Taxa de Progressão</label>
-          <input type="number" class="form-input" id="set-game_danger_progression" step="1" min="1" placeholder="5">
-          <p style="font-size:12px;color:#a0a0c0;margin-top:4px">A cada quantos andares a quantidade de fatias vermelhas vai aumentar. Padrão: 5</p>
+          <label>Andar Inicial do Perigo (Influencers)</label>
+          <input type="number" class="form-input" id="set-inf_game_danger_start_level" step="1" min="0" placeholder="10">
+          <p style="font-size:12px;color:#a0a0c0;margin-top:4px">Eles podem chegar até o andar 10 sem ver nenhuma cor vermelha.</p>
         </div>
         <div class="form-group">
-          <label>Máximo de Fatias Vermelhas (Limite)</label>
-          <input type="number" class="form-input" id="set-game_danger_max_slices" step="1" min="1" max="11" placeholder="6">
-          <p style="font-size:12px;color:#a0a0c0;margin-top:4px">Limite máximo de fatias vermelhas que o jogo pode gerar em uma plataforma para não ficar impossível. Padrão: 6 (de 12)</p>
-        </div>
-        <h3 style="color:#b388ff;margin:24px 0 16px">Física do Jogo</h3>
-        <div class="form-group">
-          <label>Quantidade de plataformas</label>
-          <input type="number" class="form-input" id="set-game_platform_count" step="1" min="10" max="100" placeholder="25">
-          <p style="font-size:12px;color:#a0a0c0;margin-top:4px">Quantas plataformas no total. Mais = jogo mais longo.</p>
-        </div>
-        <div class="form-group">
-          <label>Gravidade (velocidade de queda)</label>
-          <input type="number" class="form-input" id="set-game_gravity" step="0.001" min="0.005" max="0.05" placeholder="0.012">
-          <p style="font-size:12px;color:#a0a0c0;margin-top:4px">Maior = bola cai mais rapido. Padrao: 0.015</p>
-        </div>
-        <div class="form-group">
-          <label>Forca do pulo</label>
-          <input type="number" class="form-input" id="set-game_bounce_force" step="0.01" min="0.05" max="0.5" placeholder="0.18">
-          <p style="font-size:12px;color:#a0a0c0;margin-top:4px">Quanto a bola sobe ao quicar. Padrao: 0.22</p>
-        </div>
-        <div class="form-group">
-          <label>Tamanho do buraco (segmentos)</label>
-          <input type="number" class="form-input" id="set-game_hole_segments" step="0.1" min="0.5" max="4" placeholder="1.5">
-          <p style="font-size:12px;color:#a0a0c0;margin-top:4px">Maior = buraco maior = mais facil. Padrao: 2</p>
-        </div>
-        <div class="form-group">
-          <label>Sensibilidade de rotacao</label>
-          <input type="number" class="form-input" id="set-game_rotation_sensitivity" step="0.001" min="0.002" max="0.02" placeholder="0.008">
-          <p style="font-size:12px;color:#a0a0c0;margin-top:4px">Velocidade de giro. Padrao: 0.008</p>
-        </div>
-        <div class="form-group">
-          <label>Espacamento entre plataformas</label>
-          <input type="number" class="form-input" id="set-game_platform_spacing" step="0.1" min="1" max="5" placeholder="2.2">
-          <p style="font-size:12px;color:#a0a0c0;margin-top:4px">Distancia entre plataformas. Padrao: 2.2</p>
-        </div>
-        <div class="form-group">
-          <label>Segmentos por plataforma</label>
-          <input type="number" class="form-input" id="set-game_segments_per_platform" step="1" min="4" max="16" placeholder="8">
-          <p style="font-size:12px;color:#a0a0c0;margin-top:4px">Quantas fatias cada plataforma tem. Padrao: 12</p>
+          <label>Tamanho do buraco de queda (Influencers)</label>
+          <input type="number" class="form-input" id="set-inf_game_hole_segments" step="0.1" min="0.5" max="6" placeholder="3.0">
+          <p style="font-size:12px;color:#a0a0c0;margin-top:4px">Defina 3.0 para um buraco gigantesco para a bola passar liso.</p>
         </div>
 
-        <h3 style="color:#b388ff;margin:24px 0 16px">Indicacao</h3>
-        <div class="form-group"><label>Bonus de indicacao (%)</label><input type="number" class="form-input" id="set-referral_bonus" step="1"></div>
+        <h3 style="color:#b388ff;margin:32px 0 16px;border-bottom:1px solid rgba(124,77,255,0.2);padding-bottom:8px;">Física Complementar Global</h3>
+        <div class="form-group"><label>Gravidade (Velocidade de queda)</label><input type="number" class="form-input" id="set-game_gravity" step="0.001" min="0.005" max="0.05" placeholder="0.012"></div>
+        <div class="form-group"><label>Força do pulo / Quique</label><input type="number" class="form-input" id="set-game_bounce_force" step="0.01" min="0.05" max="0.5" placeholder="0.18"></div>
+        <div class="form-group"><label>Espaçamento Vertical</label><input type="number" class="form-input" id="set-game_platform_spacing" step="0.1" min="1" max="5" placeholder="2.2"></div>
+        <div class="form-group"><label>Fatias Renderizadas por Andar</label><input type="number" class="form-input" id="set-game_segments_per_platform" step="1" min="4" max="16" placeholder="12"></div>
 
-        <h3 style="color:#b388ff;margin:24px 0 16px">Geral</h3>
-        <div class="form-group"><label>Nome do site</label><input type="text" class="form-input" id="set-site_name"></div>
+        <h3 style="color:#b388ff;margin:32px 0 16px;border-bottom:1px solid rgba(124,77,255,0.2);padding-bottom:8px;">Afiliados & Indicações</h3>
+        <div class="form-group"><label>Bônus de indicação (%) da 1ª aposta</label><input type="number" class="form-input" id="set-referral_bonus" step="1"></div>
 
-        <button class="btn btn-primary" onclick="saveSettings()" style="margin-top:8px">SALVAR CONFIGURACOES</button>
+        <button class="btn btn-primary" onclick="saveSettings()" style="margin-top:24px; font-size:16px; padding:16px; width:100%">SALVAR TODAS CONFIGURAÇÕES</button>
       </div>
     </div>
 
@@ -314,11 +356,22 @@ let allUsers = [];
 let allDeposits = [];
 let allWithdrawals = [];
 
+// Sidebar Controller (Mobile)
+document.getElementById('sidebarOverlay').addEventListener('click', () => {
+    document.querySelector('.admin-sidebar').classList.remove('open');
+    document.getElementById('sidebarOverlay').style.display = 'none';
+});
+const toggleSidebar = () => {
+    document.querySelector('.admin-sidebar').classList.toggle('open');
+    document.getElementById('sidebarOverlay').style.display = document.querySelector('.admin-sidebar').classList.contains('open') ? 'block' : 'none';
+};
+document.querySelector('.admin-mobile-header button').onclick = toggleSidebar;
+
 async function api(url, options = {}) {
   const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
   const res = await fetch(url, { ...options, headers });
   const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'Erro');
+  if (!res.ok) throw new Error(data.error || 'Erro na requisição');
   return data;
 }
 
@@ -329,7 +382,7 @@ function showToast(msg, type = 'success') {
   const t = document.getElementById('toast');
   t.textContent = msg; t.className = `toast toast-${type}`;
   t.classList.remove('hidden');
-  setTimeout(() => t.classList.add('hidden'), 3000);
+  setTimeout(() => t.classList.add('hidden'), 3500);
 }
 
 function statusBadge(status) {
@@ -351,7 +404,13 @@ document.querySelectorAll('.admin-nav-item').forEach(btn => {
     btn.classList.add('active');
     document.querySelectorAll('.admin-section').forEach(s => s.classList.remove('active'));
     document.getElementById('section-' + btn.dataset.section).classList.add('active');
-    document.querySelector('.admin-sidebar').classList.remove('open');
+    
+    // Auto-close sidebar on mobile
+    if(window.innerWidth <= 900) {
+        document.querySelector('.admin-sidebar').classList.remove('open');
+        document.getElementById('sidebarOverlay').style.display = 'none';
+    }
+
     const loaders = { users: loadUsers, influencers: loadInfluencers, deposits: loadDeposits, withdrawals: loadWithdrawals, games: loadGames, settings: loadSettings, dashboard: loadDashboard };
     if (loaders[btn.dataset.section]) loaders[btn.dataset.section]();
   });
@@ -389,7 +448,7 @@ async function loadUsers() {
 
 function filterUsers() {
   const q = document.getElementById('searchUsers').value.toLowerCase();
-  renderUsers(allUsers.filter(u => u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q)));
+  renderUsers(allUsers.filter(u => (u.name||'').toLowerCase().includes(q) || (u.email||'').toLowerCase().includes(q)));
 }
 
 function renderUsers(users) {
@@ -408,11 +467,11 @@ function renderUsers(users) {
       <td>${u.is_blocked ? '<span class="status-badge status-rejected">Bloqueado</span>' : '<span class="status-badge status-approved">Ativo</span>'}</td>
       <td class="admin-actions">
         <button class="btn btn-sm btn-accent" onclick="openBalanceModal(${u.id},'${u.name}',${u.balance})">💰 Saldo</button>
-        <button class="btn btn-sm" style="background:rgba(255,193,7,0.15);color:#ffc107" onclick="openInfluencerModal(${u.id},'${u.name}',${u.is_influencer},${u.influencer_win_rate || 0})">⭐ Influencer</button>
-        <button class="btn btn-sm ${u.is_blocked ? 'btn-primary' : 'btn-danger'}" onclick="toggleBlock(${u.id},${!u.is_blocked})">${u.is_blocked ? '✅ Ativar' : '🚫 Bloquear'}</button>
+        <button class="btn btn-sm" style="background:rgba(255,193,7,0.15);color:#ffc107" onclick="openInfluencerModal(${u.id},'${u.name}',${u.is_influencer},${u.influencer_win_rate || 0})">⭐ Perfil</button>
+        <button class="btn btn-sm ${u.is_blocked ? 'btn-primary' : 'btn-danger'}" onclick="toggleBlock(${u.id},${!u.is_blocked})">${u.is_blocked ? '✅ Ativar' : '🚫 Block'}</button>
       </td>
     </tr>
-  `).join('') || '<tr><td colspan="8" style="text-align:center;color:#a0a0c0;padding:40px">Nenhum usuario</td></tr>';
+  `).join('') || '<tr><td colspan="8" style="text-align:center;color:#a0a0c0;padding:40px">Nenhum usuário encontrado</td></tr>';
 }
 
 function openBalanceModal(id, name, balance) {
@@ -422,16 +481,17 @@ function openBalanceModal(id, name, balance) {
       <label>Saldo atual: <strong style="color:#00e676">R$ ${fmt(balance)}</strong></label>
     </div>
     <div class="form-group">
-      <label>Definir saldo para:</label>
+      <label>Substituir saldo exato para:</label>
       <input type="number" class="form-input" id="modalBalance" value="${balance}" step="0.01">
     </div>
+    <div style="text-align:center;color:#a0a0c0;margin:10px 0;font-weight:700">OU</div>
     <div class="form-group">
-      <label>Ou adicionar valor:</label>
+      <label>Adicionar (+ bônus) valor:</label>
       <input type="number" class="form-input" id="modalAddBalance" placeholder="Ex: 50" step="0.01">
     </div>
     <div class="modal-actions">
-      <button class="btn btn-primary" onclick="saveBalance(${id})">Salvar</button>
-      <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+      <button class="btn btn-primary" style="flex:1" onclick="saveBalance(${id})">Salvar</button>
+      <button class="btn btn-secondary" style="flex:1" onclick="closeModal()">Cancelar</button>
     </div>
   `);
 }
@@ -442,10 +502,10 @@ async function saveBalance(id) {
   try {
     if (addAmount && addAmount !== 0) {
       await api(`/api/admin/user/${id}/add-balance`, { method: 'POST', body: JSON.stringify({ amount: addAmount }) });
-      showToast(`R$ ${fmt(addAmount)} adicionado!`);
+      showToast(`R$ ${fmt(addAmount)} adicionado com sucesso!`);
     } else {
       await api(`/api/admin/user/${id}/balance`, { method: 'POST', body: JSON.stringify({ amount: setAmount }) });
-      showToast('Saldo atualizado!');
+      showToast('Saldo redefinido com sucesso!');
     }
     closeModal(); loadUsers();
   } catch (e) { showToast(e.message, 'error'); }
@@ -453,23 +513,23 @@ async function saveBalance(id) {
 
 function openInfluencerModal(id, name, isInfluencer, winRate) {
   showModal(`
-    <h3>⭐ Influenciador - ${name}</h3>
-    <p style="color:#a0a0c0;margin-bottom:16px">Influenciadores tem uma taxa de ganho maior para mostrar ganhos nas redes sociais.</p>
+    <h3>⭐ Status de Divulgação - ${name}</h3>
+    <p style="color:#a0a0c0;margin-bottom:16px;font-size:12px">Contas Influencer têm a dificuldade do jogo reduzida e pulam a taxa de retenção da casa com base no valor abaixo.</p>
     <div class="form-group">
-      <label>Status</label>
+      <label>Classificação da Conta</label>
       <select class="form-input" id="modalInfluencer">
-        <option value="false" ${!isInfluencer ? 'selected' : ''}>Usuario Normal</option>
-        <option value="true" ${isInfluencer ? 'selected' : ''}>Influenciador ⭐</option>
+        <option value="false" ${!isInfluencer ? 'selected' : ''}>Usuário Normal (Padrão)</option>
+        <option value="true" ${isInfluencer ? 'selected' : ''}>Influenciador de Marketing ⭐</option>
       </select>
     </div>
     <div class="form-group">
-      <label>Taxa de Ganho Personalizada (%)</label>
+      <label>Taxa de Sucesso Forçado (%)</label>
       <input type="number" class="form-input" id="modalWinRate" value="${winRate}" min="0" max="100" step="5">
-      <p style="font-size:12px;color:#a0a0c0;margin-top:4px">0 = usa a house edge padrao de influenciador. 80 = 80% de chance de ganhar o premio completo.</p>
+      <p style="font-size:11px;color:#a0a0c0;margin-top:4px">100 = 100% de certeza que não cai na House Edge se ele clicar em resgatar.</p>
     </div>
     <div class="modal-actions">
-      <button class="btn btn-primary" onclick="saveInfluencer(${id})">Salvar</button>
-      <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+      <button class="btn btn-primary" style="flex:1" onclick="saveInfluencer(${id})">Salvar Configuração</button>
+      <button class="btn btn-secondary" style="flex:1" onclick="closeModal()">Cancelar</button>
     </div>
   `);
 }
@@ -479,15 +539,16 @@ async function saveInfluencer(id) {
   const winRate = parseFloat(document.getElementById('modalWinRate').value) || 0;
   try {
     await api(`/api/admin/user/${id}/influencer`, { method: 'POST', body: JSON.stringify({ is_influencer: isInfluencer, win_rate: winRate }) });
-    showToast(isInfluencer ? 'Marcado como influenciador!' : 'Removido de influenciador');
+    showToast(isInfluencer ? 'Conta atualizada para Influenciador!' : 'Removido dos influenciadores');
     closeModal(); loadUsers();
   } catch (e) { showToast(e.message, 'error'); }
 }
 
 async function toggleBlock(id, blocked) {
+  if (blocked && !confirm('Tem certeza que deseja bloquear o acesso desse usuário?')) return;
   try {
     await api(`/api/admin/user/${id}/block`, { method: 'POST', body: JSON.stringify({ blocked }) });
-    showToast(blocked ? 'Usuario bloqueado' : 'Usuario desbloqueado');
+    showToast(blocked ? 'Conta bloqueada com sucesso' : 'Conta reativada');
     loadUsers();
   } catch (e) { showToast(e.message, 'error'); }
 }
@@ -501,15 +562,15 @@ async function loadInfluencers() {
     if (influencers.length === 0) { noEl.style.display = 'block'; } else { noEl.style.display = 'none'; }
     document.getElementById('influencersTable').innerHTML = influencers.map(u => `
       <tr>
-        <td><strong>${u.name}</strong> <span class="influencer-badge">INFLUENCER</span></td>
+        <td><strong>${u.name}</strong></td>
         <td>${u.email}</td>
         <td style="color:#00e676;font-weight:700">R$ ${fmt(u.balance)}</td>
-        <td style="color:#ffc107;font-weight:700">${u.influencer_win_rate || 0}%</td>
+        <td style="color:#ffc107;font-weight:700">${u.influencer_win_rate || 0}% Imunidade</td>
         <td>${u.total_games || 0}</td>
         <td class="admin-actions">
           <button class="btn btn-sm btn-accent" onclick="openBalanceModal(${u.id},'${u.name}',${u.balance})">💰 Saldo</button>
-          <button class="btn btn-sm" style="background:rgba(255,193,7,0.15);color:#ffc107" onclick="openInfluencerModal(${u.id},'${u.name}',true,${u.influencer_win_rate || 0})">⚙️ Editar</button>
-          <button class="btn btn-sm btn-danger" onclick="removeInfluencer(${u.id})">Remover</button>
+          <button class="btn btn-sm" style="background:rgba(255,193,7,0.15);color:#ffc107" onclick="openInfluencerModal(${u.id},'${u.name}',true,${u.influencer_win_rate || 0})">⚙️ Configurar</button>
+          <button class="btn btn-sm btn-danger" onclick="removeInfluencer(${u.id})">Remover Permissão</button>
         </td>
       </tr>
     `).join('');
@@ -517,9 +578,10 @@ async function loadInfluencers() {
 }
 
 async function removeInfluencer(id) {
+  if(!confirm('Retirar privilégios de influencer desta conta?')) return;
   try {
     await api(`/api/admin/user/${id}/influencer`, { method: 'POST', body: JSON.stringify({ is_influencer: false, win_rate: 0 }) });
-    showToast('Removido de influenciador');
+    showToast('Privilégio removido.');
     loadInfluencers();
   } catch (e) { showToast(e.message, 'error'); }
 }
@@ -542,27 +604,28 @@ function renderDeposits(deps) {
   document.getElementById('depositsTable').innerHTML = deps.map(d => `
     <tr>
       <td>#${d.id}</td>
-      <td><strong>${d.name}</strong><div class="user-detail">${d.email}</div></td>
-      <td style="color:#00e676;font-weight:700">R$ ${fmt(d.amount)}</td>
-      <td style="font-size:11px;font-family:monospace;color:#b388ff">${d.pix_code || '—'}</td>
+      <td><strong>${d.user_name || 'Usuário'}</strong><div class="user-detail">${d.user_email || ''}</div></td>
+      <td style="color:#00e676;font-weight:700;font-size:14px">R$ ${fmt(d.amount)}</td>
+      <td style="font-size:11px;font-family:monospace;color:#b388ff">${(d.pix_code||'').substring(0, 15)}...</td>
       <td>${statusBadge(d.status)}</td>
-      <td style="font-size:12px">${fmtDate(d.created_at)}</td>
+      <td style="font-size:11px;color:#a0a0c0">${fmtDate(d.created_at)}</td>
       <td class="admin-actions">
         ${d.status === 'pending' ? `
-          <button class="btn btn-sm btn-primary" onclick="approveDeposit(${d.id})">✅ Aprovar</button>
-          <button class="btn btn-sm btn-danger" onclick="rejectDeposit(${d.id})">❌ Rejeitar</button>
-        ` : fmtDate(d.approved_at)}
+          <button class="btn btn-sm btn-primary" onclick="approveDeposit(${d.id})">✅ Forçar</button>
+          <button class="btn btn-sm btn-danger" onclick="rejectDeposit(${d.id})">❌ Negar</button>
+        ` : `<span style="font-size:11px;color:#666">Automatizado/Fechado</span>`}
       </td>
     </tr>
-  `).join('') || '<tr><td colspan="7" style="text-align:center;color:#a0a0c0;padding:40px">Nenhum deposito</td></tr>';
+  `).join('') || '<tr><td colspan="7" style="text-align:center;color:#a0a0c0;padding:40px">Nenhuma transação na base</td></tr>';
 }
 
 async function approveDeposit(id) {
-  try { await api(`/api/admin/deposit/${id}/approve`, { method: 'POST' }); showToast('Deposito aprovado!'); loadDeposits(); loadDashboard(); } catch (e) { showToast(e.message, 'error'); }
+  if (!confirm('Aprovar depósito manualmente ignorando API PenguimPay?')) return;
+  try { await api(`/api/admin/deposit/${id}/approve`, { method: 'POST' }); showToast('Depósito creditado manualmente!'); loadDeposits(); loadDashboard(); } catch (e) { showToast(e.message, 'error'); }
 }
 async function rejectDeposit(id) {
-  if (!confirm('Rejeitar este deposito?')) return;
-  try { await api(`/api/admin/deposit/${id}/reject`, { method: 'POST' }); showToast('Deposito rejeitado'); loadDeposits(); } catch (e) { showToast(e.message, 'error'); }
+  if (!confirm('Rejeitar este depósito? Ele sumirá da pendência.')) return;
+  try { await api(`/api/admin/deposit/${id}/reject`, { method: 'POST' }); showToast('Depósito descartado.'); loadDeposits(); } catch (e) { showToast(e.message, 'error'); }
 }
 
 // ===== WITHDRAWALS =====
@@ -583,28 +646,29 @@ function renderWithdrawals(ws) {
   document.getElementById('withdrawalsTable').innerHTML = ws.map(w => `
     <tr>
       <td>#${w.id}</td>
-      <td><strong>${w.name}</strong><div class="user-detail">${w.email}</div></td>
-      <td style="color:#ff1744;font-weight:700">R$ ${fmt(w.amount)}</td>
-      <td style="font-family:monospace;font-size:12px">${w.pix_key}</td>
-      <td style="font-size:12px">${w.pix_type}</td>
+      <td><strong>${w.user_name || 'Usuário'}</strong><div class="user-detail">${w.user_email || ''}</div></td>
+      <td style="color:#ff1744;font-weight:900;font-size:15px">R$ ${fmt(w.amount)}</td>
+      <td style="font-family:monospace;font-size:12px;color:#fff">${w.pix_key}</td>
+      <td style="font-size:11px;color:#a0a0c0;text-transform:uppercase">${w.pix_type}</td>
       <td>${statusBadge(w.status)}</td>
-      <td style="font-size:12px">${fmtDate(w.created_at)}</td>
+      <td style="font-size:11px;color:#a0a0c0">${fmtDate(w.created_at)}</td>
       <td class="admin-actions">
         ${w.status === 'pending' ? `
-          <button class="btn btn-sm btn-primary" onclick="approveWithdrawal(${w.id})">✅ Pagar</button>
-          <button class="btn btn-sm btn-danger" onclick="rejectWithdrawal(${w.id})">❌ Rejeitar</button>
-        ` : '—'}
+          <button class="btn btn-sm btn-primary" onclick="approveWithdrawal(${w.id})">💸 Marcar Pago</button>
+          <button class="btn btn-sm btn-danger" onclick="rejectWithdrawal(${w.id})">❌ Estornar</button>
+        ` : `<span style="font-size:11px;color:#666">Concluído</span>`}
       </td>
     </tr>
-  `).join('') || '<tr><td colspan="8" style="text-align:center;color:#a0a0c0;padding:40px">Nenhum saque</td></tr>';
+  `).join('') || '<tr><td colspan="8" style="text-align:center;color:#a0a0c0;padding:40px">Nenhum saque solicitado ainda.</td></tr>';
 }
 
 async function approveWithdrawal(id) {
-  try { await api(`/api/admin/withdrawal/${id}/approve`, { method: 'POST' }); showToast('Saque aprovado!'); loadWithdrawals(); loadDashboard(); } catch (e) { showToast(e.message, 'error'); }
+  if (!confirm('Você já fez o PIX manualmente pelo seu banco para esta chave?')) return;
+  try { await api(`/api/admin/withdrawal/${id}/approve`, { method: 'POST' }); showToast('Marcado como pago no sistema!'); loadWithdrawals(); loadDashboard(); } catch (e) { showToast(e.message, 'error'); }
 }
 async function rejectWithdrawal(id) {
-  if (!confirm('Rejeitar saque? Valor sera devolvido.')) return;
-  try { await api(`/api/admin/withdrawal/${id}/reject`, { method: 'POST' }); showToast('Saque rejeitado'); loadWithdrawals(); } catch (e) { showToast(e.message, 'error'); }
+  if (!confirm('Estornar saque? O dinheiro vai voltar pro saldo do cliente.')) return;
+  try { await api(`/api/admin/withdrawal/${id}/reject`, { method: 'POST' }); showToast('Saque estornado para o jogador.'); loadWithdrawals(); } catch (e) { showToast(e.message, 'error'); }
 }
 
 // ===== GAMES =====
@@ -612,19 +676,18 @@ async function loadGames() {
   try {
     const gs = await api('/api/admin/games');
     document.getElementById('gamesTable').innerHTML = gs.map(g => {
-      const won = g.prize > g.bet_amount;
+      const won = g.prize > 0;
       return `<tr>
-        <td>#${g.id}</td>
-        <td>${g.name} ${g.is_influencer ? '<span class="influencer-badge">INF</span>' : ''}</td>
-        <td>${g.is_influencer ? '<span class="influencer-badge">INFLUENCER</span>' : '<span style="font-size:11px;color:#a0a0c0">Normal</span>'}</td>
-        <td>R$ ${fmt(g.bet_amount)}</td>
-        <td>${g.platforms_reached}</td>
-        <td>${g.multiplier ? g.multiplier.toFixed(2) + 'x' : '—'}</td>
-        <td style="color:${won ? '#00e676' : '#ff1744'};font-weight:700">R$ ${fmt(g.prize)}</td>
-        <td>${won ? '<span style="color:#00e676">GANHOU</span>' : '<span style="color:#ff1744">PERDEU</span>'}</td>
-        <td style="font-size:12px">${fmtDate(g.created_at)}</td>
+        <td style="font-size:11px;color:#666">#${g.id}</td>
+        <td><strong>${g.user_name || 'Desconhecido'}</strong></td>
+        <td style="font-size:13px">R$ ${fmt(g.bet_amount)}</td>
+        <td style="font-weight:700">${g.platforms_reached} pts</td>
+        <td style="color:#b388ff">${g.multiplier ? g.multiplier.toFixed(2) + 'x' : '—'}</td>
+        <td style="color:${won ? '#00e676' : '#ff1744'};font-weight:900">R$ ${fmt(g.prize)}</td>
+        <td>${won ? '<span class="status-badge status-approved">CASH OUT</span>' : '<span class="status-badge status-rejected">DERROTA</span>'}</td>
+        <td style="font-size:11px;color:#a0a0c0">${fmtDate(g.created_at)}</td>
       </tr>`;
-    }).join('') || '<tr><td colspan="9" style="text-align:center;color:#a0a0c0;padding:40px">Nenhum jogo</td></tr>';
+    }).join('') || '<tr><td colspan="8" style="text-align:center;color:#a0a0c0;padding:40px">O histórico de jogos está vazio.</td></tr>';
   } catch (e) { showToast(e.message, 'error'); }
 }
 
@@ -639,18 +702,24 @@ async function loadSettings() {
   } catch (e) { showToast(e.message, 'error'); }
 }
 
-// ===== ATUALIZADO: Lista de chaves agora inclui as variaveis novas de dificuldade =====
 async function saveSettings() {
-  const keys = ['min_deposit', 'min_withdrawal', 'max_multiplier', 'referral_bonus', 'house_edge', 'influencer_house_edge', 'site_name',
-    'game_platform_count', 'game_gravity', 'game_bounce_force', 'game_hole_segments', 
-    'game_danger_start_level', 'game_danger_progression', 'game_danger_max_slices', // As 3 variaveis novas
-    'game_rotation_sensitivity', 'game_platform_spacing', 'game_segments_per_platform'];
+  // Lista unificada das variáveis globais e para influenciadores
+  const keys = [
+    'min_deposit', 'min_withdrawal', 'max_multiplier', 'referral_bonus', 'house_edge', 'influencer_house_edge', 'site_name',
+    'game_platform_count', 'game_gravity', 'game_bounce_force', 'game_hole_segments', 'game_rotation_sensitivity', 'game_platform_spacing', 'game_segments_per_platform',
+    'game_danger_start_level', 'game_danger_progression', 'game_danger_max_slices',
+    'inf_game_danger_max_slices', 'inf_game_danger_start_level', 'inf_game_hole_segments'
+  ];
   
   const settings = {};
-  keys.forEach(k => { const el = document.getElementById('set-' + k); if (el && el.value) settings[k] = el.value; });
+  keys.forEach(k => { 
+      const el = document.getElementById('set-' + k); 
+      if (el && el.value !== "") settings[k] = el.value; 
+  });
+  
   try {
     await api('/api/admin/settings', { method: 'POST', body: JSON.stringify(settings) });
-    showToast('Configuracoes salvas!');
+    showToast('Sistema atualizado com os novos parâmetros!');
   } catch (e) { showToast(e.message, 'error'); }
 }
 
@@ -660,12 +729,11 @@ function adminLogout() {
   window.location.href = '/';
 }
 
-// Close modal on overlay click
+// Inicializadores e Listeners Extras
 document.getElementById('modal').addEventListener('click', (e) => {
   if (e.target === document.getElementById('modal')) closeModal();
 });
 
-// Load dashboard
 loadDashboard();
 </script>
 </body>
