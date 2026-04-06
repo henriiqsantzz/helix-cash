@@ -241,7 +241,7 @@ function closeGame() {
   loadUserData();
 }
 
-// ===================== DEPOSIT (PIX MODAL - UPDATED FOR PARADISE) =====================
+// ===================== DEPOSIT (PIX MODAL - PARADISE FIXED) =====================
 document.querySelectorAll('.amount-option[data-dep]').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.amount-option[data-dep]').forEach(b => b.classList.remove('active'));
@@ -267,25 +267,26 @@ document.getElementById('btnDeposit').addEventListener('click', async () => {
       method: 'POST', body: JSON.stringify({ amount, cpf })
     });
 
-    // Captura o deposit_id enviado pela bridge
     currentDepositId = data.deposit_id || (data.deposit ? data.deposit.id : null);
 
-    // Preenche o Modal com código PIX e QR Code
     const pixCode = data.pix_code || (data.deposit && data.deposit.pix_code) || 'Codigo indisponivel';
     const codeContainer = document.getElementById('pixCode');
     if (codeContainer) codeContainer.textContent = pixCode;
 
     const qrImg = document.getElementById('pixQrImage');
-    const qrLoading = document.getElementById('qrLoading'); // Referência ao carregando
+    const qrLoading = document.getElementById('qrLoading');
 
     if (qrImg) {
+      // Captura o campo exato vindo do seu gerar_deposito.php
       let qrSource = data.qr_code_image || (data.deposit && data.deposit.qr_code_image);
-      if (qrSource && qrSource.length > 10) {
-        // Paradise envia o Base64 que pode ou não conter o prefixo data:image
-        const cleanQr = qrSource.trim();
-        qrImg.src = cleanQr.startsWith('data:') ? cleanQr : ('data:image/png;base64,' + cleanQr);
+      
+      if (qrSource && qrSource.length > 20) {
+        // Limpa o Base64 removendo espaços em branco que a Paradise costuma enviar
+        qrSource = qrSource.replace(/\s/g, ''); 
         
-        // Esconde o texto "Carregando..." e mostra a imagem
+        // Verifica se precisa adicionar o prefixo data:image
+        qrImg.src = qrSource.startsWith('data:') ? qrSource : ('data:image/png;base64,' + qrSource);
+        
         if (qrLoading) qrLoading.style.display = 'none';
         qrImg.style.display = 'block';
       } else {
@@ -294,13 +295,11 @@ document.getElementById('btnDeposit').addEventListener('click', async () => {
       }
     }
 
-    // Abre o Modal do PIX
     const modal = document.getElementById('pixModal');
     if (modal) modal.classList.remove('hidden');
 
     showToast('PIX Paradise gerado!');
 
-    // Inicia verificação automática
     if (currentDepositId) {
       if (depositCheckInterval) clearInterval(depositCheckInterval);
       depositCheckInterval = setInterval(checkDepositStatus, 5000);
