@@ -171,7 +171,7 @@
         <p style="color:#a0a0c0">Gerencie links de convite e comissões.</p>
         <div class="table-responsive">
             <table class="admin-table">
-              <thead><tr><th>Influenciador</th><th>Código</th><th>Comissão (%)</th><th>Indicados</th><th>Ganhos</th></tr></thead>
+              <thead><tr><th>Influenciador</th><th>Código</th><th>Link de Convite</th><th>Indicados</th><th>Ganhos</th></tr></thead>
               <tbody id="affiliatesTable"></tbody>
             </table>
         </div>
@@ -319,6 +319,37 @@ function renderInfluencers(infs) {
   `).join('');
 }
 
+// AFILIADOS
+async function loadAffiliates() {
+  try {
+    const affs = await api('/api/admin/affiliates');
+    const table = document.getElementById('affiliatesTable');
+    if (affs.length === 0) {
+      table.innerHTML = '<tr><td colspan="5" style="text-align:center">Nenhum influenciador encontrado.</td></tr>';
+      return;
+    }
+    table.innerHTML = affs.map(a => `
+      <tr>
+        <td><strong style="color:#b388ff">${a.name}</strong></td>
+        <td><code style="background:rgba(124,77,255,0.1);padding:4px 8px;border-radius:4px">${a.code}</code></td>
+        <td>
+          <input type="text" readonly value="${a.link}" class="form-input" style="font-size:11px; padding:5px; width:180px; display:inline-block" id="link-${a.code}">
+          <button class="btn btn-sm" onclick="copyLink('${a.code}')">Copiar</button>
+        </td>
+        <td style="text-align:center; font-weight:bold">${a.count}</td>
+        <td class="green">R$ ${fmt(a.earnings)}</td>
+      </tr>
+    `).join('');
+  } catch (e) { console.error(e); }
+}
+
+function copyLink(code) {
+  const input = document.getElementById('link-' + code);
+  input.select();
+  document.execCommand('copy');
+  alert('Link de afiliado copiado!');
+}
+
 function filterUsers() {
   const q = document.getElementById('searchUsers').value.toLowerCase();
   renderUsers(cacheUsers.filter(u => u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q)));
@@ -333,6 +364,7 @@ function openEdit(id) {
     <div style="margin:15px 0; display:flex; gap:15px">
       <label><input type="checkbox" id="m-isadmin" ${u.is_admin ? 'checked' : ''}> Admin</label>
       <label><input type="checkbox" id="m-isinf" ${u.is_influencer ? 'checked' : ''}> Influencer</label>
+      <label><input type="checkbox" id="m-isblocked" ${u.is_blocked ? 'checked' : ''}> Bloqueado</label>
     </div>
     <div style="display:flex; gap:10px">
       <button class="btn btn-primary" style="flex:1" onclick="saveUser(${u.id})">Salvar</button>
@@ -343,7 +375,14 @@ function openEdit(id) {
 }
 
 async function saveUser(id) {
-  const body = { id, balance: document.getElementById('m-balance').value, influencer_win_rate: document.getElementById('m-winrate').value, is_admin: document.getElementById('m-isadmin').checked, is_influencer: document.getElementById('m-isinf').checked };
+  const body = { 
+    id, 
+    balance: document.getElementById('m-balance').value, 
+    influencer_win_rate: document.getElementById('m-winrate').value, 
+    is_admin: document.getElementById('m-isadmin').checked, 
+    is_influencer: document.getElementById('m-isinf').checked,
+    is_blocked: document.getElementById('m-isblocked').checked 
+  };
   await api('/api/admin/user/update', { method: 'POST', body: JSON.stringify(body) });
   closeModal(); loadUsers();
 }
@@ -394,7 +433,8 @@ document.querySelectorAll('.admin-nav-item').forEach(btn => {
     document.getElementById('section-' + btn.dataset.section).classList.add('active');
     
     if (btn.dataset.section === 'dashboard') loadDashboard();
-    if (btn.dataset.section === 'users') loadUsers();
+    if (btn.dataset.section === 'users' || btn.dataset.section === 'influencers') loadUsers();
+    if (btn.dataset.section === 'affiliates') loadAffiliates();
     if (['deposits', 'withdrawals', 'games'].includes(btn.dataset.section)) loadFinancial();
     if (btn.dataset.section === 'settings') loadSettings();
   };
