@@ -1,16 +1,16 @@
 // ===================== HELIX JUMP 3D GAME =====================
-// Three.js WebGL Helix Jump - 100% Original Perspective
+// Three.js WebGL Helix Jump - Física e Câmera Corrigidas
 (function() {
   'use strict';
 
-  // CONFIGURAÇÕES IDÊNTICAS AO HELIX JUMP ORIGINAL (Visão de abismo)
+  // CONFIGURAÇÕES CORRIGIDAS (Câmera distante, FOV baixo para não distorcer)
   var CONFIG = {
     platformCount: 30,
-    platformSpacing: 2.5,
-    platformOuterRadius: 2.4,
-    platformInnerRadius: 0.6,
+    platformSpacing: 2.2,
+    platformOuterRadius: 3.0, // Plataforma mais larga
+    platformInnerRadius: 0.5,
     platformHeight: 0.35,
-    postRadius: 0.6,
+    postRadius: 0.5,          // Pilar proporcional
     postHeight: 200,
     ballRadius: 0.35,
     ballBounceForce: 0.22,
@@ -18,12 +18,12 @@
     segmentsPerPlatform: 12,
     holeSegments: 2,
     
-    // === O SEGREDO DA CÂMERA E DO PILAR INFINITO ===
-    cameraFov: 75,            // Campo de visão bem aberto para dar profundidade
-    cameraDistance: 6.2,      // Distância horizontal mais justa com o pilar
-    cameraHeight: 5.8,        // Altura da câmera bem acima da bola
-    cameraOffsetDown: 10.0,   // Força a câmera a olhar BEM para baixo (Joga a bola pro topo da tela)
-    postExtraTop: 50.0,       // Faz o pilar subir 50 metros a mais (nunca vai aparecer o topo na tela)
+    // === A MÁGICA DA CÂMERA (CORRIGIDA) ===
+    cameraFov: 45,            // FOV menor tira o efeito "olho de peixe" bizarro
+    cameraDistance: 14.0,     // Câmera BEM mais para trás
+    cameraHeight: 6.0,        // Câmera posicionada bem acima da bola
+    cameraOffsetDown: 4.0,    // Foca um pouco abaixo da bola (mostra o abismo sem quebrar o jogo)
+    postExtraTop: 20.0,       // Pilar longo o suficiente pra vazar a tela pra cima
     
     cameraFollowSpeed: 0.08,
     rotationSensitivity: 0.008,
@@ -119,7 +119,7 @@
     createPlatforms();
     createBall();
 
-    // AJUSTE: Câmera nasce com as novas proporções de "abismo"
+    // AJUSTE: Câmera posicionada de forma limpa, focada no ponto certo
     camera.position.set(0, ballWorldY + CONFIG.cameraHeight, CONFIG.cameraDistance);
     camera.lookAt(0, ballWorldY - CONFIG.cameraOffsetDown, 0);
     cameraTargetY = ballWorldY + CONFIG.cameraHeight;
@@ -150,7 +150,6 @@
     var mat = new THREE.MeshStandardMaterial({ color: pal.pole, roughness: 0.3, metalness: 0.1 });
     postMesh = new THREE.Mesh(geo, mat);
     
-    // Pilar infinito pra cima
     postMesh.position.y = (-CONFIG.postHeight / 2) + CONFIG.postExtraTop;
     postMesh.receiveShadow = true;
     postMesh.castShadow = true;
@@ -163,7 +162,6 @@
     var capMat = new THREE.MeshStandardMaterial({ color: pal.topCap, roughness: 0.3, metalness: 0.1 });
     topCapMesh = new THREE.Mesh(capGeo, capMat);
     
-    // Topo escondido lá em cima, fora da visão da câmera
     topCapMesh.position.y = CONFIG.postExtraTop; 
     helixGroup.add(topCapMesh);
   }
@@ -444,10 +442,10 @@
       if (ballWorldY < -(CONFIG.platformCount + 2) * CONFIG.platformSpacing) triggerGameOver();
     }
 
-    // AJUSTE CÂMERA: Mantém a inclinação de abismo enquanto cai
     if (camera && gamePhase !== 'ready') {
       cameraTargetY = ballWorldY + CONFIG.cameraHeight;
       camera.position.y += (cameraTargetY - camera.position.y) * CONFIG.cameraFollowSpeed;
+      // AJUSTE: Mantém a câmera olhando de forma estável pro centro, sem virar de ponta cabeça
       camera.lookAt(0, camera.position.y - CONFIG.cameraHeight - CONFIG.cameraOffsetDown, 0);
     }
 
