@@ -271,7 +271,7 @@ module.exports = async function handler(req, res) {
         balance: num(user.balance),
         bonus_balance: num(user.bonus_balance),
         referral_code: user.referral_code,
-        is_admin: user.is_admin, // CRITICAL: Envia para o index.html
+        is_admin: user.is_admin,
         is_influencer: user.is_influencer,
         referrals: db.users.filter(function (u) { return u.referred_by === user.referral_code; }).length
       });
@@ -453,8 +453,6 @@ module.exports = async function handler(req, res) {
     }
 
     // ==================== ADMIN: DASHBOARD ROBUSTA ====================
-    var isAdminUser = (req) => { var u = getUser(db, req); return u && u.is_admin ? u : null; };
-
     if (url === '/api/admin/dashboard' && method === 'GET') {
       if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
       
