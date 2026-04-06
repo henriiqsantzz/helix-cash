@@ -452,6 +452,9 @@ module.exports = async function handler(req, res) {
       return respond(res, 200, { result: result, prize: prize, new_balance: num(user.balance) });
     }
 
+    // ==================== ADMIN HELPERS ====================
+    var isAdminUser = (req) => { var u = getUser(db, req); return u && u.is_admin ? u : null; };
+
     // ==================== ADMIN: DASHBOARD ROBUSTA ====================
     if (url === '/api/admin/dashboard' && method === 'GET') {
       if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
@@ -486,11 +489,12 @@ module.exports = async function handler(req, res) {
       return respond(res, 200, db.users.filter(u => !u.is_admin || u.id !== 1));
     }
 
-    // ROTA PARA O MODAL UPDATE
+    // ROTA PARA O MODAL UPDATE (RESOLVENDO 404)
     if (url === '/api/admin/user/update' && method === 'POST') {
       if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
       var body = await parseBody(req);
-      var target = db.users.find(u => u.id === parseInt(body.id));
+      var targetId = parseInt(body.id);
+      var target = db.users.find(u => u.id === targetId);
       if (!target) return respond(res, 404, { error: 'Usuario nao encontrado' });
 
       if (body.balance !== undefined) target.balance = num(body.balance);
@@ -558,7 +562,12 @@ module.exports = async function handler(req, res) {
       }));
     }
 
-    // ==================== ADMIN: CONFIGURAÇÕES ====================
+    // ==================== ADMIN: CONFIGURAÇÕES (RESOLVENDO CAMPOS VAZIOS) ====================
+    if (url === '/api/admin/settings' && method === 'GET') {
+      if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
+      return respond(res, 200, db.settings || {});
+    }
+
     if (url === '/api/admin/settings' && method === 'POST') {
       if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
       var body = await parseBody(req);
@@ -571,6 +580,6 @@ module.exports = async function handler(req, res) {
 
   } catch (err) {
     console.error('API Error:', err);
-    return respond(res, 500, { error: 'Erro interno no servidor' });
+    return respond(res, 500, { error: 'Erro interno no servidor: ' + err.message });
   }
 };
