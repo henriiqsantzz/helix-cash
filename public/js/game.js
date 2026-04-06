@@ -1,16 +1,16 @@
 // ===================== HELIX JUMP 3D GAME =====================
-// Three.js WebGL Helix Jump - Blindado contra Atrasos de Clique (DevTools/Mobile)
+// Three.js WebGL Helix Jump - Modo Infinito com Dificuldade via Admin
 (function() {
   'use strict';
 
   var CONFIG = {
-    platformCount: 30,
+    platformCount: 30, // Quantidade de plataformas visíveis simultaneamente
     platformSpacing: 2.2,
     platformOuterRadius: 2.2,
     platformInnerRadius: 0.5,
     platformHeight: 0.35,
     postRadius: 0.5,
-    postHeight: 200,
+    postHeight: 5000, // Poste estendido para permitir descida infinita
     ballRadius: 0.30,
     ballBounceForce: 0.22,
     gravity: 0.015,
@@ -53,6 +53,7 @@
   var ballVelY = 0, ballWorldY = 0;
   var isDragging = false, lastDragX = 0, helixRotation = 0;
   var cameraTargetY = 0, hudContainer = null;
+  var lastGeneratedPlatformIndex = 0; // Controle para geração infinita
 
   window.startHelixGame = function(bet, serverConfig) {
     if (serverConfig) {
@@ -73,6 +74,7 @@
     gameActive = true; prizeAmount = 0; comboCount = 0; comboTimer = 0;
     currentPaletteIndex = 0; gamePhase = 'ready'; helixRotation = 0;
     splashParticles = [];
+    lastGeneratedPlatformIndex = 0;
     initGame(); animate();
   };
 
@@ -129,7 +131,7 @@
     var H = container.clientHeight || window.innerHeight;
 
     scene = new THREE.Scene();
-    camera = new THREE.PerspectiveCamera(CONFIG.cameraFov, W / H, 0.1, 1000);
+    camera = new THREE.PerspectiveCamera(CONFIG.cameraFov, W / H, 0.1, 5000);
     
     renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: false });
     renderer.setSize(W, H);
@@ -161,7 +163,12 @@
 
     createPost();
     createTopCap();
-    createPlatforms();
+    
+    // Inicia com as primeiras plataformas visíveis
+    for (var i = 0; i < 20; i++) {
+      generateSinglePlatform(i);
+    }
+    
     createBall();
 
     camera.position.set(0, ballWorldY + CONFIG.cameraHeight, CONFIG.cameraDistance);
@@ -210,6 +217,60 @@
     helixGroup.add(topCapMesh);
   }
 
+  function generateSinglePlatform(index) {
+    var pal = PALETTES[currentPaletteIndex];
+    var y = -index * CONFIG.platformSpacing;
+    var segAngle = (Math.PI * 2) / CONFIG.segmentsPerPlatform;
+    var holeArc = CONFIG.holeSegments * segAngle;
+    var holeStart = Math.random() * Math.PI * 2;
+    var holeEnd = holeStart + holeArc;
+
+    var pData = {
+      y: y, holeStart: holeStart, holeSize: holeArc,
+      passed: false, segments: [],
+      group: new THREE.Group(),
+      index: index
+    };
+    pData.group.position.y = y;
+    helixGroup.add(pData.group);
+
+    var dangerSlicesCount = 0;
+    if (index >= CONFIG.dangerStartLevel) {
+      var andaresDeRisco = index - CONFIG.dangerStartLevel;
+      var minRed = Math.floor(andaresDeRisco / CONFIG.dangerProgression);
+      dangerSlicesCount = Math.min(CONFIG.dangerMaxSlices, minRed + Math.floor(Math.random() * 3));
+    }
+
+    var validIndices = [];
+    for (var s = 0; s < CONFIG.segmentsPerPlatform; s++) {
+      var sMid = (s * segAngle) + segAngle / 2;
+      if (!isAngleInRange(sMid, holeStart, holeEnd)) {
+        validIndices.push(s);
+      }
+    }
+
+    var shuffled = validIndices.sort(function() { return 0.5 - Math.random() });
+    var dangerIndices = shuffled.slice(0, dangerSlicesCount);
+
+    for (var s = 0; s < CONFIG.segmentsPerPlatform; s++) {
+      var sStart = s * segAngle;
+      if (isAngleInRange(sStart + segAngle / 2, holeStart, holeEnd)) continue;
+
+      var isDanger = dangerIndices.includes(s);
+      var col = isDanger ? pal.killer : (s % 2 === 0 ? pal.platforms : pal.alt);
+      var mesh = createRingSegment(CONFIG.platformInnerRadius, CONFIG.platformOuterRadius, CONFIG.platformHeight, sStart, segAngle, col);
+      
+      if(isDanger) {
+        mesh.material.emissive = new THREE.Color(pal.killer);
+        mesh.material.emissiveIntensity = 0.2;
+      }
+      pData.group.add(mesh);
+      pData.segments.push({ mesh: mesh, startAngle: sStart, endAngle: sStart + segAngle, isKiller: isDanger });
+    }
+    platforms.push(pData);
+    lastGeneratedPlatformIndex = index;
+  }
+
   function createRingSegment(innerR, outerR, height, startAngle, arcAngle, color) {
     var shape = new THREE.Shape();
     shape.absarc(0, 0, outerR, startAngle, startAngle + arcAngle, false);
@@ -234,75 +295,6 @@
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     return mesh;
-  }
-
-  function createPlatforms() {
-    platforms = [];
-    var pal = PALETTES[currentPaletteIndex];
-    var segAngle = (Math.PI * 2) / CONFIG.segmentsPerPlatform;
-    var holeArc = CONFIG.holeSegments * segAngle;
-
-    for (var i = 0; i < CONFIG.platformCount; i++) {
-      var y = -i * CONFIG.platformSpacing; 
-      var holeStart = Math.random() * Math.PI * 2;
-      var holeEnd = holeStart + holeArc;
-
-      var pData = {
-        y: y, holeStart: holeStart, holeSize: holeArc,
-        passed: false, segments: [],
-        group: new THREE.Group()
-      };
-      pData.group.position.y = y;
-      helixGroup.add(pData.group);
-
-      var dangerSlicesCount = 0;
-      if (i >= CONFIG.dangerStartLevel) { 
-        var andaresDeRisco = i - CONFIG.dangerStartLevel;
-        var minRed = Math.floor(andaresDeRisco / CONFIG.dangerProgression); 
-        var maxRed = minRed + 2; 
-        
-        dangerSlicesCount = minRed + Math.floor(Math.random() * (maxRed - minRed + 1));
-        if (dangerSlicesCount > CONFIG.dangerMaxSlices) {
-            dangerSlicesCount = CONFIG.dangerMaxSlices; 
-        }
-      }
-
-      var validSegmentsIndices = [];
-      for (var s = 0; s < CONFIG.segmentsPerPlatform; s++) {
-        var sStart = s * segAngle;
-        var sMid = sStart + segAngle / 2;
-        if (!isAngleInRange(sMid, holeStart, holeEnd)) {
-          validSegmentsIndices.push(s);
-        }
-      }
-
-      var shuffled = validSegmentsIndices.sort(function() { return 0.5 - Math.random() });
-      var dangerIndices = shuffled.slice(0, dangerSlicesCount);
-
-      for (var s = 0; s < CONFIG.segmentsPerPlatform; s++) {
-        var sStart = s * segAngle;
-        var sMid = sStart + segAngle / 2;
-        
-        if (isAngleInRange(sMid, holeStart, holeEnd)) continue;
-
-        var isDanger = dangerIndices.includes(s);
-        var col = isDanger ? pal.killer : (s % 2 === 0 ? pal.platforms : pal.alt);
-        
-        var mesh = createRingSegment(
-          CONFIG.platformInnerRadius, CONFIG.platformOuterRadius,
-          CONFIG.platformHeight, sStart, segAngle, col
-        );
-        
-        if(isDanger) {
-            mesh.material.emissive = new THREE.Color(pal.killer);
-            mesh.material.emissiveIntensity = 0.2;
-        }
-
-        pData.group.add(mesh);
-        pData.segments.push({ mesh: mesh, startAngle: sStart, endAngle: sStart + segAngle, isKiller: isDanger });
-      }
-      platforms.push(pData);
-    }
   }
 
   function createBall() {
@@ -440,15 +432,12 @@
     if (pc) pc.textContent = platformsPassed;
   }
 
-  // CÁLCULO DINÂMICO E PRECISO DO PRÊMIO
   function calcPrize() {
     if (platformsPassed <= 0) return 0;
     var totalMultiplier = 0;
     for (var i = 0; i < platformsPassed; i++) {
-      // Regra de ganho progressivo: Plataforma 1 (0.15), Plataforma 2 (0.20)...
       totalMultiplier += 0.15 + (i * 0.05);
     }
-    // Retorna o valor exato arredondado para centavos (2 casas decimais)
     return Math.round(betAmount * totalMultiplier * 100) / 100;
   }
 
@@ -548,8 +537,18 @@
       if (comboTimer > 0) { comboTimer--; if (comboTimer <= 0) comboCount = 0; }
       checkCollisions();
       
-      if (ballWorldY < -(CONFIG.platformCount + 1) * CONFIG.platformSpacing) {
-          window.helixGameCashOut();
+      // GERAÇÃO INFINITA: Se a bolinha se aproximar do fim das plataformas atuais, gera mais
+      if (Math.abs(ballWorldY) > (lastGeneratedPlatformIndex - 10) * CONFIG.platformSpacing) {
+          generateSinglePlatform(lastGeneratedPlatformIndex + 1);
+      }
+
+      // LIMPEZA: Remove plataformas que ficaram muito para cima para otimizar performance
+      for (var i = platforms.length - 1; i >= 0; i--) {
+          if (platforms[i].y > ballWorldY + 15) {
+              helixGroup.remove(platforms[i].group);
+              platforms[i].group.traverse(obj => { if(obj.geometry) obj.geometry.dispose(); if(obj.material) obj.material.dispose(); });
+              platforms.splice(i, 1);
+          }
       }
     }
 
@@ -568,56 +567,34 @@
 
   function checkCollisions() {
     if (ballVelY <= 0) return;
-
     var ballAngle = normAngle((3 * Math.PI / 2) - helixRotation);
-
     for (var i = 0; i < platforms.length; i++) {
       var p = platforms[i];
       if (p.passed) continue;
-
       var platTop = p.y + CONFIG.platformHeight / 2;
       var platBottom = p.y - CONFIG.platformHeight / 2;
-
       if (ballWorldY <= platTop + (CONFIG.ballRadius * 0.5) && ballWorldY >= platBottom && ballVelY > 0) {
-        var hEnd = p.holeStart + p.holeSize;
-        var inHole = isAngleInRange(ballAngle, p.holeStart, hEnd);
-
+        var inHole = isAngleInRange(ballAngle, p.holeStart, p.holeStart + p.holeSize);
         if (inHole) {
           p.passed = true;
           platformsPassed++;
           comboCount++; comboTimer = 60;
           if (comboCount >= 3) showCombo(comboCount);
-
           var oldP = prizeAmount;
           var newP = calcPrize();
           showScorePopup('+R$ ' + fmtBRL(newP - oldP));
-
           p.segments.forEach(function(seg) { seg.mesh.material.transparent = true; seg.mesh.material.opacity = 0.2; });
           createSplash(p.y);
-
           if (typeof onPlatformPassed === 'function') onPlatformPassed(platformsPassed);
         } else {
-          
-          var hitDanger = false;
-          for (var s = 0; s < p.segments.length; s++) {
-            var seg = p.segments[s];
-            if (isAngleInRange(ballAngle, seg.startAngle, seg.endAngle)) {
-              if (seg.isKiller) {
-                  hitDanger = true;
-              }
-              break;
-            }
-          }
-
+          var hitDanger = p.segments.some(seg => seg.isKiller && isAngleInRange(ballAngle, seg.startAngle, seg.endAngle));
           if (hitDanger) { 
             triggerGameOver(); 
             return; 
           }
-
           ballWorldY = platTop + CONFIG.ballRadius;
           ballVelY = -CONFIG.ballBounceForce;
           comboCount = 0; comboTimer = 0;
-          
           if (ballMesh) {
             ballMesh.scale.set(1.3, 0.6, 1.3);
             setTimeout(function(){ if(ballMesh) ballMesh.scale.set(1,1,1); }, 100);
@@ -630,16 +607,11 @@
 
   function triggerGameOver() {
     if (gamePhase === 'gameover') return;
-    
-    // Captura o score, mas ZERA o prêmio final (perdeu na fatia escura)
     var finalScore = platformsPassed;
     var finalPrize = 0; 
-    
     gamePhase = 'gameover'; 
-    
     var cb = document.getElementById('hud-cashout');
     if (cb) cb.style.display = 'none';
-    
     setTimeout(function() {
       gameActive = false;
       if (typeof window.onGameEnd === 'function') window.onGameEnd(finalScore, false, finalPrize);
