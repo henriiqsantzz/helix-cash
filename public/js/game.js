@@ -1,33 +1,32 @@
 // ===================== HELIX JUMP 3D GAME =====================
-// Three.js WebGL Helix Jump - Enquadramento Mobile Perfeito
+// Three.js WebGL Helix Jump - Dificuldade Progressiva e Justa
 (function() {
   'use strict';
 
-  // CONFIGURAÇÕES CORRIGIDAS (Plataforma menor para caber na tela e câmera ajustada)
   var CONFIG = {
     platformCount: 30,
     platformSpacing: 2.2,
-    platformOuterRadius: 2.2, // Reduzido (era 3.0) para NÃO cortar nas laterais do celular
+    platformOuterRadius: 2.2,
     platformInnerRadius: 0.5,
     platformHeight: 0.35,
     postRadius: 0.5,
     postHeight: 200,
-    ballRadius: 0.30,         // Bola levemente menor para manter proporção
+    ballRadius: 0.30,
     ballBounceForce: 0.22,
     gravity: 0.015,
-    segmentsPerPlatform: 12,
-    holeSegments: 2,
+    segmentsPerPlatform: 12, // Plataforma dividida em 12 fatias de pizza
+    holeSegments: 2,         // O buraco ocupa 2 fatias
     
-    // === CÂMERA E ENQUADRAMENTO ===
-    cameraFov: 60,            // Ângulo natural
-    cameraDistance: 11.0,     // Longe o suficiente para ver toda a largura
-    cameraHeight: 6.5,        // Altura da câmera
-    cameraOffsetDown: 3.5,    // Olha um pouco para baixo
-    postExtraTop: 20.0,       // Mantém o pilar subindo infinito
+    // CÂMERA E ENQUADRAMENTO
+    cameraFov: 60,
+    cameraDistance: 11.0,
+    cameraHeight: 6.5,
+    cameraOffsetDown: 3.5,
+    postExtraTop: 20.0,
     
     cameraFollowSpeed: 0.08,
     rotationSensitivity: 0.008,
-    dangerChance: 0.12,
+    dangerChance: 0.12, // (Não é mais usado de forma fixa, substituído pela progressão dinâmica)
     targetMultiplier: 8,
     latheSegments: 32
   };
@@ -166,13 +165,25 @@
   }
 
   function createRingSegment(innerR, outerR, height, startAngle, arcAngle, color) {
-    var pts = [
-      new THREE.Vector2(innerR, -height / 2),
-      new THREE.Vector2(outerR, -height / 2),
-      new THREE.Vector2(outerR, height / 2),
-      new THREE.Vector2(innerR, height / 2)
-    ];
-    var geo = new THREE.LatheGeometry(pts, CONFIG.latheSegments, startAngle, arcAngle);
+    var shape = new THREE.Shape();
+    shape.absarc(0, 0, outerR, startAngle, startAngle + arcAngle, false);
+    shape.absarc(0, 0, innerR, startAngle + arcAngle, startAngle, true);
+
+    var bevelThickness = 0.04;
+    var extrudeSettings = {
+      depth: height - (bevelThickness * 2),
+      bevelEnabled: true,
+      bevelThickness: bevelThickness,
+      bevelSize: 0.04,
+      bevelSegments: 3,
+      curveSegments: 24
+    };
+
+    var geo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+    
+    geo.rotateX(-Math.PI / 2); 
+    geo.translate(0, - (extrudeSettings.depth / 2), 0);
+
     var mat = new THREE.MeshStandardMaterial({ color: color, roughness: 0.4, metalness: 0.1 });
     var mesh = new THREE.Mesh(geo, mat);
     mesh.castShadow = true;
@@ -180,6 +191,7 @@
     return mesh;
   }
 
+  // === AQUI ESTÁ A LÓGICA DINÂMICA E PROGRESSIVA DAS PLATAFORMAS VERMELHAS ===
   function createPlatforms() {
     platforms = [];
     var pal = PALETTES[currentPaletteIndex];
@@ -189,22 +201,52 @@
     for (var i = 0; i < CONFIG.platformCount; i++) {
       var y = -i * CONFIG.platformSpacing; 
       var holeStart = Math.random() * Math.PI * 2;
-      var isDanger = i > 1 && Math.random() < CONFIG.dangerChance;
+      var holeEnd = holeStart + holeArc;
 
       var pData = {
         y: y, holeStart: holeStart, holeSize: holeArc,
-        isDanger: isDanger, passed: false, segments: [],
+        passed: false, segments: [],
         group: new THREE.Group()
       };
       pData.group.position.y = y;
       helixGroup.add(pData.group);
 
-      var holeEnd = holeStart + holeArc;
+      // 1. Descobre quantas fatias vão ser perigosas baseada no andar (Dificuldade Progressiva)
+      var dangerSlicesCount = 0;
+      if (i > 1) { // Os 2 primeiros andares são 100% seguros
+        var minRed = Math.floor(i / 6); // Aumenta 1 vermelha no mínimo a cada 6 andares
+        var maxRed = Math.floor(i / 3) + 1; // Máximo vai subindo gradativamente
+        
+        dangerSlicesCount = minRed + Math.floor(Math.random() * (maxRed - minRed + 1));
+        
+        // Garante que nunca vai passar de 6 fatias vermelhas para ser impossível de passar
+        if (dangerSlicesCount > 6) dangerSlicesCount = 6; 
+      }
 
+      // 2. Mapeia quais fatias existem (tirando as do buraco)
+      var validSegmentsIndices = [];
       for (var s = 0; s < CONFIG.segmentsPerPlatform; s++) {
         var sStart = s * segAngle;
         var sMid = sStart + segAngle / 2;
+        if (!isAngleInRange(sMid, holeStart, holeEnd)) {
+          validSegmentsIndices.push(s);
+        }
+      }
+
+      // 3. Embaralha as fatias válidas e escolhe as que vão ficar vermelhas
+      var shuffled = validSegmentsIndices.sort(function() { return 0.5 - Math.random() });
+      var dangerIndices = shuffled.slice(0, dangerSlicesCount);
+
+      // 4. Constrói a plataforma aplicando as cores
+      for (var s = 0; s < CONFIG.segmentsPerPlatform; s++) {
+        var sStart = s * segAngle;
+        var sMid = sStart + segAngle / 2;
+        
+        // Se a fatia cair no espaço do buraco, não constrói nada
         if (isAngleInRange(sMid, holeStart, holeEnd)) continue;
+
+        // Checa se a fatia atual foi sorteada pra ser vermelha (perigo)
+        var isDanger = dangerIndices.includes(s);
 
         var col = isDanger ? pal.killer : (s % 2 === 0 ? pal.platforms : pal.alt);
         var mesh = createRingSegment(
@@ -214,7 +256,7 @@
         
         if(isDanger) {
             mesh.material.emissive = new THREE.Color(pal.killer);
-            mesh.material.emissiveIntensity = 0.2;
+            mesh.material.emissiveIntensity = 0.2; // Efeito neon na vermelha
         }
 
         pData.group.add(mesh);
