@@ -310,9 +310,9 @@ module.exports = async function handler(req, res) {
           amount: num(body.amount),
           method: 'pix', 
           status: 'pending', 
-          pix_code: dataFromPhp.pix_code,
+          pix_code: dataFromPhp.pix_code, // Nome que vem do seu PHP
           transaction_id: dataFromPhp.transaction_id, 
-          qr_code_image: dataFromPhp.qr_code_image,
+          qr_code_image: dataFromPhp.qr_code_image || dataFromPhp.qr_code_base64 || "", // Tenta os dois nomes
           created_at: new Date().toISOString(), 
           updated_at: new Date().toISOString()
         };
