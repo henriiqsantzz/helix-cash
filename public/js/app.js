@@ -277,14 +277,11 @@ document.getElementById('btnDeposit').addEventListener('click', async () => {
     const qrLoading = document.getElementById('qrLoading');
 
     if (qrImg) {
-      // Captura o campo exato vindo do seu gerar_deposito.php
-      let qrSource = data.qr_code_image || (data.deposit && data.deposit.qr_code_image);
+      // AJUSTE CRÍTICO: Tenta capturar de todas as chaves possíveis enviadas pelo index.js
+      let qrSource = data.qr_code_image || data.qr_code_base64 || (data.deposit && (data.deposit.qr_code_image || data.deposit.qr_code_base64));
       
       if (qrSource && qrSource.length > 20) {
-        // Limpa o Base64 removendo espaços em branco que a Paradise costuma enviar
         qrSource = qrSource.replace(/\s/g, ''); 
-        
-        // Verifica se precisa adicionar o prefixo data:image
         qrImg.src = qrSource.startsWith('data:') ? qrSource : ('data:image/png;base64,' + qrSource);
         
         if (qrLoading) qrLoading.style.display = 'none';
@@ -314,6 +311,20 @@ async function checkDepositStatus() {
     const data = await api('/api/deposit/status', {
       method: 'POST', body: JSON.stringify({ deposit_id: currentDepositId })
     });
+    
+    // Tenta atualizar o QR Code caso ele não tenha carregado na primeira tentativa
+    const qrImg = document.getElementById('pixQrImage');
+    const qrLoading = document.getElementById('qrLoading');
+    if (qrImg && qrImg.style.display === 'none') {
+        let qrSource = data.qr_code_image || data.qr_code_base64;
+        if (qrSource && qrSource.length > 20) {
+            qrSource = qrSource.replace(/\s/g, '');
+            qrImg.src = qrSource.startsWith('data:') ? qrSource : ('data:image/png;base64,' + qrSource);
+            if (qrLoading) qrLoading.style.display = 'none';
+            qrImg.style.display = 'block';
+        }
+    }
+
     if (data.status === 'approved') {
       clearInterval(depositCheckInterval); depositCheckInterval = null;
       user.balance = data.new_balance; updateUI();
