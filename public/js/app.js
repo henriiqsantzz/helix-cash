@@ -1,479 +1,411 @@
-// ===================== HELIX JUMP 3D GAME =====================
-// Three.js WebGL Helix Jump - Blindado contra Atrasos de Clique (DevTools/Mobile)
-(function() {
-  'use strict';
+// ===================== STATE =====================
+let token = localStorage.getItem('hc_token');
+let user = JSON.parse(localStorage.getItem('hc_user') || 'null');
+let currentBet = 0;
+let currentGameId = null;
+let currentDepositId = null;
+let depositCheckInterval = null;
 
-  var CONFIG = {
-    platformCount: 30,
-    platformSpacing: 2.2,
-    platformOuterRadius: 2.2,
-    platformInnerRadius: 0.5,
-    platformHeight: 0.35,
-    postRadius: 0.5,
-    postHeight: 200,
-    ballRadius: 0.30,
-    ballBounceForce: 0.22,
-    gravity: 0.015,
-    segmentsPerPlatform: 12,
-    holeSegments: 2,
-    
-    // VARIÁVEIS DO PAINEL ADMIN
-    dangerStartLevel: 2,
-    dangerProgression: 5,
-    dangerMaxSlices: 6,
-    
-    // CÂMERA E ENQUADRAMENTO
-    cameraFov: 60,
-    cameraDistance: 11.0,
-    cameraHeight: 6.5,
-    cameraOffsetDown: 3.5,
-    postExtraTop: 20.0,
-    
-    cameraFollowSpeed: 0.08,
-    rotationSensitivity: 0.008,
-    targetMultiplier: 8,
-    latheSegments: 32
+// ===================== ROUTER =====================
+function navigate(hash) {
+  const routes = {
+    '': 'page-landing',
+    '#': 'page-landing',
+    '#login': 'page-login',
+    '#cadastro': 'page-register',
+    '#painel': 'page-panel',
+    '#jogo': 'page-game'
   };
 
-  window.helixGameConfig = CONFIG;
+  if ((hash === '#painel' || hash === '#jogo') && !token) hash = '#login';
+  if (token && (hash === '' || hash === '#' || hash === '#login' || hash === '#cadastro')) hash = '#painel';
 
-  var PALETTES = [
-    { name:'Rose', platforms:0xFF9E9D, alt:0xFFBEB8, ball:0xFFFFFF, pole:0xE8294A, bgTop:'#FFE4EE', bgBottom:'#FFB3CB', killer:0x2A0010, topCap:0xE8294A },
-    { name:'Ocean', platforms:0x7CB8E8, alt:0x9DD0F5, ball:0xFFFFFF, pole:0x2060A0, bgTop:'#E0F0FF', bgBottom:'#A0C8F0', killer:0x101030, topCap:0x2060A0 },
-    { name:'Mint', platforms:0x8CE8A5, alt:0xB0F5C0, ball:0xFFFFFF, pole:0x208A40, bgTop:'#E0FFE8', bgBottom:'#A0F0B0', killer:0x102010, topCap:0x208A40 },
-    { name:'Sunset', platforms:0xE8C88C, alt:0xF5DCA0, ball:0xFFFFFF, pole:0xC07820, bgTop:'#FFF5E0', bgBottom:'#F0D0A0', killer:0x2A1A0A, topCap:0xC07820 },
-    { name:'Lavender', platforms:0xC88CE8, alt:0xDCA0F5, ball:0xFFFFFF, pole:0x8030B0, bgTop:'#F0E0FF', bgBottom:'#D0A0F0', killer:0x1A0A2A, topCap:0x8030B0 },
-  ];
-
-  var gameActive = false, betAmount = 0, platformsPassed = 0;
-  var isCashingOut = false, gamePhase = 'ready', prizeAmount = 0;
-  var currentPaletteIndex = 0, comboCount = 0, comboTimer = 0;
-  var scene, camera, renderer, helixGroup, postMesh, ballMesh, topCapMesh;
-  var platforms = [], animFrame = null, splashParticles = [];
-  var ballVelY = 0, ballWorldY = 0;
-  var isDragging = false, lastDragX = 0, helixRotation = 0;
-  var cameraTargetY = 0, hudContainer = null;
-
-  window.startHelixGame = function(bet, serverConfig) {
-    if (serverConfig) {
-      Object.keys(serverConfig).forEach(function(k) {
-        if (k === 'game_platform_count') CONFIG.platformCount = parseInt(serverConfig[k]);
-        if (k === 'game_gravity') CONFIG.gravity = parseFloat(serverConfig[k]);
-        if (k === 'game_bounce_force') CONFIG.ballBounceForce = parseFloat(serverConfig[k]);
-        if (k === 'game_hole_segments') CONFIG.holeSegments = parseFloat(serverConfig[k]);
-        if (k === 'game_danger_start_level') CONFIG.dangerStartLevel = parseInt(serverConfig[k]);
-        if (k === 'game_danger_max_slices') CONFIG.dangerMaxSlices = parseInt(serverConfig[k]);
-        if (k === 'game_rotation_sensitivity') CONFIG.rotationSensitivity = parseFloat(serverConfig[k]);
-        if (k === 'game_platform_spacing') CONFIG.platformSpacing = parseFloat(serverConfig[k]);
-        if (k === 'max_multiplier') CONFIG.targetMultiplier = parseFloat(serverConfig[k]);
-        if (CONFIG.hasOwnProperty(k)) CONFIG[k] = serverConfig[k];
-      });
-    }
-    betAmount = parseFloat(bet); platformsPassed = 0; isCashingOut = false;
-    gameActive = true; prizeAmount = 0; comboCount = 0; comboTimer = 0;
-    currentPaletteIndex = 0; gamePhase = 'ready'; helixRotation = 0;
-    splashParticles = [];
-    initGame(); animate();
-  };
-
-  window.stopHelixGame = function() {
-    gameActive = false;
-    if (animFrame) {
-        cancelAnimationFrame(animFrame);
-        animFrame = null;
-    }
-    removeEvents(); cleanupHUD(); cleanupThree();
-  };
-
-  window.helixGameCashOut = function(e) {
-    if (e) {
-      if (e.preventDefault) e.preventDefault();
-      if (e.stopPropagation) e.stopPropagation();
-    }
-    if (isCashingOut) return;
-    if (!gameActive || gamePhase === 'gameover') return;
-    var finalScore = platformsPassed;
-    var finalPrize = calcPrize();
-    if (animFrame) {
-        cancelAnimationFrame(animFrame);
-        animFrame = null;
-    }
-    isCashingOut = true; gamePhase = 'gameover'; gameActive = false; 
-    var cb = document.getElementById('hud-cashout');
-    if (cb) {
-        cb.style.background = '#ffffff';
-        cb.style.color = '#000000';
-        cb.innerText = 'PROCESSANDO...';
-        cb.style.pointerEvents = 'none';
-    }
-    if (typeof window.onGameEnd === 'function') {
-      window.onGameEnd(finalScore, true, finalPrize);
-    } else if (typeof onGameEnd === 'function') {
-      onGameEnd(finalScore, true, finalPrize);
-    }
-  };
-
-  function initGame() {
-    cleanupThree();
-    var canvas = document.getElementById('gameCanvas');
-    var container = canvas.parentElement;
-    var W = container.clientWidth || window.innerWidth;
-    var H = container.clientHeight || window.innerHeight;
-    scene = new THREE.Scene();
-    camera = new THREE.PerspectiveCamera(CONFIG.cameraFov, W / H, 0.1, 1000);
-    renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: false });
-    renderer.setSize(W, H);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    var ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-    scene.add(ambientLight);
-    var dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
-    dirLight.position.set(10, 20, 10);
-    dirLight.castShadow = true;
-    dirLight.shadow.mapSize.width = 1024;
-    dirLight.shadow.mapSize.height = 1024;
-    dirLight.shadow.camera.near = 0.5;
-    dirLight.shadow.camera.far = 50;
-    scene.add(dirLight);
-    updateBackground();
-    helixGroup = new THREE.Group();
-    scene.add(helixGroup);
-    createPost();
-    createTopCap();
-    createPlatforms();
-    createBall();
-    camera.position.set(0, ballWorldY + CONFIG.cameraHeight, CONFIG.cameraDistance);
-    camera.lookAt(0, ballWorldY - CONFIG.cameraOffsetDown, 0);
-    cameraTargetY = ballWorldY + CONFIG.cameraHeight;
-    createHUD();
-    attachEvents();
+  const pageId = routes[hash] || 'page-landing';
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  const page = document.getElementById(pageId);
+  if (page) { 
+    page.classList.add('active'); 
+    page.classList.remove('hidden'); 
   }
+  if (hash === '#painel') { loadUserData(); loadStats(); }
+}
 
-  function cleanupThree() {
-    if (renderer) renderer.dispose();
-    if (scene) {
-      scene.traverse(function(obj) {
-        if (obj.geometry) obj.geometry.dispose();
-        if (obj.material) {
-          if (Array.isArray(obj.material)) obj.material.forEach(function(m){m.dispose();});
-          else obj.material.dispose();
-        }
-      });
-    }
-    scene = null; camera = null; renderer = null;
-    helixGroup = null; postMesh = null; ballMesh = null; topCapMesh = null;
-    platforms = []; splashParticles = [];
-  }
+window.addEventListener('hashchange', () => navigate(location.hash));
+window.addEventListener('load', () => { navigate(location.hash); loadPublicStats(); });
 
-  function createPost() {
-    var pal = PALETTES[currentPaletteIndex];
-    var geo = new THREE.CylinderGeometry(CONFIG.postRadius, CONFIG.postRadius, CONFIG.postHeight, 32, 1, false);
-    var mat = new THREE.MeshStandardMaterial({ color: pal.pole, roughness: 0.3, metalness: 0.1 });
-    postMesh = new THREE.Mesh(geo, mat);
-    postMesh.position.y = (-CONFIG.postHeight / 2) + CONFIG.postExtraTop;
-    postMesh.receiveShadow = true;
-    postMesh.castShadow = true;
-    helixGroup.add(postMesh);
-  }
+// ===================== API HELPER =====================
+async function api(url, options = {}) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  try {
+    const res = await fetch(url, { ...options, headers });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Erro desconhecido');
+    return data;
+  } catch (e) { throw e; }
+}
 
-  function createTopCap() {
-    var pal = PALETTES[currentPaletteIndex];
-    var capGeo = new THREE.SphereGeometry(CONFIG.postRadius, 32, 32, 0, Math.PI * 2, 0, Math.PI / 2);
-    var capMat = new THREE.MeshStandardMaterial({ color: pal.topCap, roughness: 0.3, metalness: 0.1 });
-    topCapMesh = new THREE.Mesh(capGeo, capMat);
-    topCapMesh.position.y = CONFIG.postExtraTop; 
-    helixGroup.add(topCapMesh);
-  }
-
-  function createRingSegment(innerR, outerR, height, startAngle, arcAngle, color) {
-    var shape = new THREE.Shape();
-    shape.absarc(0, 0, outerR, startAngle, startAngle + arcAngle, false);
-    shape.absarc(0, 0, innerR, startAngle + arcAngle, startAngle, true);
-    var bevelThickness = 0.04;
-    var extrudeSettings = { depth: height - (bevelThickness * 2), bevelEnabled: true, bevelThickness: bevelThickness, bevelSize: 0.04, bevelSegments: 3, curveSegments: 24 };
-    var geo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
-    geo.rotateX(-Math.PI / 2); 
-    geo.translate(0, - (extrudeSettings.depth / 2), 0);
-    var mat = new THREE.MeshStandardMaterial({ color: color, roughness: 0.4, metalness: 0.1 });
-    var mesh = new THREE.Mesh(geo, mat);
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    return mesh;
-  }
-
-  function createPlatforms() {
-    platforms = [];
-    var pal = PALETTES[currentPaletteIndex];
-    var segAngle = (Math.PI * 2) / CONFIG.segmentsPerPlatform;
-    var holeArc = CONFIG.holeSegments * segAngle;
-    for (var i = 0; i < CONFIG.platformCount; i++) {
-      var y = -i * CONFIG.platformSpacing; 
-      var holeStart = Math.random() * Math.PI * 2;
-      var holeEnd = holeStart + holeArc;
-      var pData = { y: y, holeStart: holeStart, holeSize: holeArc, passed: false, segments: [], group: new THREE.Group() };
-      pData.group.position.y = y;
-      helixGroup.add(pData.group);
-      var dangerSlicesCount = 0;
-      if (i >= CONFIG.dangerStartLevel) { 
-        var andaresDeRisco = i - CONFIG.dangerStartLevel;
-        var minRed = Math.floor(andaresDeRisco / CONFIG.dangerProgression); 
-        dangerSlicesCount = Math.min(CONFIG.dangerMaxSlices, minRed + 1 + Math.floor(Math.random() * 2));
-      }
-      var validSegmentsIndices = [];
-      for (var s = 0; s < CONFIG.segmentsPerPlatform; s++) {
-        var sMid = (s * segAngle) + segAngle / 2;
-        if (!isAngleInRange(sMid, holeStart, holeEnd)) validSegmentsIndices.push(s);
-      }
-      var shuffled = validSegmentsIndices.sort(function() { return 0.5 - Math.random() });
-      var dangerIndices = shuffled.slice(0, dangerSlicesCount);
-      for (var s = 0; s < CONFIG.segmentsPerPlatform; s++) {
-        var sStart = s * segAngle;
-        if (isAngleInRange(sStart + segAngle/2, holeStart, holeEnd)) continue;
-        var isDanger = dangerIndices.includes(s);
-        var col = isDanger ? pal.killer : (s % 2 === 0 ? pal.platforms : pal.alt);
-        var mesh = createRingSegment(CONFIG.platformInnerRadius, CONFIG.platformOuterRadius, CONFIG.platformHeight, sStart, segAngle, col);
-        if(isDanger) { mesh.material.emissive = new THREE.Color(pal.killer); mesh.material.emissiveIntensity = 0.2; }
-        pData.group.add(mesh);
-        pData.segments.push({ mesh: mesh, startAngle: sStart, endAngle: sStart + segAngle, isKiller: isDanger });
-      }
-      platforms.push(pData);
-    }
-  }
-
-  function createBall() {
-    var pal = PALETTES[currentPaletteIndex];
-    var geo = new THREE.SphereGeometry(CONFIG.ballRadius, 32, 32);
-    var mat = new THREE.MeshStandardMaterial({ color: pal.ball, roughness: 0.1, metalness: 0.2 });
-    ballMesh = new THREE.Mesh(geo, mat);
-    ballMesh.castShadow = true;
-    ballWorldY = (CONFIG.platformHeight / 2) + CONFIG.ballRadius; 
-    ballMesh.position.set(0, ballWorldY, (CONFIG.platformInnerRadius + CONFIG.platformOuterRadius) / 2);
-    scene.add(ballMesh);
-  }
-
-  function updateBackground() {
-    var pal = PALETTES[currentPaletteIndex];
-    var c = document.createElement('canvas'); c.width = 2; c.height = 512;
-    var ctx = c.getContext('2d'); var g = ctx.createLinearGradient(0, 0, 0, 512);
-    g.addColorStop(0, pal.bgTop); g.addColorStop(1, pal.bgBottom);
-    ctx.fillStyle = g; ctx.fillRect(0, 0, 2, 512);
-    scene.background = new THREE.CanvasTexture(c);
-  }
-
-  function createSplash(y) {
-    var pal = PALETTES[currentPaletteIndex];
-    for (var i = 0; i < 8; i++) {
-      var geo = new THREE.SphereGeometry(0.08, 8, 8);
-      var mat = new THREE.MeshBasicMaterial({ color: pal.platforms, transparent: true, opacity: 0.9 });
-      var p = new THREE.Mesh(geo, mat);
-      var angle = Math.random() * Math.PI * 2;
-      var bz = (CONFIG.platformInnerRadius + CONFIG.platformOuterRadius) / 2;
-      p.position.set(Math.sin(angle) * bz * 0.3, y + 0.1, Math.cos(angle) * bz * 0.3);
-      scene.add(p);
-      splashParticles.push({ mesh: p, vx: (Math.random() - 0.5) * 0.2, vy: Math.random() * 0.15 + 0.05, vz: (Math.random() - 0.5) * 0.2, life: 30 });
-    }
-  }
-
-  function updateSplash() {
-    for (var i = splashParticles.length - 1; i >= 0; i--) {
-      var sp = splashParticles[i];
-      sp.mesh.position.x += sp.vx; sp.mesh.position.y += sp.vy; sp.mesh.position.z += sp.vz;
-      sp.vy -= 0.01; sp.life--; sp.mesh.material.opacity = sp.life / 30;
-      if (sp.life <= 0) { scene.remove(sp.mesh); sp.mesh.geometry.dispose(); sp.mesh.material.dispose(); splashParticles.splice(i, 1); }
-    }
-  }
-
-  function createHUD() {
-    cleanupHUD();
-    var container = document.getElementById('gameCanvas').parentElement;
-    hudContainer = document.createElement('div');
-    hudContainer.id = 'helix-hud';
-    hudContainer.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:100;';
-    hudContainer.innerHTML = `
-      <div style="position:absolute;top:12px;left:12px;pointer-events:auto;background:rgba(0,0,0,0.55);color:#fff;padding:6px 14px;border-radius:12px;font-family:Inter;backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,0.15);">
-        <div style="font-size:9px;text-transform:uppercase;letter-spacing:1px;opacity:0.7;">Entrada</div>
-        <div style="font-size:16px;font-weight:800;" id="hud-entry-val">R$ 0,00</div>
-      </div>
-      <div style="position:absolute;top:12px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.55);color:#fff;padding:8px 16px;border-radius:12px;font-family:Inter;min-width:160px;text-align:center;backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,0.15);max-width:calc(100% - 140px);">
-        <div style="font-size:9px;text-transform:uppercase;letter-spacing:1px;opacity:0.7;">Progresso</div>
-        <div style="font-size:14px;font-weight:800;" id="hud-progress-val">R$ 0,00 / R$ 0,00</div>
-        <div style="width:100%;height:4px;background:rgba(255,255,255,0.15);border-radius:2px;margin-top:4px;overflow:hidden;">
-          <div id="hud-progress-bar" style="width:0%;height:100%;background:linear-gradient(90deg,#00e676,#69f0ae);border-radius:2px;transition:width 0.3s;"></div>
-        </div>
-      </div>
-      <button id="hud-cashout" style="position:absolute;top:12px;right:12px;z-index:9999;pointer-events:auto;background:linear-gradient(135deg,#00e676,#00c853);color:#000;padding:16px 28px;border-radius:12px;font-family:Inter;cursor:pointer;font-weight:900;font-size:16px;text-transform:uppercase;letter-spacing:1px;border:none;box-shadow:0 4px 15px rgba(0,230,118,0.4);display:none;" onpointerdown="window.helixGameCashOut(event)" ontouchstart="window.helixGameCashOut(event)" onclick="window.helixGameCashOut(event)">RESGATAR</button>
-      <div id="hud-start" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-family:Inter;text-align:center;color:rgba(0,0,0,0.6);pointer-events:none;">
-        <div style="font-size:20px;font-weight:700;">Toque para jogar</div>
-        <div style="font-size:28px;margin-top:8px;animation:helixBounce 1s infinite;">↓</div>
-      </div>
-      <div id="hud-score-popup" style="position:absolute;top:45%;left:50%;transform:translate(-50%,-50%);pointer-events:none;font-family:Inter;font-size:36px;font-weight:900;color:#fff;text-shadow:0 2px 10px rgba(0,0,0,0.3);opacity:0;"></div>
-      <div style="position:absolute;bottom:30px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.4);color:#fff;padding:6px 16px;border-radius:20px;font-family:Inter;backdrop-filter:blur(6px);font-size:13px;font-weight:600;"><span id="hud-platform-count">0</span> plataformas</div>
-    `;
-    var style = document.createElement('style');
-    style.textContent = '@keyframes helixBounce{0%,100%{transform:translateY(0)}50%{transform:translateY(10px)}} @keyframes helixFadeUp{0%{opacity:1;transform:translate(-50%,-50%) scale(1)} 100%{opacity:0;transform:translate(-50%,-80%) scale(1.5)}} @keyframes helixPulse{0%,100%{box-shadow:0 4px 15px rgba(0,230,118,0.4)} 50%{box-shadow:0 4px 25px rgba(0,230,118,0.7)}}';
-    hudContainer.appendChild(style);
-    container.appendChild(hudContainer);
-    updateHUD();
-  }
-
-  function cleanupHUD() { if (hudContainer && hudContainer.parentNode) { hudContainer.parentNode.removeChild(hudContainer); hudContainer = null; } }
-
-  function updateHUD() {
-    if (!hudContainer) return;
-    document.getElementById('hud-entry-val').textContent = 'R$ ' + fmtBRL(betAmount);
-    var prize = calcPrize(); prizeAmount = prize;
-    var meta = betAmount * CONFIG.targetMultiplier;
-    document.getElementById('hud-progress-val').textContent = 'R$ ' + fmtBRL(prize) + ' / R$ ' + fmtBRL(meta);
-    document.getElementById('hud-progress-bar').style.width = Math.min(100, (prize / (meta || 1)) * 100) + '%';
-    var cb = document.getElementById('hud-cashout');
-    if (cb) {
-      var goalReached = prize >= meta && meta > 0;
-      cb.style.display = (gamePhase === 'playing' && goalReached) ? 'block' : 'none';
-      if (goalReached) cb.style.animation = 'helixPulse 1s infinite';
-    }
-    document.getElementById('hud-start').style.display = gamePhase === 'ready' ? 'block' : 'none';
-    document.getElementById('hud-platform-count').textContent = platformsPassed;
-  }
-
-  function calcPrize() {
-    if (platformsPassed <= 0) return 0;
-    var totalMultiplier = 0;
-    for (var i = 0; i < platformsPassed; i++) totalMultiplier += 0.15 + (i * 0.05);
-    return Math.round(betAmount * totalMultiplier * 100) / 100;
-  }
-
-  function fmtBRL(v) { return v.toFixed(2).replace('.', ','); }
-
-  function showScorePopup(text) {
-    var el = document.getElementById('hud-score-popup');
-    if (el) { el.textContent = text; el.style.opacity = '1'; el.style.animation = 'none'; el.offsetHeight; el.style.animation = 'helixFadeUp 0.8s ease-out forwards'; }
-  }
-
-  function attachEvents() {
-    var c = document.getElementById('gameCanvas');
-    c.addEventListener('mousedown', onDown); c.addEventListener('mousemove', onMove); c.addEventListener('mouseup', onUp);
-    c.addEventListener('touchstart', onTouchDown, {passive:false}); c.addEventListener('touchmove', onTouchMove, {passive:false}); c.addEventListener('touchend', onUp);
-    window.addEventListener('resize', onResize);
-  }
-
-  function removeEvents() {
-    var c = document.getElementById('gameCanvas'); if (!c) return;
-    c.removeEventListener('mousedown', onDown); c.removeEventListener('mousemove', onMove); c.removeEventListener('mouseup', onUp);
-    c.removeEventListener('touchstart', onTouchDown); c.removeEventListener('touchmove', onTouchMove); c.removeEventListener('touchend', onUp);
-  }
-
-  function onDown(e) { if (e.target && e.target.id === 'hud-cashout') return; if (gamePhase==='ready') startPlaying(); isDragging=true; lastDragX=e.clientX; }
-  function onMove(e) { if (!isDragging) return; var dx=e.clientX-lastDragX; helixRotation+=dx*CONFIG.rotationSensitivity; helixGroup.rotation.y=helixRotation; lastDragX=e.clientX; }
-  function onUp() { isDragging=false; }
-  function onTouchDown(e) { if (e.target && e.target.id === 'hud-cashout') return; e.preventDefault(); if(gamePhase==='ready')startPlaying(); isDragging=true; lastDragX=e.touches[0].clientX; }
-  function onTouchMove(e) { e.preventDefault(); if(!isDragging)return; var dx=e.touches[0].clientX-lastDragX; helixRotation+=dx*CONFIG.rotationSensitivity; helixGroup.rotation.y=helixRotation; lastDragX=e.touches[0].clientX; }
-  function onResize() { var ct=document.getElementById('gameCanvas').parentElement; renderer.setSize(ct.clientWidth, ct.clientHeight); camera.aspect=ct.clientWidth/ct.clientHeight; camera.updateProjectionMatrix(); }
-  function startPlaying() { gamePhase='playing'; ballVelY=0; updateHUD(); }
-
-  function animate() { if (!gameActive && gamePhase !== 'gameover') return; animFrame = requestAnimationFrame(animate); update(); renderer.render(scene, camera); }
-
-  function update() {
-    if (gamePhase === 'playing') {
-      ballVelY += CONFIG.gravity; ballWorldY -= ballVelY;
-      if (ballMesh) ballMesh.position.y = ballWorldY;
-      checkCollisions();
-      if (ballWorldY < -(CONFIG.platformCount + 1) * CONFIG.platformSpacing) window.helixGameCashOut();
-    }
-    if (camera && gamePhase !== 'ready') {
-      cameraTargetY = ballWorldY + CONFIG.cameraHeight;
-      camera.position.y += (cameraTargetY - camera.position.y) * CONFIG.cameraFollowSpeed;
-      camera.lookAt(0, camera.position.y - CONFIG.cameraHeight - CONFIG.cameraOffsetDown, 0);
-    }
-    updateSplash();
-    var np = Math.min(Math.floor(platformsPassed / 5), PALETTES.length - 1);
-    if (np !== currentPaletteIndex) { currentPaletteIndex = np; updatePaletteColors(); }
-    updateHUD();
-  }
-
-  function checkCollisions() {
-    if (ballVelY <= 0) return;
-    var ballAngle = normAngle((3 * Math.PI / 2) - helixRotation);
-    for (var i = 0; i < platforms.length; i++) {
-      var p = platforms[i]; if (p.passed) continue;
-      var platTop = p.y + CONFIG.platformHeight / 2;
-      var platBottom = p.y - CONFIG.platformHeight / 2;
-
-      // CRITICAL COLLISION LOGIC: Detects if the ball hits a segment
-      if (ballWorldY <= platTop + (CONFIG.ballRadius * 0.5) && ballWorldY >= platBottom && ballVelY > 0) {
-        var hEnd = p.holeStart + p.holeSize;
-        var inHole = isAngleInRange(ballAngle, p.holeStart, hEnd);
-
-        if (inHole) {
-          p.passed = true;
-          platformsPassed++;
-          var oldP = prizeAmount; var newP = calcPrize(); showScorePopup('+R$ ' + fmtBRL(newP - oldP));
-          p.segments.forEach(s => { s.mesh.material.transparent = true; s.mesh.material.opacity = 0.2; });
-          createSplash(p.y);
-          if (typeof onPlatformPassed === 'function') onPlatformPassed(platformsPassed);
-        } else {
-          // CHECK IF HIT KILLER SEGMENT (FATIA ESCURA)
-          var hitKiller = false;
-          for (var s = 0; s < p.segments.length; s++) {
-            var seg = p.segments[s];
-            if (isAngleInRange(ballAngle, seg.startAngle, seg.endAngle) && seg.isKiller) {
-              hitKiller = true;
-              break;
-            }
-          }
-
-          if (hitKiller) {
-            triggerGameOver(); // JOGADOR PERDE TUDO
-            return;
-          }
-
-          // Bounce normal se for fatia segura
-          ballWorldY = platTop + CONFIG.ballRadius;
-          ballVelY = -CONFIG.ballBounceForce;
-          if (ballMesh) {
-            ballMesh.scale.set(1.3, 0.6, 1.3);
-            setTimeout(function(){ if(ballMesh) ballMesh.scale.set(1,1,1); }, 100);
-          }
-          break;
-        }
-      }
-    }
-  }
-
-  function triggerGameOver() {
-    if (gamePhase === 'gameover') return;
-    var fs = platformsPassed; 
-    // AO PERDER, O PRÊMIO É ZERADO
-    var fp = 0; 
-    gamePhase = 'gameover'; 
-    var cb = document.getElementById('hud-cashout');
-    if (cb) cb.style.display = 'none';
-    setTimeout(() => { 
-      gameActive = false; 
-      if (typeof window.onGameEnd === 'function') window.onGameEnd(fs, false, fp); 
-      else if (typeof onGameEnd === 'function') onGameEnd(fs, false, fp);
-    }, 500);
-  }
-
-  function updatePaletteColors() {
-    var pal = PALETTES[currentPaletteIndex];
-    if (postMesh) postMesh.material.color.setHex(pal.pole);
-    if (topCapMesh) topCapMesh.material.color.setHex(pal.topCap);
-    if (ballMesh) ballMesh.material.color.setHex(pal.ball);
-    updateBackground();
-    platforms.forEach(p => { 
-      if (p.passed) return; 
-      p.segments.forEach((seg, s) => {
-        if (seg.isKiller) {
-          seg.mesh.material.color.setHex(pal.killer);
-          seg.mesh.material.emissive.setHex(pal.killer);
-        } else {
-          seg.mesh.material.color.setHex(s % 2 === 0 ? pal.platforms : pal.alt);
-        }
-      });
+// ===================== AUTH =====================
+document.getElementById('registerForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const form = e.target;
+  const errEl = document.getElementById('registerError');
+  errEl.classList.add('hidden');
+  const btn = form.querySelector('button[type="submit"]');
+  btn.disabled = true; btn.innerHTML = '<span class="loader"></span>';
+  try {
+    const data = await api('/api/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: form.name.value, email: form.email.value,
+        phone: form.phone.value, password: form.password.value,
+        referral_code: form.referral_code.value
+      })
     });
-  }
+    token = data.token; user = data.user;
+    localStorage.setItem('hc_token', token);
+    localStorage.setItem('hc_user', JSON.stringify(user));
+    showToast('Conta criada com sucesso!');
+    location.hash = '#painel';
+  } catch (e) { errEl.textContent = e.message; errEl.classList.remove('hidden'); }
+  finally { btn.disabled = false; btn.textContent = 'CRIAR CONTA'; }
+});
 
-  function normAngle(a) { a = a % (Math.PI * 2); return a < 0 ? a + Math.PI * 2 : a; }
-  function isAngleInRange(angle, start, end) { angle = normAngle(angle); start = normAngle(start); end = normAngle(end); return start <= end ? (angle >= start && angle <= end) : (angle >= start || angle <= end); }
-})();
+document.getElementById('loginForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const form = e.target;
+  const errEl = document.getElementById('loginError');
+  errEl.classList.add('hidden');
+  const btn = form.querySelector('button[type="submit"]');
+  btn.disabled = true; btn.innerHTML = '<span class="loader"></span>';
+  try {
+    const data = await api('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email: form.email.value, password: form.password.value })
+    });
+    token = data.token; user = data.user;
+    localStorage.setItem('hc_token', token);
+    localStorage.setItem('hc_user', JSON.stringify(user));
+    if (user.is_admin) { window.location.href = '/admin.html'; return; }
+    showToast('Bem-vindo de volta!');
+    location.hash = '#painel';
+  } catch (e) { errEl.textContent = e.message; errEl.classList.remove('hidden'); }
+  finally { btn.disabled = false; btn.textContent = 'ENTRAR'; }
+});
+
+function logout() {
+  token = null; user = null;
+  localStorage.removeItem('hc_token'); localStorage.removeItem('hc_user');
+  location.hash = '#';
+}
+
+// ===================== USER DATA =====================
+async function loadUserData() {
+  try {
+    const data = await api('/api/user/me');
+    user = data;
+    localStorage.setItem('hc_user', JSON.stringify(user));
+    updateUI();
+  } catch (e) {
+    if (e.message.includes('Token') || e.message.includes('Usuário')) logout();
+  }
+}
+
+function updateUI() {
+  if (!user) return;
+  document.getElementById('userBalance').textContent = formatMoney(user.balance);
+  document.getElementById('userAvatar').textContent = user.name.charAt(0).toUpperCase();
+  document.getElementById('withdrawBalance').textContent = 'R$ ' + formatMoney(user.balance);
+  document.getElementById('referralCode').textContent = user.referral_code;
+  document.getElementById('refCount').textContent = user.referrals || 0;
+}
+
+// ===================== STATS =====================
+async function loadPublicStats() {
+  try {
+    const stats = await api('/api/stats');
+    document.getElementById('stat-online').textContent = stats.online.toLocaleString('pt-BR');
+    document.getElementById('stat-users').textContent = stats.online.toLocaleString('pt-BR');
+    document.getElementById('stat-paid').textContent = 'R$ ' + stats.today_paid.toLocaleString('pt-BR');
+    document.getElementById('stat-maxwin').textContent = 'R$ ' + stats.max_win_today.toLocaleString('pt-BR');
+  } catch (e) { /* silent */ }
+}
+
+async function loadStats() {
+  try {
+    const stats = await api('/api/stats');
+    const el = document.getElementById('panelOnline');
+    if (el) el.textContent = stats.online;
+  } catch (e) { /* silent */ }
+}
+
+// ===================== BET SELECTION =====================
+document.querySelectorAll('.bet-option').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.bet-option').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentBet = parseFloat(btn.dataset.amount);
+    updateBetDisplay();
+  });
+});
+
+function updateBetDisplay() {
+  document.getElementById('betAmount').textContent = formatMoney(currentBet);
+  const meta = currentBet * 7;
+  document.getElementById('metaGanho').textContent = 'R$ ' + formatMoney(meta);
+  document.getElementById('perPlatform').textContent = currentBet > 0 ? 'R$ ' + formatMoney(currentBet * 0.5) : '—';
+  document.getElementById('platMeta').textContent = currentBet > 0 ? '14' : '—';
+}
+
+// ===================== PLAY GAME =====================
+document.getElementById('btnPlay').addEventListener('click', async () => {
+  if (currentBet <= 0) return showToast('Selecione um valor de aposta!', 'error');
+  if (!user || user.balance < currentBet) return showToast('Saldo insuficiente! Faça um depósito.', 'error');
+
+  const btn = document.getElementById('btnPlay');
+  btn.disabled = true; btn.innerHTML = '<span class="loader"></span>';
+
+  try {
+    const data = await api('/api/game/start', {
+      method: 'POST', body: JSON.stringify({ bet_amount: currentBet })
+    });
+    currentGameId = data.game_id;
+    user.balance = data.new_balance;
+    updateUI();
+
+    document.getElementById('page-game').classList.remove('hidden');
+    document.getElementById('gameOverOverlay').classList.add('hidden');
+
+    let serverConfig = null;
+    try {
+      const settings = await api('/api/game/config');
+      if (settings) serverConfig = settings;
+    } catch(e) { }
+
+    startHelixGame(currentBet, serverConfig);
+  } catch (e) { showToast(e.message, 'error'); }
+  finally {
+    btn.disabled = false;
+    btn.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg> JOGAR AGORA';
+  }
+});
+
+function onPlatformPassed(count) { }
+
+// CORREÇÃO: Função agora aceita 3 parâmetros enviados pelo game.js
+async function onGameEnd(platformsReached, cashed, prizeFromGame) {
+  try {
+    const data = await api('/api/game/finish', {
+      method: 'POST',
+      body: JSON.stringify({
+        game_id: currentGameId,
+        platforms_reached: platformsReached,
+        cashed_out: cashed,
+        prize: prizeFromGame // Envia o valor exato calculado pelo jogo
+      })
+    });
+
+    user.balance = data.new_balance;
+    updateUI();
+
+    const overlay = document.getElementById('gameOverOverlay');
+    overlay.classList.remove('hidden');
+
+    // Título e Ícone Dinâmico
+    const resultTitle = document.getElementById('resultTitle');
+    const resultIcon = document.getElementById('resultIcon');
+
+    if (cashed && (prizeFromGame > 0 || data.prize > 0)) {
+      resultTitle.textContent = 'Resgatado!';
+      resultTitle.style.color = 'var(--primary)';
+      resultIcon.textContent = '💰';
+    } else if ((prizeFromGame > 0 || data.prize > 0)) {
+      resultTitle.textContent = 'Parabéns!';
+      resultTitle.style.color = 'var(--primary)';
+      resultIcon.textContent = '🎉';
+    } else {
+      resultTitle.textContent = 'Fim de Jogo!';
+      resultTitle.style.color = '#ff4444';
+      resultIcon.textContent = '💥';
+    }
+
+    // Exibição do Prêmio e Detalhes sem undefined
+    document.getElementById('resultPrize').textContent = 'R$ ' + formatMoney(prizeFromGame || data.prize);
+    
+    const finalPlats = platformsReached !== undefined ? platformsReached : (data.platforms_reached || 0);
+    const finalMult = prizeFromGame > 0 ? (prizeFromGame / currentBet).toFixed(2) : (data.multiplier || 0);
+
+    document.getElementById('resultDetails').textContent =
+      'Plataformas: ' + finalPlats + ' | Multiplicador: ' + finalMult + 'x | Aposta: R$ ' + formatMoney(currentBet);
+
+  } catch (e) { showToast(e.message, 'error'); }
+}
+
+function cashOut() {
+  if (typeof helixGameCashOut === 'function') helixGameCashOut();
+}
+
+function closeGame() {
+  document.getElementById('page-game').classList.add('hidden');
+  if (typeof stopHelixGame === 'function') stopHelixGame();
+  currentGameId = null;
+  loadUserData();
+}
+
+// ===================== DEPOSIT =====================
+document.querySelectorAll('.amount-option').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.amount-option').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const val = btn.dataset.amount || btn.textContent.replace('R$', '').trim();
+    document.getElementById('depositAmount').value = val;
+  });
+});
+
+document.getElementById('btnDeposit').addEventListener('click', async () => {
+  const amountInput = document.getElementById('depositAmount');
+  const amount = parseFloat(amountInput.value);
+  const cpfEl = document.getElementById('depositCpf');
+  const cpf = cpfEl ? cpfEl.value.trim() : '';
+  
+  if (!amount || amount < 10) return showToast('Depósito mínimo: R$10,00', 'error');
+  if (!cpf || cpf.length < 11) return showToast('Informe um CPF válido para gerar o PIX', 'error');
+
+  const btn = document.getElementById('btnDeposit');
+  btn.disabled = true; 
+  btn.innerHTML = '<span class="loader"></span>';
+
+  try {
+    const data = await api('/api/deposit', {
+      method: 'POST', body: JSON.stringify({ amount, cpf })
+    });
+
+    currentDepositId = data.deposit_id || (data.deposit ? data.deposit.id : null);
+
+    const pixCode = data.pix_code || (data.deposit && data.deposit.pix_code);
+    if (document.getElementById('pixCode')) {
+        document.getElementById('pixCode').textContent = pixCode || 'Erro ao gerar código';
+    }
+
+    const qrImg = document.getElementById('pixQrImage');
+    const qrLoading = document.getElementById('qrLoading');
+
+    if (qrImg) {
+        let qrSource = data.qr_code_base64 || 
+                       (data.deposit && data.deposit.qr_code_base64) || 
+                       data.qr_code_image || 
+                       (data.deposit && data.deposit.qr_code_image);
+        
+        if (qrSource && qrSource.length > 50) {
+            qrSource = qrSource.replace(/\s/g, ''); 
+            const finalSrc = qrSource.startsWith('data:') ? qrSource : `data:image/png;base64,${qrSource}`;
+            qrImg.src = finalSrc;
+            qrImg.style.display = 'block';
+            if (qrLoading) qrLoading.style.display = 'none';
+        }
+    }
+
+    const modal = document.getElementById('pixModal');
+    if (modal) modal.classList.remove('hidden');
+
+    if (currentDepositId) {
+      if (depositCheckInterval) clearInterval(depositCheckInterval);
+      depositCheckInterval = setInterval(checkDepositStatus, 5000);
+    }
+
+    showToast('PIX gerado com sucesso!');
+
+  } catch (e) { 
+    showToast(e.message, 'error'); 
+  } finally { 
+    btn.disabled = false; 
+    btn.textContent = 'GERAR PIX'; 
+  }
+});
+
+async function checkDepositStatus() {
+  if (!currentDepositId) return;
+  try {
+    const data = await api('/api/deposit/status', {
+      method: 'POST', body: JSON.stringify({ deposit_id: currentDepositId })
+    });
+
+    if (data.status === 'approved') {
+      clearInterval(depositCheckInterval); depositCheckInterval = null;
+      user.balance = data.new_balance; updateUI();
+      showToast('Pagamento confirmado! Saldo atualizado.');
+      const modal = document.getElementById('pixModal');
+      if (modal) modal.classList.add('hidden');
+      currentDepositId = null;
+    } else if (data.status === 'rejected' || data.status === 'expired') {
+      clearInterval(depositCheckInterval); depositCheckInterval = null;
+      showToast('PIX expirado ou rejeitado. Tente novamente.', 'error');
+      const modal = document.getElementById('pixModal');
+      if (modal) modal.classList.add('hidden');
+      currentDepositId = null;
+    }
+  } catch (e) { }
+}
+
+// ===================== WITHDRAW =====================
+document.getElementById('btnWithdraw').addEventListener('click', async () => {
+  const amount = parseFloat(document.getElementById('withdrawAmount').value);
+  const pixKey = document.getElementById('pixKey').value;
+  const pixType = document.getElementById('pixType').value;
+  if (!amount || amount < 20) return showToast('Saque mínimo: R$20,00', 'error');
+  if (!pixKey) return showToast('Informe a chave PIX', 'error');
+
+  const btn = document.getElementById('btnWithdraw');
+  btn.disabled = true; btn.innerHTML = '<span class="loader"></span>';
+  try {
+    const data = await api('/api/withdraw', {
+      method: 'POST', body: JSON.stringify({ amount, pix_key: pixKey, pix_type: pixType })
+    });
+    showToast(data.message); loadUserData();
+    document.getElementById('withdrawAmount').value = '';
+    document.getElementById('pixKey').value = '';
+  } catch (e) { showToast(e.message, 'error'); }
+  finally { btn.disabled = false; btn.textContent = 'SOLICITAR SAQUE'; }
+});
+
+// ===================== REFERRALS =====================
+async function loadReferrals() {
+  try {
+    const data = await api('/api/referrals');
+    document.getElementById('refEarned').textContent = 'R$ ' + formatMoney(data.total_earned);
+    const listEl = document.getElementById('referralList');
+    if (data.referrals.length === 0) {
+      listEl.innerHTML = '<div class="referral-card" style="text-align:center;color:var(--text-secondary)">Nenhum indicado ainda. Compartilhe seu código!</div>';
+    } else {
+      listEl.innerHTML = data.referrals.map(r =>
+        '<div class="history-item"><div class="left"><span class="type">' + r.name + '</span><span class="date">' + new Date(r.created_at).toLocaleDateString('pt-BR') + '</span></div><span class="amount positive">+R$ ' + formatMoney(r.amount || 0) + '</span></div>'
+      ).join('');
+    }
+  } catch (e) { }
+}
+
+// ===================== NAVIGATION =====================
+document.querySelectorAll('.nav-item[data-panel]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const panel = btn.dataset.panel;
+    document.querySelectorAll('.panel-sub').forEach(p => { p.classList.add('hidden'); p.classList.remove('active'); });
+    const target = document.getElementById('panel-' + panel);
+    if (target) { target.classList.remove('hidden'); target.classList.add('active'); }
+    if (panel === 'referral') loadReferrals();
+    if (panel === 'withdraw') updateUI();
+  });
+});
+
+// ===================== HELPERS =====================
+function formatMoney(val) { return parseFloat(val || 0).toFixed(2).replace('.', ','); }
+
+function showToast(message, type = 'success') {
+  const toast = document.getElementById('toast');
+  if (!toast) return console.log("Toast:", message);
+  toast.textContent = message;
+  toast.className = 'toast toast-' + type;
+  toast.classList.remove('hidden');
+  setTimeout(() => toast.classList.add('hidden'), 3000);
+}
