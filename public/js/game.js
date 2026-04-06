@@ -94,6 +94,9 @@
     if (isCashingOut) return;
     if (!gameActive || gamePhase === 'gameover') return;
     
+    // Captura o valor exato antes de parar o loop
+    var finalScore = platformsPassed;
+
     if (animFrame) {
         cancelAnimationFrame(animFrame);
         animFrame = null;
@@ -111,11 +114,10 @@
         cb.style.pointerEvents = 'none';
     }
     
-    var finalPlatforms = platformsPassed; // Garante o valor fixo
     if (typeof window.onGameEnd === 'function') {
-      window.onGameEnd(finalPlatforms, true);
+      window.onGameEnd(finalScore, true);
     } else if (typeof onGameEnd === 'function') {
-      onGameEnd(finalPlatforms, true);
+      onGameEnd(finalScore, true);
     }
   };
 
@@ -623,16 +625,19 @@
 
   function triggerGameOver() {
     if (gamePhase === 'gameover') return;
+    
+    // Captura o valor exato antes de mudar a fase
+    var finalScore = platformsPassed;
+    
     gamePhase = 'gameover'; 
     
     var cb = document.getElementById('hud-cashout');
     if (cb) cb.style.display = 'none';
     
-    var finalPlatforms = platformsPassed; // Captura o valor atual antes do delay
     setTimeout(function() {
       gameActive = false;
-      if (typeof window.onGameEnd === 'function') window.onGameEnd(finalPlatforms, false);
-      else if (typeof onGameEnd === 'function') onGameEnd(finalPlatforms, false);
+      if (typeof window.onGameEnd === 'function') window.onGameEnd(finalScore, false);
+      else if (typeof onGameEnd === 'function') onGameEnd(finalScore, false);
     }, 500);
   }
 
