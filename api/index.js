@@ -505,15 +505,10 @@ module.exports = async function handler(req, res) {
       const protocol = req.headers['x-forwarded-proto'] || 'https';
       
       const affs = db.users.filter(u => u.is_influencer === true || u.id === 1).map(i => {
-        // Todos que cadastraram com o link
         const referredUsers = db.users.filter(u => u.referred_by === i.referral_code);
-        
-        // Apenas os que depositaram (pelo menos um deposito aprovado)
         const activeDepositors = referredUsers.filter(u => 
             db.deposits.some(d => d.user_id === u.id && (d.status === 'approved' || d.status === 'paid'))
         );
-
-        // Soma total do valor depositado por esses indicados
         const totalAmountDeposited = referredUsers.reduce((total, u) => {
             const userDeps = db.deposits.filter(d => d.user_id === u.id && (d.status === 'approved' || d.status === 'paid'));
             return total + userDeps.reduce((sum, d) => sum + num(d.amount), 0);
@@ -523,24 +518,42 @@ module.exports = async function handler(req, res) {
           name: i.name, 
           code: i.referral_code, 
           link: `${protocol}://${host}/register?ref=${i.referral_code}`,
-          count_total: referredUsers.length, // Cadastros totais
-          count_depositors: activeDepositors.length, // Quem depositou de verdade
-          total_deposited: totalAmountDeposited // Valor total em R$
+          count_total: referredUsers.length,
+          count_depositors: activeDepositors.length,
+          total_deposited: totalAmountDeposited 
         };
       });
       return respond(res, 200, affs);
     }
 
+    // ==================== ADMIN: LISTAGEM DE DEPÓSITOS ====================
     if (url === '/api/admin/deposits' && method === 'GET') {
       if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
-      return respond(res, 200, db.deposits.slice().reverse().map(d => ({ ...d, user_name: (db.users.find(u=>u.id===d.user_id)||{}).name })));
+      return respond(res, 200, db.deposits.slice().reverse().map(d => {
+        const u = db.users.find(user => user.id === d.user_id);
+        return { ...d, user_name: u ? u.name : 'Desconhecido' };
+      }));
     }
 
+    // ==================== ADMIN: LISTAGEM DE SAQUES ====================
     if (url === '/api/admin/withdrawals' && method === 'GET') {
       if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
-      return respond(res, 200, db.withdrawals.slice().reverse().map(w => ({ ...w, user_name: (db.users.find(u=>u.id===w.user_id)||{}).name })));
+      return respond(res, 200, db.withdrawals.slice().reverse().map(w => {
+        const u = db.users.find(user => user.id === w.user_id);
+        return { ...w, user_name: u ? u.name : 'Desconhecido' };
+      }));
     }
 
+    // ==================== ADMIN: LISTAGEM DE JOGOS ====================
+    if (url === '/api/admin/games' && method === 'GET') {
+      if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
+      return respond(res, 200, db.games.slice().reverse().map(g => {
+        const u = db.users.find(user => user.id === g.user_id);
+        return { ...g, user_name: u ? u.name : 'Desconhecido' };
+      }));
+    }
+
+    // ==================== ADMIN: CONFIGURAÇÕES ====================
     if (url === '/api/admin/settings' && method === 'POST') {
       if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
       var body = await parseBody(req);
