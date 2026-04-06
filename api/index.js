@@ -49,7 +49,7 @@ function createDefaultDB() {
     games: [],
     pending_games: [],
     referral_earnings: [],
-    webhooks: [], // Adicionado para suporte ao PushCut
+    webhooks: [],
     settings: {
       min_deposit: '10', min_withdrawal: '20', max_multiplier: '7',
       referral_bonus: '5', house_edge: '15', influencer_house_edge: '5',
@@ -366,19 +366,32 @@ module.exports = async function handler(req, res) {
       return respond(res, 200, { success: true, message: 'Saque solicitado!' });
     }
 
-    // ==================== GAMES API ====================
+    // ==================== GAME CONFIG: DIFICULDADE PROGRESSIVA ====================
     if (url === '/api/game/config' && method === 'GET') {
       var user = getUser(db, req);
       var s = db.settings;
+      var houseEdge = num(s.house_edge); // Ex: 80%
+
+      // LÓGICA DE DIFICULDADE PROGRESSIVA
+      // O jogo começa com valores padrão e aperta a física conforme o jogador desce.
+      var config = {
+        ...s,
+        difficulty_curve: {
+          start_speed: 1.0,
+          // Se houseEdge for 80, a bolinha pode acelerar ate 1.8x a velocidade base
+          max_speed_boost: houseEdge / 100, 
+          // Obstaculos aumentam a cada X plataformas baseados na taxa
+          danger_increase_step: houseEdge > 60 ? 3 : 6, 
+          // Buraco diminui ate o valor minimo baseado na taxa
+          min_hole_size: Math.max(1.1, 2.5 - (houseEdge / 40))
+        }
+      };
+
       if (user && user.is_influencer) {
-        return respond(res, 200, {
-          ...s,
-          game_danger_max_slices: s.inf_game_danger_max_slices || s.game_danger_max_slices,
-          game_danger_start_level: s.inf_game_danger_start_level || s.game_danger_start_level,
-          game_hole_segments: s.inf_game_hole_segments || s.game_hole_segments
-        });
+        // Influencers tem o "modo facil" permanente
+        config.difficulty_curve = { start_speed: 1.0, max_speed_boost: 0, danger_increase_step: 99, min_hole_size: 2.5 };
       }
-      return respond(res, 200, s);
+      return respond(res, 200, config);
     }
 
     if (url === '/api/game/start' && method === 'POST') {
@@ -438,19 +451,6 @@ module.exports = async function handler(req, res) {
       return respond(res, 200, { result: result, prize: prize, new_balance: num(user.balance) });
     }
 
-    // ==================== LISTS ====================
-    if (url === '/api/deposits' && method === 'GET') {
-      var user = getUser(db, req);
-      if (!user) return respond(res, 401, { error: 'Nao autorizado' });
-      return respond(res, 200, db.deposits.filter(d => d.user_id === user.id).reverse());
-    }
-
-    if (url === '/api/withdrawals' && method === 'GET') {
-      var user = getUser(db, req);
-      if (!user) return respond(res, 401, { error: 'Nao autorizado' });
-      return respond(res, 200, db.withdrawals.filter(w => w.user_id === user.id).reverse());
-    }
-
     // ==================== ADMIN: DASHBOARD ROBUSTA ====================
     var isAdminUser = (req) => { var u = getUser(db, req); return u && u.is_admin ? u : null; };
 
@@ -487,7 +487,7 @@ module.exports = async function handler(req, res) {
       return respond(res, 200, db.users.filter(u => !u.is_admin || u.id !== 1));
     }
 
-    // NOVA ROTA PARA CORRIGIR O ERRO 404 DO MODAL UPDATE
+    // ROTA PARA O MODAL UPDATE (FIX DO ERRO 404)
     if (url === '/api/admin/user/update' && method === 'POST') {
       if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
       var body = await parseBody(req);
@@ -522,12 +522,21 @@ module.exports = async function handler(req, res) {
       return respond(res, 200, { success: true });
     }
 
+    // AFILIADOS ADMIN: GERA LINK PARA INFLUENCERS AUTOMATICAMENTE
     if (url === '/api/admin/affiliates' && method === 'GET') {
       if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
+      const host = req.headers.host;
+      const protocol = req.headers['x-forwarded-proto'] || 'https';
       const affs = db.users.filter(u => u.is_influencer || u.id === 1).map(i => {
         const referred = db.users.filter(u => u.referred_by === i.referral_code);
         const earnings = db.referral_earnings.filter(e => e.user_id === i.id).reduce((s, e) => s + num(e.amount), 0);
-        return { name: i.name, code: i.referral_code, earnings: earnings, count: referred.length };
+        return { 
+          name: i.name, 
+          code: i.referral_code, 
+          link: `${protocol}://${host}/register?ref=${i.referral_code}`, // Link de afiliado dinamico
+          earnings: earnings, 
+          count: referred.length 
+        };
       });
       return respond(res, 200, affs);
     }
