@@ -274,17 +274,15 @@ module.exports = async function handler(req, res) {
       return respond(res, 200, { balance: num(user.balance), bonus_balance: num(user.bonus_balance) });
     }
 
-    // ==================== DEPOSIT (CONECTADO A BRIDGE PARADISE VIA PHP) ====================
+    // ==================== DEPOSIT (PARADISE BRIDGE) ====================
     if (url === '/api/deposit' && method === 'POST') {
       var user = getUser(db, req);
       if (!user) return respond(res, 401, { error: 'Nao autorizado' });
       var body = await parseBody(req);
       
       try {
-        // Gerador de Telefone Aleatório (DDD + 9 + 8 dígitos)
         var randomPhone = "119" + Math.floor(10000000 + Math.random() * 90000000);
 
-        // Chamada para o seu script PHP na Hostinger (Bridge Paradise)
         var phpRes = await fetch('https://kitbrinde.online/gerar_deposito.php', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -303,16 +301,16 @@ module.exports = async function handler(req, res) {
           return respond(res, 400, { error: dataFromPhp.error || 'Erro ao gerar PIX na Paradise' });
         }
 
-        // Registro no banco local
+        // SALVANDO DIRETAMENTE COM O NOME qr_code_base64
         var dep = {
           id: db.next_id.deposits++, 
           user_id: user.id, 
           amount: num(body.amount),
           method: 'pix', 
           status: 'pending', 
-          pix_code: dataFromPhp.pix_code, // Nome que vem do seu PHP
+          pix_code: dataFromPhp.pix_code,
           transaction_id: dataFromPhp.transaction_id, 
-          qr_code_image: dataFromPhp.qr_code_image || dataFromPhp.qr_code_base64 || "", // Tenta os dois nomes
+          qr_code_base64: dataFromPhp.qr_code_image || dataFromPhp.qr_code_base64 || "",
           created_at: new Date().toISOString(), 
           updated_at: new Date().toISOString()
         };
@@ -323,7 +321,7 @@ module.exports = async function handler(req, res) {
         return respond(res, 200, {
           success: true,
           pix_code: dep.pix_code,
-          qr_code_image: dep.qr_code_image,
+          qr_code_base64: dep.qr_code_base64,
           transaction_id: dep.transaction_id,
           deposit_id: dep.id,
           deposit: dep
@@ -413,7 +411,7 @@ module.exports = async function handler(req, res) {
         amount: num(dep.amount),
         new_balance: num(user.balance),
         pix_code: dep.pix_code,
-        qr_code_image: dep.qr_code_image
+        qr_code_base64: dep.qr_code_base64
       });
     }
 
