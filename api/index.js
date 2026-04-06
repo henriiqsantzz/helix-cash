@@ -558,17 +558,19 @@ module.exports = async function handler(req, res) {
       var prize = 0;
       var result = 'loss';
 
-      // Prize is only awarded if player cashed out after reaching the goal
-      if (cashedOut && clientPrize >= targetPrize && isWin && platformsReached > 0) {
-        prize = clientPrize;
-        result = 'win';
-        user.balance = num(user.balance) + prize;
-      } else if (cashedOut && clientPrize >= targetPrize && platformsReached > 0) {
-        // House edge kicked in - player reached goal but house won
-        prize = 0;
-        result = 'loss';
-      } else if (!cashedOut && platformsReached > 0) {
-        // Player died - no prize (they didn't cash out)
+      // O jogador recebe o prêmio caso tenha clicado em resgatar e passado de pelo menos 1 plataforma
+      if (cashedOut && platformsReached > 0) {
+        if (isWin) {
+          prize = clientPrize;
+          result = 'win';
+          user.balance = num(user.balance) + prize;
+        } else {
+          // House edge (Vantagem da casa) derrubou o prêmio no momento do saque
+          prize = 0;
+          result = 'loss';
+        }
+      } else {
+        // Morreu antes de sacar (caiu no vermelho)
         prize = 0;
         result = 'loss';
       }
