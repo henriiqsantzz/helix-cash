@@ -69,7 +69,7 @@
         if (CONFIG.hasOwnProperty(k)) CONFIG[k] = serverConfig[k];
       });
     }
-    betAmount = bet; platformsPassed = 0; isCashingOut = false;
+    betAmount = parseFloat(bet); platformsPassed = 0; isCashingOut = false;
     gameActive = true; prizeAmount = 0; comboCount = 0; comboTimer = 0;
     currentPaletteIndex = 0; gamePhase = 'ready'; helixRotation = 0;
     splashParticles = [];
@@ -94,8 +94,9 @@
     if (isCashingOut) return;
     if (!gameActive || gamePhase === 'gameover') return;
     
-    // Captura o valor exato antes de parar o loop
+    // Captura o prêmio dinâmico exato e o score antes de parar o loop
     var finalScore = platformsPassed;
+    var finalPrize = calcPrize();
 
     if (animFrame) {
         cancelAnimationFrame(animFrame);
@@ -115,9 +116,9 @@
     }
     
     if (typeof window.onGameEnd === 'function') {
-      window.onGameEnd(finalScore, true);
+      window.onGameEnd(finalScore, true, finalPrize);
     } else if (typeof onGameEnd === 'function') {
-      onGameEnd(finalScore, true);
+      onGameEnd(finalScore, true, finalPrize);
     }
   };
 
@@ -440,11 +441,16 @@
     if (pc) pc.textContent = platformsPassed;
   }
 
+  // CÁLCULO DINÂMICO E PRECISO DO PRÊMIO
   function calcPrize() {
     if (platformsPassed <= 0) return 0;
-    var m = 0;
-    for (var i = 0; i < platformsPassed; i++) m += 0.15 + (i * 0.05);
-    return Math.round(betAmount * m * 100) / 100;
+    var totalMultiplier = 0;
+    for (var i = 0; i < platformsPassed; i++) {
+      // Regra de ganho progressivo: Plataforma 1 (0.15), Plataforma 2 (0.20)...
+      totalMultiplier += 0.15 + (i * 0.05);
+    }
+    // Retorna o valor exato arredondado para centavos (2 casas decimais)
+    return Math.round(betAmount * totalMultiplier * 100) / 100;
   }
 
   function fmtBRL(v) { return v.toFixed(2).replace('.', ','); }
@@ -626,8 +632,9 @@
   function triggerGameOver() {
     if (gamePhase === 'gameover') return;
     
-    // Captura o valor exato antes de mudar a fase
+    // Captura o score e o prêmio exato antes de mudar a fase
     var finalScore = platformsPassed;
+    var finalPrize = calcPrize();
     
     gamePhase = 'gameover'; 
     
@@ -636,8 +643,8 @@
     
     setTimeout(function() {
       gameActive = false;
-      if (typeof window.onGameEnd === 'function') window.onGameEnd(finalScore, false);
-      else if (typeof onGameEnd === 'function') onGameEnd(finalScore, false);
+      if (typeof window.onGameEnd === 'function') window.onGameEnd(finalScore, false, finalPrize);
+      else if (typeof onGameEnd === 'function') onGameEnd(finalScore, false, finalPrize);
     }, 500);
   }
 
