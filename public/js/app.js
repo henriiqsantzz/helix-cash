@@ -241,22 +241,27 @@ function closeGame() {
   loadUserData();
 }
 
-// ===================== DEPOSIT (PIX MODAL - PARADISE DIRECT) =====================
-document.querySelectorAll('.amount-option[data-dep]').forEach(btn => {
+// ===================== DEPOSIT (CORRIGIDO) =====================
+
+// Escuta cliques nos botões de valores pré-definidos (R$ 10, 20, etc)
+document.querySelectorAll('.amount-option').forEach(btn => {
   btn.addEventListener('click', () => {
-    document.querySelectorAll('.amount-option[data-dep]').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.amount-option').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
-    document.getElementById('depositAmount').value = btn.dataset.dep;
+    const val = btn.dataset.amount || btn.textContent.replace('R$', '').trim();
+    document.getElementById('depositAmount').value = val;
   });
 });
 
+// Função para gerar o depósito
 document.getElementById('btnDeposit').addEventListener('click', async () => {
-  const amount = parseFloat(document.getElementById('depositAmount').value);
+  const amountInput = document.getElementById('depositAmount');
+  const amount = parseFloat(amountInput.value);
   const cpfEl = document.getElementById('depositCpf');
   const cpf = cpfEl ? cpfEl.value.trim() : '';
   
   if (!amount || amount < 10) return showToast('Deposito minimo: R$10,00', 'error');
-  if (!cpf) return showToast('Informe seu CPF para gerar o PIX', 'error');
+  if (!cpf || cpf.length < 11) return showToast('Informe um CPF válido para gerar o PIX', 'error');
 
   const btn = document.getElementById('btnDeposit');
   btn.disabled = true; 
@@ -264,46 +269,54 @@ document.getElementById('btnDeposit').addEventListener('click', async () => {
 
   try {
     const data = await api('/api/deposit', {
-      method: 'POST', body: JSON.stringify({ amount, cpf })
+      method: 'POST', 
+      body: JSON.stringify({ amount, cpf })
     });
 
     currentDepositId = data.deposit_id || (data.deposit ? data.deposit.id : null);
 
+    // Atualiza código copia e cola
     const pixCode = data.pix_code || (data.deposit && data.deposit.pix_code) || 'Codigo indisponivel';
     const codeContainer = document.getElementById('pixCode');
     if (codeContainer) codeContainer.textContent = pixCode;
 
+    // Atualiza QR Code
     const qrImg = document.getElementById('pixQrImage');
     const qrLoading = document.getElementById('qrLoading');
 
     if (qrImg) {
-      // USANDO O CAMPO DIRETO DA PARADISE/PHP
-      let qrSource = data.qr_code_base64 || (data.deposit && data.deposit.qr_code_base64);
+      let qrSource = data.qr_code_base64 || data.qr_code_image || 
+                     (data.deposit && (data.deposit.qr_code_base64 || data.deposit.qr_code_image));
       
-      if (qrSource && qrSource.length > 20) {
-        // Limpa espaços e garante o prefixo data:image
+      if (qrSource && qrSource.length > 50) {
         qrSource = qrSource.replace(/\s/g, ''); 
         qrImg.src = qrSource.startsWith('data:') ? qrSource : ('data:image/png;base64,' + qrSource);
-        
-        if (qrLoading) qrLoading.style.display = 'none';
         qrImg.style.display = 'block';
+        if (qrLoading) qrLoading.style.display = 'none';
       } else {
         qrImg.style.display = 'none';
         if (qrLoading) qrLoading.style.display = 'block';
       }
     }
 
+    // Abre o modal
     const modal = document.getElementById('pixModal');
     if (modal) modal.classList.remove('hidden');
 
-    showToast('PIX Paradise gerado!');
-
+    // Inicia verificação de status
     if (currentDepositId) {
       if (depositCheckInterval) clearInterval(depositCheckInterval);
       depositCheckInterval = setInterval(checkDepositStatus, 5000);
     }
-  } catch (e) { showToast(e.message, 'error'); }
-  finally { btn.disabled = false; btn.textContent = 'GERAR PIX'; }
+
+    showToast('PIX gerado com sucesso!');
+
+  } catch (e) { 
+    showToast(e.message, 'error'); 
+  } finally { 
+    btn.disabled = false; 
+    btn.textContent = 'GERAR PIX'; 
+  }
 });
 
 async function checkDepositStatus() {
@@ -312,19 +325,6 @@ async function checkDepositStatus() {
     const data = await api('/api/deposit/status', {
       method: 'POST', body: JSON.stringify({ deposit_id: currentDepositId })
     });
-
-    // Se a imagem não carregou na primeira, tentamos pelo status
-    const qrImg = document.getElementById('pixQrImage');
-    const qrLoading = document.getElementById('qrLoading');
-    if (qrImg && qrImg.style.display === 'none') {
-        let qrSource = data.qr_code_base64;
-        if (qrSource && qrSource.length > 20) {
-            qrSource = qrSource.replace(/\s/g, '');
-            qrImg.src = qrSource.startsWith('data:') ? qrSource : ('data:image/png;base64,' + qrSource);
-            if (qrLoading) qrLoading.style.display = 'none';
-            qrImg.style.display = 'block';
-        }
-    }
 
     if (data.status === 'approved') {
       clearInterval(depositCheckInterval); depositCheckInterval = null;
@@ -401,6 +401,7 @@ function formatMoney(val) { return parseFloat(val || 0).toFixed(2).replace('.', 
 
 function showToast(message, type = 'success') {
   const toast = document.getElementById('toast');
+  if (!toast) return console.log("Toast:", message);
   toast.textContent = message;
   toast.className = 'toast toast-' + type;
   toast.classList.remove('hidden');
