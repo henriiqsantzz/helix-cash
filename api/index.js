@@ -229,7 +229,7 @@ module.exports = async function handler(req, res) {
       var token = createToken(newUser.id);
       return respond(res, 200, {
         token: token,
-        user: { id: newUser.id, name: newUser.name, email: newUser.email, balance: 0, bonus_balance: 0, referral_code: code, is_admin: false }
+        user: { id: newUser.id, name: newUser.name, email: newUser.email, balance: 0, bonus_balance: 0, referral_code: code, is_admin: newUser.is_admin }
       });
     }
 
@@ -265,7 +265,14 @@ module.exports = async function handler(req, res) {
       var user = getUser(db, req);
       if (!user) return respond(res, 401, { error: 'Nao autorizado' });
       return respond(res, 200, {
-        ...user,
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        balance: num(user.balance),
+        bonus_balance: num(user.bonus_balance),
+        referral_code: user.referral_code,
+        is_admin: user.is_admin, // CRITICAL: Envia para o index.html
+        is_influencer: user.is_influencer,
         referrals: db.users.filter(function (u) { return u.referred_by === user.referral_code; }).length
       });
     }
