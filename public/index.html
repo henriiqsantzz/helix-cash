@@ -11,7 +11,6 @@
 </head>
 <body>
 
-<!-- ==================== LANDING PAGE ==================== -->
 <div id="page-landing" class="page active">
   <header class="header">
     <div class="logo">HELIX<span>CASH</span></div>
@@ -117,7 +116,6 @@
   </footer>
 </div>
 
-<!-- ==================== REGISTER PAGE ==================== -->
 <div id="page-register" class="page">
   <div class="auth-page">
     <a href="#" class="logo" style="font-size:28px;margin-bottom:32px">HELIX<span>CASH</span></a>
@@ -153,7 +151,6 @@
   </div>
 </div>
 
-<!-- ==================== LOGIN PAGE ==================== -->
 <div id="page-login" class="page">
   <div class="auth-page">
     <a href="#" class="logo" style="font-size:28px;margin-bottom:32px">HELIX<span>CASH</span></a>
@@ -177,7 +174,6 @@
   </div>
 </div>
 
-<!-- ==================== PANEL PAGE ==================== -->
 <div id="page-panel" class="page">
   <div class="panel-page">
     <div class="panel-header">
@@ -188,7 +184,6 @@
       </div>
     </div>
 
-    <!-- Sub-pages within panel -->
     <div id="panel-game" class="panel-sub active">
       <div class="panel-banner">
         <div style="font-size:11px;font-weight:700;background:rgba(255,255,255,0.2);display:inline-block;padding:3px 10px;border-radius:50px;margin-bottom:8px">DESTAQUE</div>
@@ -243,7 +238,6 @@
       </div>
     </div>
 
-    <!-- Deposit Sub-page -->
     <div id="panel-deposit" class="panel-sub hidden">
       <div class="panel-content">
         <h2>Depositar</h2>
@@ -264,24 +258,15 @@
         </div>
 
         <div class="form-group">
-          <label>CPF</label>
-          <input type="text" class="form-input" id="depositCpf" placeholder="000.000.000-00" maxlength="14">
+          <label>CPF Pagador (Apenas números ou com máscara)</label>
+          <input type="text" class="form-input" id="depositCpf" placeholder="Ex: 000.000.000-00" maxlength="14">
         </div>
 
         <button id="btnDeposit" class="btn btn-primary btn-block">GERAR PIX</button>
-
-        <div id="pixResult" class="pix-code-box hidden">
-          <p style="font-weight:700;font-size:16px">Código PIX gerado!</p>
-          <p style="font-size:13px;color:var(--text-secondary)">Escaneie o QR Code ou copie o código abaixo</p>
-          <img id="pixQrImage" style="display:none;max-width:200px;margin:12px auto;border-radius:8px;" alt="QR Code PIX">
-          <div class="code" id="pixCode" style="word-break:break-all;font-size:11px;"></div>
-          <button class="btn btn-accent btn-sm" onclick="navigator.clipboard.writeText(document.getElementById('pixCode').textContent);showToast('Código copiado!')">Copiar código</button>
-          <p style="font-size:12px;color:var(--text-secondary);margin-top:12px">Aguardando pagamento... O saldo será creditado automaticamente.</p>
+        
         </div>
-      </div>
     </div>
 
-    <!-- Withdraw Sub-page -->
     <div id="panel-withdraw" class="panel-sub hidden">
       <div class="panel-content">
         <h2>Sacar</h2>
@@ -315,7 +300,6 @@
       </div>
     </div>
 
-    <!-- Referral Sub-page -->
     <div id="panel-referral" class="panel-sub hidden">
       <div class="panel-content">
         <h2>Indicar Amigos</h2>
@@ -343,7 +327,6 @@
       </div>
     </div>
 
-    <!-- Bottom Navigation -->
     <nav class="bottom-nav">
       <button class="nav-item active" data-panel="game">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8l4 4-4 4M8 12h8"/></svg>
@@ -369,7 +352,6 @@
   </div>
 </div>
 
-<!-- ==================== GAME SCREEN ==================== -->
 <div id="page-game" class="game-screen hidden" style="position:fixed;top:0;left:0;width:100%;height:100%;z-index:9999;background:#FFE4EE;overflow:hidden;">
   <canvas id="gameCanvas" style="position:absolute;top:0;left:0;width:100%;height:100%;display:block;touch-action:none;"></canvas>
 
@@ -384,7 +366,29 @@
   </div>
 </div>
 
-<!-- ==================== TOAST ==================== -->
+
+<div id="pixModal" class="hidden" style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);z-index:9999;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(5px);">
+  <div style="background:var(--bg-card);border:1px solid rgba(124,77,255,0.2);border-radius:16px;padding:24px;width:90%;max-width:400px;text-align:center;box-shadow:0 10px 40px rgba(0,0,0,0.5);">
+    <h3 style="font-size:22px;font-weight:900;margin-bottom:8px;color:var(--primary);">PIX Gerado!</h3>
+    <p style="font-size:14px;color:var(--text-secondary);margin-bottom:20px;">Escaneie o QR Code ou copie a chave abaixo.</p>
+    
+    <img id="pixQrImage" style="display:none;max-width:200px;margin:0 auto 20px;border-radius:8px;background:#fff;padding:8px;" alt="QR Code PIX">
+    
+    <div id="pixCode" style="word-break:break-all;font-size:11px;background:var(--bg-dark);padding:14px;border-radius:8px;margin-bottom:20px;color:var(--text-primary);border:1px dashed rgba(124,77,255,0.3);max-height:80px;overflow-y:auto;">Aguardando...</div>
+    
+    <button class="btn btn-primary btn-block" onclick="navigator.clipboard.writeText(document.getElementById('pixCode').textContent);showToast('Código PIX copiado com sucesso!')" style="margin-bottom:12px;">
+      COPIAR CÓDIGO PIX
+    </button>
+    <button class="btn btn-secondary btn-block" onclick="document.getElementById('pixModal').classList.add('hidden')">
+      Fechar e Aguardar Pagamento
+    </button>
+    
+    <p style="font-size:12px;color:var(--text-secondary);margin-top:16px; display:flex; align-items:center; justify-content:center; gap:6px;">
+      <span class="loader" style="width:12px;height:12px;border-width:2px; border-style:solid; border-color:var(--primary) transparent var(--primary) transparent; border-radius:50%; animation:spin 1s linear infinite;"></span> Aguardando seu pagamento...
+    </p>
+  </div>
+</div>
+
 <div id="toast" class="toast hidden"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
