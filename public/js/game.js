@@ -12,8 +12,8 @@
     postRadius: 0.5,
     postHeight: 5000, // Poste estendido para permitir descida infinita
     ballRadius: 0.30,
-    ballBounceForce: 0.22,
-    gravity: 0.015,
+    ballBounceForce: 0.35,
+    gravity: 0.025,
     segmentsPerPlatform: 12,
     holeSegments: 2,
     
@@ -29,7 +29,7 @@
     cameraOffsetDown: 3.5,
     postExtraTop: 20.0,
     
-    cameraFollowSpeed: 0.08,
+    cameraFollowSpeed: 0.15,
     rotationSensitivity: 0.008,
     targetMultiplier: 8,
     latheSegments: 32
