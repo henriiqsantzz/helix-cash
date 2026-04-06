@@ -260,12 +260,15 @@ document.querySelectorAll('.amount-option[data-dep]').forEach(btn => {
 
 document.getElementById('btnDeposit').addEventListener('click', async () => {
   const amount = parseFloat(document.getElementById('depositAmount').value);
-  const cpf = (document.getElementById('depositCpf') ? document.getElementById('depositCpf').value : '').trim();
+  const cpfEl = document.getElementById('depositCpf');
+  const cpf = cpfEl ? cpfEl.value.trim() : '';
+  
   if (!amount || amount < 10) return showToast('Deposito minimo: R$10,00', 'error');
   if (!cpf) return showToast('Informe seu CPF para gerar o PIX', 'error');
 
   const btn = document.getElementById('btnDeposit');
-  btn.disabled = true; btn.innerHTML = '<span class="loader"></span>';
+  btn.disabled = true; 
+  btn.innerHTML = '<span class="loader" style="width:16px;height:16px;border-width:2px;display:inline-block;vertical-align:middle;margin-right:8px;"></span> GERANDO...';
 
   try {
     const data = await api('/api/deposit', {
@@ -274,31 +277,38 @@ document.getElementById('btnDeposit').addEventListener('click', async () => {
 
     currentDepositId = data.deposit ? data.deposit.id : null;
 
-    // Show PIX section
-    document.getElementById('pixResult').classList.remove('hidden');
-
-    // Show PIX copia e cola
+    // Popula o Modal com a Chave e QR Code
     const pixCode = data.pix_code || 'Codigo indisponivel';
-    document.getElementById('pixCode').textContent = pixCode;
+    const codeContainer = document.getElementById('pixCode');
+    if (codeContainer) codeContainer.textContent = pixCode;
 
-    // Show QR code image if available
     const qrImg = document.getElementById('pixQrImage');
-    if (qrImg && data.qr_code_image) {
-      qrImg.src = data.qr_code_image.startsWith('data:') ? data.qr_code_image : ('data:image/png;base64,' + data.qr_code_image);
-      qrImg.style.display = 'block';
-    } else if (qrImg) {
-      qrImg.style.display = 'none';
+    if (qrImg) {
+      if (data.qr_code_image) {
+        qrImg.src = data.qr_code_image.startsWith('data:') ? data.qr_code_image : ('data:image/png;base64,' + data.qr_code_image);
+        qrImg.style.display = 'block';
+      } else {
+        qrImg.style.display = 'none';
+      }
     }
 
     showToast('PIX gerado com sucesso!');
 
-    // Start polling for payment confirmation
+    // ABRE O MODAL NOVO AQUI
+    const modal = document.getElementById('pixModal');
+    if (modal) modal.classList.remove('hidden');
+
+    // Inicia verificação do status do pagamento
     if (currentDepositId) {
       if (depositCheckInterval) clearInterval(depositCheckInterval);
       depositCheckInterval = setInterval(checkDepositStatus, 5000);
     }
-  } catch (e) { showToast(e.message, 'error'); }
-  finally { btn.disabled = false; btn.textContent = 'GERAR PIX'; }
+  } catch (e) { 
+    showToast(e.message, 'error'); 
+  } finally { 
+    btn.disabled = false; 
+    btn.textContent = 'GERAR PIX'; 
+  }
 });
 
 async function checkDepositStatus() {
@@ -307,18 +317,27 @@ async function checkDepositStatus() {
     const data = await api('/api/deposit/status', {
       method: 'POST', body: JSON.stringify({ deposit_id: currentDepositId })
     });
+    
     if (data.status === 'approved') {
       clearInterval(depositCheckInterval); depositCheckInterval = null;
-      user.balance = data.new_balance; updateUI();
-      showToast('Pagamento confirmado! Saldo atualizado.');
-      document.getElementById('pixResult').classList.add('hidden');
+      user.balance = data.new_balance; 
+      updateUI();
+      showToast('Pagamento confirmado! Saldo creditado na conta.', 'success');
+      
+      // Fecha o modal automaticamente quando o PIX for pago
+      const modal = document.getElementById('pixModal');
+      if (modal) modal.classList.add('hidden');
       currentDepositId = null;
     } else if (data.status === 'rejected' || data.status === 'expired') {
       clearInterval(depositCheckInterval); depositCheckInterval = null;
-      showToast('PIX expirado ou rejeitado. Tente novamente.', 'error');
+      showToast('O tempo do PIX expirou ou ele foi rejeitado.', 'error');
+      
+      // Fecha o modal em caso de erro
+      const modal = document.getElementById('pixModal');
+      if (modal) modal.classList.add('hidden');
       currentDepositId = null;
     }
-  } catch (e) { /* silent */ }
+  } catch (e) { /* silent fail */ }
 }
 
 // ===================== WITHDRAW =====================
