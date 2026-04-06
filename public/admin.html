@@ -142,46 +142,38 @@
   <main class="admin-main">
 
     <div id="section-dashboard" class="admin-section active">
-      <div class="admin-header"><h1>📊 Dashboard</h1><p style="color:#a0a0c0">Visão geral completa da plataforma</p></div>
-
-      <h3 style="font-size:14px;color:#a0a0c0;margin-bottom:12px;text-transform:uppercase;letter-spacing:2px">Resumo Geral</h3>
-      <div class="admin-cards" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); display:grid;">
-        <div class="admin-card"><div class="card-icon">👥</div><div class="label">Usuários totais</div><div class="value purple" id="d-users">0</div></div>
-        <div class="admin-card"><div class="card-icon">⭐</div><div class="label">Influenciadores</div><div class="value" style="color:#ffc107" id="d-influencers">0</div></div>
-        <div class="admin-card"><div class="card-icon">💰</div><div class="label">Depósitos aprov.</div><div class="value green" id="d-deposits">R$ 0</div></div>
-        <div class="admin-card"><div class="card-icon">💸</div><div class="label">Saques pagos</div><div class="value red" id="d-withdrawals">R$ 0</div></div>
-        <div class="admin-card"><div class="card-icon">📈</div><div class="label">Lucro Líquido</div><div class="value green" id="d-profit">R$ 0</div></div>
-        <div class="admin-card"><div class="card-icon">🎮</div><div class="label">Total jogos</div><div class="value purple" id="d-games">0</div></div>
-        <div class="admin-card"><div class="card-icon">🎰</div><div class="label">Total apostado</div><div class="value purple" id="d-bets">R$ 0</div></div>
-        <div class="admin-card"><div class="card-icon">🏆</div><div class="label">Total prêmios</div><div class="value red" id="d-prizes">R$ 0</div></div>
-        <div class="admin-card"><div class="card-icon">💵</div><div class="label">House Edge (Lucro)</div><div class="value green" id="d-game-profit">R$ 0</div></div>
+      <div class="admin-header" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+        <div><h1>📊 Dashboard</h1><p style="color:#a0a0c0">Gestão financeira e métricas</p></div>
+        <select class="form-input" style="max-width:180px;" id="dashboardRange" onchange="loadDashboard()">
+          <option value="today">Hoje</option>
+          <option value="yesterday">Ontem</option>
+          <option value="7days">Últimos 7 dias</option>
+          <option value="thisMonth">Este mês</option>
+          <option value="lastMonth">Mês passado</option>
+          <option value="max">Máximo</option>
+        </select>
       </div>
 
-      <h3 style="font-size:14px;color:#a0a0c0;margin:24px 0 12px;text-transform:uppercase;letter-spacing:2px">Hoje</h3>
-      <div class="admin-cards" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); display:grid;">
-        <div class="admin-card"><div class="card-icon">👤</div><div class="label">Novos usuários</div><div class="value green" id="d-today-users">0</div></div>
-        <div class="admin-card"><div class="card-icon">💰</div><div class="label">Depósitos hoje</div><div class="value green" id="d-today-deposits">R$ 0</div></div>
-        <div class="admin-card"><div class="card-icon">💸</div><div class="label">Saques hoje</div><div class="value red" id="d-today-withdrawals">R$ 0</div></div>
-        <div class="admin-card"><div class="card-icon">🎮</div><div class="label">Jogos hoje</div><div class="value purple" id="d-today-games">0</div></div>
-      </div>
-
-      <h3 style="font-size:14px;color:#a0a0c0;margin:24px 0 12px;text-transform:uppercase;letter-spacing:2px">Atenção Pendentes</h3>
-      <div class="admin-cards" style="grid-template-columns:repeat(2,1fr); display:grid;">
-        <div class="admin-card" style="border-color:rgba(255,193,7,0.3)"><div class="card-icon">⚠️</div><div class="label">Depósitos Pend.</div><div class="value" style="color:#ffc107" id="d-pending-deposits">0</div></div>
-        <div class="admin-card" style="border-color:rgba(255,193,7,0.3)"><div class="card-icon">⚠️</div><div class="label">Saques Pend.</div><div class="value" style="color:#ffc107" id="d-pending-withdrawals">0</div></div>
+      <div class="admin-cards" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); display:grid; gap:20px;">
+        <div class="admin-card"><div class="card-icon">💰</div><div class="label">Depósitos</div><div class="value green" id="d-deposits">R$ 0,00</div></div>
+        <div class="admin-card"><div class="card-icon">💸</div><div class="label">Saques</div><div class="value red" id="d-withdrawals">R$ 0,00</div></div>
+        <div class="admin-card"><div class="card-icon">📈</div><div class="label">Lucro Líquido</div><div class="value green" id="d-profit">R$ 0,00</div></div>
+        <div class="admin-card"><div class="card-icon">💵</div><div class="label">GGR (Casa)</div><div class="value green" id="d-ggr">R$ 0,00</div></div>
+        <div class="admin-card"><div class="card-icon">👥</div><div class="label">Novos Usuários</div><div class="value purple" id="d-users">0</div></div>
+        <div class="admin-card"><div class="card-icon">🎮</div><div class="label">Total Jogos</div><div class="value purple" id="d-games">0</div></div>
       </div>
     </div>
 
     <div id="section-users" class="admin-section">
       <div class="admin-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
-        <div><h1>👥 Usuários</h1><p style="color:#a0a0c0">Gerenciar clientes e saldos</p></div>
+        <div><h1>👥 Usuários</h1><p style="color:#a0a0c0">Gerenciar clientes e permissões</p></div>
         <button class="refresh-btn" onclick="loadUsers()">🔄 Atualizar</button>
       </div>
       <input type="text" class="search-input" id="searchUsers" placeholder="Buscar por nome ou email..." oninput="filterUsers()">
       <div class="table-responsive">
         <table class="admin-table">
           <thead>
-            <tr><th>Nome</th><th>Email</th><th>Saldo</th><th>Depositado</th><th>Sacado</th><th>Jogos</th><th>Status</th><th>Ações</th></tr>
+            <tr><th>ID</th><th>Nome</th><th>Email</th><th>Saldo</th><th>Status</th><th>Ações</th></tr>
           </thead>
           <tbody id="usersTable"></tbody>
         </table>
@@ -191,154 +183,41 @@
     <div id="section-influencers" class="admin-section">
       <div class="admin-header">
         <h1>⭐ Influenciadores</h1>
-        <p style="color:#a0a0c0">Gerencie contas promo e taxas de vitória (Vantagem da Casa reduzida)</p>
+        <p style="color:#a0a0c0">Ajuste individual de dificuldade e ganhos</p>
       </div>
       <div class="table-responsive">
         <table class="admin-table">
           <thead>
-            <tr><th>Nome</th><th>Email</th><th>Saldo</th><th>Taxa de Ganho (Certeza)</th><th>Jogos</th><th>Ações</th></tr>
+            <tr><th>Nome</th><th>Email</th><th>Taxa de Ganho (%)</th><th>Influencer</th><th>Admin</th><th>Ações</th></tr>
           </thead>
           <tbody id="influencersTable"></tbody>
         </table>
       </div>
-      <p id="noInfluencers" style="text-align:center;color:#a0a0c0;padding:40px;display:none">Nenhum influenciador cadastrado. Altere usuários na aba "Usuários".</p>
     </div>
 
     <div id="section-deposits" class="admin-section">
-      <div class="admin-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
-        <div>
-            <div style="display:flex; align-items:center; gap:12px;">
-                <h1 style="margin:0;">💰 Depósitos</h1>
-                <span class="auto-badge">⚡ Aprovação Automática Ativa</span>
-            </div>
-            <p style="color:#a0a0c0;margin-top:4px;">O sistema reconhece os pagamentos PIX automaticamente pelo Webhook da PenguimPay. A aprovação manual é apenas um plano de emergência.</p>
-        </div>
-        <button class="refresh-btn" onclick="loadDeposits()">🔄 Atualizar</button>
-      </div>
-      <div class="tab-bar">
-        <button class="tab-btn active" onclick="filterDeposits('all',this)">Todos</button>
-        <button class="tab-btn" onclick="filterDeposits('pending',this)">Pendentes</button>
-        <button class="tab-btn" onclick="filterDeposits('approved',this)">Aprovados</button>
-        <button class="tab-btn" onclick="filterDeposits('rejected',this)">Rejeitados</button>
-      </div>
-      <div class="table-responsive">
-        <table class="admin-table">
-          <thead><tr><th>ID</th><th>Usuário</th><th>Valor</th><th>Código PIX</th><th>Status</th><th>Data</th><th>Ações Manuais</th></tr></thead>
-          <tbody id="depositsTable"></tbody>
-        </table>
-      </div>
+      <div class="admin-header"><h1>💰 Depósitos</h1></div>
+      <div class="table-responsive"><table class="admin-table"><thead><tr><th>ID</th><th>Valor</th><th>Status</th><th>Data</th></tr></thead><tbody id="depositsTable"></tbody></table></div>
     </div>
 
     <div id="section-withdrawals" class="admin-section">
-      <div class="admin-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
-        <div><h1>💸 Saques</h1><p style="color:#a0a0c0">Processamento de retiradas PIX solicitadas pelos clientes</p></div>
-        <button class="refresh-btn" onclick="loadWithdrawals()">🔄 Atualizar</button>
-      </div>
-      <div class="tab-bar">
-        <button class="tab-btn active" onclick="filterWithdrawals('all',this)">Todos</button>
-        <button class="tab-btn" onclick="filterWithdrawals('pending',this)">Pendentes</button>
-        <button class="tab-btn" onclick="filterWithdrawals('approved',this)">Pagos</button>
-      </div>
-      <div class="table-responsive">
-        <table class="admin-table">
-          <thead><tr><th>ID</th><th>Usuário</th><th>Valor</th><th>Chave PIX</th><th>Tipo</th><th>Status</th><th>Data</th><th>Ações</th></tr></thead>
-          <tbody id="withdrawalsTable"></tbody>
-        </table>
-      </div>
+      <div class="admin-header"><h1>💸 Saques</h1></div>
+      <div class="table-responsive"><table class="admin-table"><thead><tr><th>ID</th><th>Valor</th><th>Chave PIX</th><th>Status</th></tr></thead><tbody id="withdrawalsTable"></tbody></table></div>
     </div>
 
     <div id="section-games" class="admin-section">
-      <div class="admin-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
-        <div><h1>🎮 Jogos</h1><p style="color:#a0a0c0">Histórico em tempo real de todas as partidas jogadas</p></div>
-        <button class="refresh-btn" onclick="loadGames()">🔄 Atualizar</button>
-      </div>
-      <div class="table-responsive">
-        <table class="admin-table">
-          <thead><tr><th>ID</th><th>Jogador</th><th>Aposta</th><th>Plataformas</th><th>Multiplicador</th><th>Prêmio</th><th>Resultado</th><th>Data</th></tr></thead>
-          <tbody id="gamesTable"></tbody>
-        </table>
-      </div>
+      <div class="admin-header"><h1>🎮 Jogos</h1></div>
+      <div class="table-responsive"><table class="admin-table"><thead><tr><th>ID</th><th>Aposta</th><th>Prêmio</th><th>Data</th></tr></thead><tbody id="gamesTable"></tbody></table></div>
     </div>
 
     <div id="section-settings" class="admin-section">
-      <div class="admin-header"><h1>⚙️ Configurações</h1><p style="color:#a0a0c0">Controle absoluto do algoritmo do Helix Cash</p></div>
+      <div class="admin-header"><h1>⚙️ Configurações</h1><p style="color:#a0a0c0">Configurações globais do sistema</p></div>
       <div class="settings-form">
-        <h3 style="color:#b388ff;margin-bottom:16px;border-bottom:1px solid rgba(124,77,255,0.2);padding-bottom:8px;">💳 Valores e Limites</h3>
-        <div class="form-group"><label>Depósito mínimo (R$)</label><input type="number" class="form-input" id="set-min_deposit" step="1"></div>
-        <div class="form-group"><label>Saque mínimo (R$)</label><input type="number" class="form-input" id="set-min_withdrawal" step="1"></div>
-        <div class="form-group"><label>Multiplicador máximo de lucro (x)</label><input type="number" class="form-input" id="set-max_multiplier" step="0.5"></div>
-
-        <h3 style="color:#b388ff;margin:32px 0 16px;border-bottom:1px solid rgba(124,77,255,0.2);padding-bottom:8px;">🎰 Algoritmo de Cassino (Vantagem da Casa)</h3>
-        <div class="form-group">
-          <label>House Edge - Jogadores Normais (%)</label>
-          <input type="number" class="form-input" id="set-house_edge" step="1" min="0" max="100">
-          <p style="font-size:12px;color:#a0a0c0;margin-top:4px">Ex: 15 = 15% de chance de o sistema anular o prêmio quando ele clicar em resgatar (lucro da casa).</p>
-        </div>
-        <div class="form-group">
-          <label>House Edge - Influenciadores (%)</label>
-          <input type="number" class="form-input" id="set-influencer_house_edge" step="1" min="0" max="100">
-          <p style="font-size:12px;color:#a0a0c0;margin-top:4px">Taxa padrão aplicada para influenciadores para que eles ganhem dinheiro na live (Ex: 0 = ganham sempre que não caírem).</p>
-        </div>
-
-        <h3 style="color:#00e676;margin:32px 0 16px;border-bottom:1px solid rgba(0,230,118,0.2);padding-bottom:8px;">🎮 Dificuldade do Jogo (JOGADORES NORMAIS)</h3>
-        <div class="form-group">
-          <label>Quantidade de plataformas (Mapa total)</label>
-          <input type="number" class="form-input" id="set-game_platform_count" step="1" min="10" max="100" placeholder="25">
-        </div>
-        <div class="form-group">
-          <label>Andar Inicial do Perigo (Zonas de segurança)</label>
-          <input type="number" class="form-input" id="set-game_danger_start_level" step="1" min="0" placeholder="2">
-          <p style="font-size:12px;color:#a0a0c0;margin-top:4px">Quantas plataformas o jogador pode passar sem o vermelho da morte aparecer.</p>
-        </div>
-        <div class="form-group">
-          <label>Taxa de Progressão de Perigo</label>
-          <input type="number" class="form-input" id="set-game_danger_progression" step="1" min="1" placeholder="5">
-          <p style="font-size:12px;color:#a0a0c0;margin-top:4px">A cada X andares, a quantidade de vermelho no disco aumenta.</p>
-        </div>
-        <div class="form-group">
-          <label>Máximo de Fatias Vermelhas</label>
-          <input type="number" class="form-input" id="set-game_danger_max_slices" step="1" min="1" max="11" placeholder="6">
-          <p style="font-size:12px;color:#a0a0c0;margin-top:4px">Limite extremo de fatias letais (de 12 possíveis).</p>
-        </div>
-        <div class="form-group">
-          <label>Tamanho do buraco de queda</label>
-          <input type="number" class="form-input" id="set-game_hole_segments" step="0.1" min="0.5" max="4" placeholder="1.5">
-          <p style="font-size:12px;color:#a0a0c0;margin-top:4px">Buracos menores = jogo mais difícil. Padrão: 1.5</p>
-        </div>
-        <div class="form-group">
-          <label>Velocidade de Rotação (Sensibilidade)</label>
-          <input type="number" class="form-input" id="set-game_rotation_sensitivity" step="0.001" min="0.002" max="0.02" placeholder="0.008">
-        </div>
-
-        <h3 style="color:#ffc107;margin:32px 0 16px;border-bottom:1px solid rgba(255,193,7,0.2);padding-bottom:8px;">⭐ Dificuldade FACILITADA (INFLUENCIADORES)</h3>
-        <p style="font-size:13px;color:#a0a0c0;margin-bottom:16px;">O backend envia estes parâmetros apenas se o usuário tiver a tag Influencer, deixando o jogo estupidamente fácil para marketing.</p>
-        
-        <div class="form-group">
-          <label>Máximo de Fatias Vermelhas (Influencers)</label>
-          <input type="number" class="form-input" id="set-inf_game_danger_max_slices" step="1" min="0" max="11" placeholder="2">
-          <p style="font-size:12px;color:#a0a0c0;margin-top:4px">Defina 0 ou 1 para que seja quase impossível o influencer morrer.</p>
-        </div>
-        <div class="form-group">
-          <label>Andar Inicial do Perigo (Influencers)</label>
-          <input type="number" class="form-input" id="set-inf_game_danger_start_level" step="1" min="0" placeholder="10">
-          <p style="font-size:12px;color:#a0a0c0;margin-top:4px">Eles podem chegar até o andar 10 sem ver nenhuma cor vermelha.</p>
-        </div>
-        <div class="form-group">
-          <label>Tamanho do buraco de queda (Influencers)</label>
-          <input type="number" class="form-input" id="set-inf_game_hole_segments" step="0.1" min="0.5" max="6" placeholder="3.0">
-          <p style="font-size:12px;color:#a0a0c0;margin-top:4px">Defina 3.0 para um buraco gigantesco para a bola passar liso.</p>
-        </div>
-
-        <h3 style="color:#b388ff;margin:32px 0 16px;border-bottom:1px solid rgba(124,77,255,0.2);padding-bottom:8px;">Física Complementar Global</h3>
-        <div class="form-group"><label>Gravidade (Velocidade de queda)</label><input type="number" class="form-input" id="set-game_gravity" step="0.001" min="0.005" max="0.05" placeholder="0.012"></div>
-        <div class="form-group"><label>Força do pulo / Quique</label><input type="number" class="form-input" id="set-game_bounce_force" step="0.01" min="0.05" max="0.5" placeholder="0.18"></div>
-        <div class="form-group"><label>Espaçamento Vertical</label><input type="number" class="form-input" id="set-game_platform_spacing" step="0.1" min="1" max="5" placeholder="2.2"></div>
-        <div class="form-group"><label>Fatias Renderizadas por Andar</label><input type="number" class="form-input" id="set-game_segments_per_platform" step="1" min="4" max="16" placeholder="12"></div>
-
-        <h3 style="color:#b388ff;margin:32px 0 16px;border-bottom:1px solid rgba(124,77,255,0.2);padding-bottom:8px;">Afiliados & Indicações</h3>
-        <div class="form-group"><label>Bônus de indicação (%) da 1ª aposta</label><input type="number" class="form-input" id="set-referral_bonus" step="1"></div>
-
-        <button class="btn btn-primary" onclick="saveSettings()" style="margin-top:24px; font-size:16px; padding:16px; width:100%">SALVAR TODAS CONFIGURAÇÕES</button>
+        <div class="form-group"><label>Vantagem da Casa Global (%)</label><input type="number" class="form-input" id="set-house_edge"></div>
+        <div class="form-group"><label>Depósito Mínimo (R$)</label><input type="number" class="form-input" id="set-min_deposit"></div>
+        <div class="form-group"><label>Saque Mínimo (R$)</label><input type="number" class="form-input" id="set-min_withdrawal"></div>
+        <div class="form-group"><label>Andar Inicial Perigo</label><input type="number" class="form-input" id="set-game_danger_start_level"></div>
+        <button class="btn btn-primary btn-block" onclick="saveSettings()">Salvar Configurações</button>
       </div>
     </div>
 
@@ -353,19 +232,6 @@ const token = localStorage.getItem('hc_token');
 if (!token) window.location.href = '/#login';
 
 let allUsers = [];
-let allDeposits = [];
-let allWithdrawals = [];
-
-// Sidebar Controller (Mobile)
-document.getElementById('sidebarOverlay').addEventListener('click', () => {
-    document.querySelector('.admin-sidebar').classList.remove('open');
-    document.getElementById('sidebarOverlay').style.display = 'none';
-});
-const toggleSidebar = () => {
-    document.querySelector('.admin-sidebar').classList.toggle('open');
-    document.getElementById('sidebarOverlay').style.display = document.querySelector('.admin-sidebar').classList.contains('open') ? 'block' : 'none';
-};
-document.querySelector('.admin-mobile-header button').onclick = toggleSidebar;
 
 async function api(url, options = {}) {
   const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
@@ -375,8 +241,7 @@ async function api(url, options = {}) {
   return data;
 }
 
-function fmt(v) { return parseFloat(v || 0).toFixed(2).replace('.', ','); }
-function fmtDate(d) { return d ? new Date(d).toLocaleString('pt-BR') : '—'; }
+function fmt(v) { return parseFloat(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 }); }
 
 function showToast(msg, type = 'success') {
   const t = document.getElementById('toast');
@@ -385,60 +250,26 @@ function showToast(msg, type = 'success') {
   setTimeout(() => t.classList.add('hidden'), 3500);
 }
 
-function statusBadge(status) {
-  const c = { pending: 'status-pending', approved: 'status-approved', rejected: 'status-rejected', finished: 'status-approved', playing: 'status-pending' };
-  const l = { pending: 'Pendente', approved: 'Aprovado', rejected: 'Rejeitado', finished: 'Finalizado', playing: 'Jogando' };
-  return `<span class="status-badge ${c[status] || ''}">${l[status] || status}</span>`;
-}
-
 function showModal(html) {
   document.getElementById('modal').innerHTML = `<div class="modal">${html}</div>`;
   document.getElementById('modal').style.display = 'flex';
 }
 function closeModal() { document.getElementById('modal').style.display = 'none'; }
 
-// ===== NAV =====
-document.querySelectorAll('.admin-nav-item').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.admin-nav-item').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    document.querySelectorAll('.admin-section').forEach(s => s.classList.remove('active'));
-    document.getElementById('section-' + btn.dataset.section).classList.add('active');
-    
-    // Auto-close sidebar on mobile
-    if(window.innerWidth <= 900) {
-        document.querySelector('.admin-sidebar').classList.remove('open');
-        document.getElementById('sidebarOverlay').style.display = 'none';
-    }
-
-    const loaders = { users: loadUsers, influencers: loadInfluencers, deposits: loadDeposits, withdrawals: loadWithdrawals, games: loadGames, settings: loadSettings, dashboard: loadDashboard };
-    if (loaders[btn.dataset.section]) loaders[btn.dataset.section]();
-  });
-});
-
-// ===== DASHBOARD =====
+// Dashboard com filtros
 async function loadDashboard() {
   try {
-    const d = await api('/api/admin/dashboard');
-    document.getElementById('d-users').textContent = d.users;
-    document.getElementById('d-influencers').textContent = d.influencers || 0;
-    document.getElementById('d-deposits').textContent = 'R$ ' + fmt(d.deposits.total);
-    document.getElementById('d-withdrawals').textContent = 'R$ ' + fmt(d.withdrawals.total);
-    document.getElementById('d-profit').textContent = 'R$ ' + fmt(d.profit);
-    document.getElementById('d-games').textContent = d.games.count;
-    document.getElementById('d-bets').textContent = 'R$ ' + fmt(d.games.total_bets);
-    document.getElementById('d-prizes').textContent = 'R$ ' + fmt(d.games.total_prizes);
-    document.getElementById('d-game-profit').textContent = 'R$ ' + fmt(d.game_profit || 0);
-    document.getElementById('d-today-users').textContent = d.today.new_users;
-    document.getElementById('d-today-deposits').textContent = 'R$ ' + fmt(d.today.deposits);
-    document.getElementById('d-today-withdrawals').textContent = 'R$ ' + fmt(d.today.withdrawals);
-    document.getElementById('d-today-games').textContent = d.today.games || 0;
-    document.getElementById('d-pending-deposits').textContent = d.pending.deposits;
-    document.getElementById('d-pending-withdrawals').textContent = d.pending.withdrawals;
+    const range = document.getElementById('dashboardRange').value;
+    const d = await api(`/api/admin/dashboard?range=${range}`);
+    document.getElementById('d-deposits').textContent = 'R$ ' + fmt(d.stats.deposits);
+    document.getElementById('d-withdrawals').textContent = 'R$ ' + fmt(d.stats.withdrawals);
+    document.getElementById('d-profit').textContent = 'R$ ' + fmt(d.stats.deposits - d.stats.withdrawals);
+    document.getElementById('d-ggr').textContent = 'R$ ' + fmt(d.stats.bets - d.stats.prizes);
+    document.getElementById('d-users').textContent = d.stats.new_users;
+    document.getElementById('d-games').textContent = d.stats.games_count || 0;
   } catch (e) { showToast(e.message, 'error'); }
 }
 
-// ===== USERS =====
 async function loadUsers() {
   try {
     allUsers = await api('/api/admin/users');
@@ -446,293 +277,89 @@ async function loadUsers() {
   } catch (e) { showToast(e.message, 'error'); }
 }
 
-function filterUsers() {
-  const q = document.getElementById('searchUsers').value.toLowerCase();
-  renderUsers(allUsers.filter(u => (u.name||'').toLowerCase().includes(q) || (u.email||'').toLowerCase().includes(q)));
-}
-
 function renderUsers(users) {
   document.getElementById('usersTable').innerHTML = users.map(u => `
     <tr>
-      <td>
-        <strong>${u.name}</strong>
-        ${u.is_influencer ? '<span class="influencer-badge">INFLUENCER</span>' : ''}
-        <div class="user-detail">Ref: ${u.referral_code}</div>
-      </td>
-      <td>${u.email}<div class="user-detail">${u.phone || '—'}</div></td>
-      <td style="color:#00e676;font-weight:700">R$ ${fmt(u.balance)}</td>
-      <td style="color:#00e676">R$ ${fmt(u.total_deposited)}</td>
-      <td style="color:#ff1744">R$ ${fmt(u.total_withdrawn)}</td>
-      <td>${u.total_games || 0}</td>
-      <td>${u.is_blocked ? '<span class="status-badge status-rejected">Bloqueado</span>' : '<span class="status-badge status-approved">Ativo</span>'}</td>
+      <td>#${u.id}</td>
+      <td><strong>${u.name}</strong> ${u.is_influencer ? '⭐' : ''} ${u.is_admin ? '👑' : ''}</td>
+      <td>${u.email}</td>
+      <td>R$ ${fmt(u.balance)}</td>
+      <td>${u.is_blocked ? 'Bloqueado' : 'Ativo'}</td>
       <td class="admin-actions">
-        <button class="btn btn-sm btn-accent" onclick="openBalanceModal(${u.id},'${u.name}',${u.balance})">💰 Saldo</button>
-        <button class="btn btn-sm" style="background:rgba(255,193,7,0.15);color:#ffc107" onclick="openInfluencerModal(${u.id},'${u.name}',${u.is_influencer},${u.influencer_win_rate || 0})">⭐ Perfil</button>
-        <button class="btn btn-sm ${u.is_blocked ? 'btn-primary' : 'btn-danger'}" onclick="toggleBlock(${u.id},${!u.is_blocked})">${u.is_blocked ? '✅ Ativar' : '🚫 Block'}</button>
+        <button class="btn btn-sm" onclick="openEditModal(${u.id})">Editar</button>
       </td>
     </tr>
-  `).join('') || '<tr><td colspan="8" style="text-align:center;color:#a0a0c0;padding:40px">Nenhum usuário encontrado</td></tr>';
+  `).join('');
 }
 
-function openBalanceModal(id, name, balance) {
+function openEditModal(id) {
+  const u = allUsers.find(x => x.id === id);
   showModal(`
-    <h3>💰 Editar Saldo - ${name}</h3>
-    <div class="form-group">
-      <label>Saldo atual: <strong style="color:#00e676">R$ ${fmt(balance)}</strong></label>
-    </div>
-    <div class="form-group">
-      <label>Substituir saldo exato para:</label>
-      <input type="number" class="form-input" id="modalBalance" value="${balance}" step="0.01">
-    </div>
-    <div style="text-align:center;color:#a0a0c0;margin:10px 0;font-weight:700">OU</div>
-    <div class="form-group">
-      <label>Adicionar (+ bônus) valor:</label>
-      <input type="number" class="form-input" id="modalAddBalance" placeholder="Ex: 50" step="0.01">
-    </div>
+    <h3>Editar Usuário: ${u.name}</h3>
+    <div class="form-group"><label>Saldo (R$)</label><input type="number" id="m-balance" class="form-input" value="${u.balance}"></div>
+    <div class="form-group"><label>Taxa de Vitória Influencer (%)</label><input type="number" id="m-winrate" class="form-input" value="${u.influencer_win_rate}"></div>
+    <div class="form-group"><label><input type="checkbox" id="m-influencer" ${u.is_influencer ? 'checked' : ''}> Influenciador</label></div>
+    <div class="form-group"><label><input type="checkbox" id="m-admin" ${u.is_admin ? 'checked' : ''}> Administrador</label></div>
     <div class="modal-actions">
-      <button class="btn btn-primary" style="flex:1" onclick="saveBalance(${id})">Salvar</button>
-      <button class="btn btn-secondary" style="flex:1" onclick="closeModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveUser(${id})">Salvar</button>
+      <button class="btn btn-secondary" onclick="closeModal()">Fechar</button>
     </div>
   `);
 }
 
-async function saveBalance(id) {
-  const addAmount = parseFloat(document.getElementById('modalAddBalance').value);
-  const setAmount = parseFloat(document.getElementById('modalBalance').value);
+async function saveUser(id) {
+  const body = {
+    id,
+    balance: document.getElementById('m-balance').value,
+    influencer_win_rate: document.getElementById('m-winrate').value,
+    is_influencer: document.getElementById('m-influencer').checked,
+    is_admin: document.getElementById('m-admin').checked
+  };
   try {
-    if (addAmount && addAmount !== 0) {
-      await api(`/api/admin/user/${id}/add-balance`, { method: 'POST', body: JSON.stringify({ amount: addAmount }) });
-      showToast(`R$ ${fmt(addAmount)} adicionado com sucesso!`);
-    } else {
-      await api(`/api/admin/user/${id}/balance`, { method: 'POST', body: JSON.stringify({ amount: setAmount }) });
-      showToast('Saldo redefinido com sucesso!');
-    }
+    await api('/api/admin/user/update', { method: 'POST', body: JSON.stringify(body) });
+    showToast('Usuário atualizado!');
     closeModal(); loadUsers();
   } catch (e) { showToast(e.message, 'error'); }
 }
 
-function openInfluencerModal(id, name, isInfluencer, winRate) {
-  showModal(`
-    <h3>⭐ Status de Divulgação - ${name}</h3>
-    <p style="color:#a0a0c0;margin-bottom:16px;font-size:12px">Contas Influencer têm a dificuldade do jogo reduzida e pulam a taxa de retenção da casa com base no valor abaixo.</p>
-    <div class="form-group">
-      <label>Classificação da Conta</label>
-      <select class="form-input" id="modalInfluencer">
-        <option value="false" ${!isInfluencer ? 'selected' : ''}>Usuário Normal (Padrão)</option>
-        <option value="true" ${isInfluencer ? 'selected' : ''}>Influenciador de Marketing ⭐</option>
-      </select>
-    </div>
-    <div class="form-group">
-      <label>Taxa de Sucesso Forçado (%)</label>
-      <input type="number" class="form-input" id="modalWinRate" value="${winRate}" min="0" max="100" step="5">
-      <p style="font-size:11px;color:#a0a0c0;margin-top:4px">100 = 100% de certeza que não cai na House Edge se ele clicar em resgatar.</p>
-    </div>
-    <div class="modal-actions">
-      <button class="btn btn-primary" style="flex:1" onclick="saveInfluencer(${id})">Salvar Configuração</button>
-      <button class="btn btn-secondary" style="flex:1" onclick="closeModal()">Cancelar</button>
-    </div>
-  `);
-}
-
-async function saveInfluencer(id) {
-  const isInfluencer = document.getElementById('modalInfluencer').value === 'true';
-  const winRate = parseFloat(document.getElementById('modalWinRate').value) || 0;
-  try {
-    await api(`/api/admin/user/${id}/influencer`, { method: 'POST', body: JSON.stringify({ is_influencer: isInfluencer, win_rate: winRate }) });
-    showToast(isInfluencer ? 'Conta atualizada para Influenciador!' : 'Removido dos influenciadores');
-    closeModal(); loadUsers();
-  } catch (e) { showToast(e.message, 'error'); }
-}
-
-async function toggleBlock(id, blocked) {
-  if (blocked && !confirm('Tem certeza que deseja bloquear o acesso desse usuário?')) return;
-  try {
-    await api(`/api/admin/user/${id}/block`, { method: 'POST', body: JSON.stringify({ blocked }) });
-    showToast(blocked ? 'Conta bloqueada com sucesso' : 'Conta reativada');
-    loadUsers();
-  } catch (e) { showToast(e.message, 'error'); }
-}
-
-// ===== INFLUENCERS TAB =====
-async function loadInfluencers() {
-  try {
-    const users = await api('/api/admin/users');
-    const influencers = users.filter(u => u.is_influencer);
-    const noEl = document.getElementById('noInfluencers');
-    if (influencers.length === 0) { noEl.style.display = 'block'; } else { noEl.style.display = 'none'; }
-    document.getElementById('influencersTable').innerHTML = influencers.map(u => `
-      <tr>
-        <td><strong>${u.name}</strong></td>
-        <td>${u.email}</td>
-        <td style="color:#00e676;font-weight:700">R$ ${fmt(u.balance)}</td>
-        <td style="color:#ffc107;font-weight:700">${u.influencer_win_rate || 0}% Imunidade</td>
-        <td>${u.total_games || 0}</td>
-        <td class="admin-actions">
-          <button class="btn btn-sm btn-accent" onclick="openBalanceModal(${u.id},'${u.name}',${u.balance})">💰 Saldo</button>
-          <button class="btn btn-sm" style="background:rgba(255,193,7,0.15);color:#ffc107" onclick="openInfluencerModal(${u.id},'${u.name}',true,${u.influencer_win_rate || 0})">⚙️ Configurar</button>
-          <button class="btn btn-sm btn-danger" onclick="removeInfluencer(${u.id})">Remover Permissão</button>
-        </td>
-      </tr>
-    `).join('');
-  } catch (e) { showToast(e.message, 'error'); }
-}
-
-async function removeInfluencer(id) {
-  if(!confirm('Retirar privilégios de influencer desta conta?')) return;
-  try {
-    await api(`/api/admin/user/${id}/influencer`, { method: 'POST', body: JSON.stringify({ is_influencer: false, win_rate: 0 }) });
-    showToast('Privilégio removido.');
-    loadInfluencers();
-  } catch (e) { showToast(e.message, 'error'); }
-}
-
-// ===== DEPOSITS =====
-async function loadDeposits() {
-  try {
-    allDeposits = await api('/api/admin/deposits');
-    renderDeposits(allDeposits);
-  } catch (e) { showToast(e.message, 'error'); }
-}
-
-function filterDeposits(status, btn) {
-  document.querySelectorAll('#section-deposits .tab-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  renderDeposits(status === 'all' ? allDeposits : allDeposits.filter(d => d.status === status));
-}
-
-function renderDeposits(deps) {
-  document.getElementById('depositsTable').innerHTML = deps.map(d => `
-    <tr>
-      <td>#${d.id}</td>
-      <td><strong>${d.user_name || 'Usuário'}</strong><div class="user-detail">${d.user_email || ''}</div></td>
-      <td style="color:#00e676;font-weight:700;font-size:14px">R$ ${fmt(d.amount)}</td>
-      <td style="font-size:11px;font-family:monospace;color:#b388ff">${(d.pix_code||'').substring(0, 15)}...</td>
-      <td>${statusBadge(d.status)}</td>
-      <td style="font-size:11px;color:#a0a0c0">${fmtDate(d.created_at)}</td>
-      <td class="admin-actions">
-        ${d.status === 'pending' ? `
-          <button class="btn btn-sm btn-primary" onclick="approveDeposit(${d.id})">✅ Forçar</button>
-          <button class="btn btn-sm btn-danger" onclick="rejectDeposit(${d.id})">❌ Negar</button>
-        ` : `<span style="font-size:11px;color:#666">Automatizado/Fechado</span>`}
-      </td>
-    </tr>
-  `).join('') || '<tr><td colspan="7" style="text-align:center;color:#a0a0c0;padding:40px">Nenhuma transação na base</td></tr>';
-}
-
-async function approveDeposit(id) {
-  if (!confirm('Aprovar depósito manualmente ignorando API PenguimPay?')) return;
-  try { await api(`/api/admin/deposit/${id}/approve`, { method: 'POST' }); showToast('Depósito creditado manualmente!'); loadDeposits(); loadDashboard(); } catch (e) { showToast(e.message, 'error'); }
-}
-async function rejectDeposit(id) {
-  if (!confirm('Rejeitar este depósito? Ele sumirá da pendência.')) return;
-  try { await api(`/api/admin/deposit/${id}/reject`, { method: 'POST' }); showToast('Depósito descartado.'); loadDeposits(); } catch (e) { showToast(e.message, 'error'); }
-}
-
-// ===== WITHDRAWALS =====
-async function loadWithdrawals() {
-  try {
-    allWithdrawals = await api('/api/admin/withdrawals');
-    renderWithdrawals(allWithdrawals);
-  } catch (e) { showToast(e.message, 'error'); }
-}
-
-function filterWithdrawals(status, btn) {
-  document.querySelectorAll('#section-withdrawals .tab-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  renderWithdrawals(status === 'all' ? allWithdrawals : allWithdrawals.filter(w => w.status === status));
-}
-
-function renderWithdrawals(ws) {
-  document.getElementById('withdrawalsTable').innerHTML = ws.map(w => `
-    <tr>
-      <td>#${w.id}</td>
-      <td><strong>${w.user_name || 'Usuário'}</strong><div class="user-detail">${w.user_email || ''}</div></td>
-      <td style="color:#ff1744;font-weight:900;font-size:15px">R$ ${fmt(w.amount)}</td>
-      <td style="font-family:monospace;font-size:12px;color:#fff">${w.pix_key}</td>
-      <td style="font-size:11px;color:#a0a0c0;text-transform:uppercase">${w.pix_type}</td>
-      <td>${statusBadge(w.status)}</td>
-      <td style="font-size:11px;color:#a0a0c0">${fmtDate(w.created_at)}</td>
-      <td class="admin-actions">
-        ${w.status === 'pending' ? `
-          <button class="btn btn-sm btn-primary" onclick="approveWithdrawal(${w.id})">💸 Marcar Pago</button>
-          <button class="btn btn-sm btn-danger" onclick="rejectWithdrawal(${w.id})">❌ Estornar</button>
-        ` : `<span style="font-size:11px;color:#666">Concluído</span>`}
-      </td>
-    </tr>
-  `).join('') || '<tr><td colspan="8" style="text-align:center;color:#a0a0c0;padding:40px">Nenhum saque solicitado ainda.</td></tr>';
-}
-
-async function approveWithdrawal(id) {
-  if (!confirm('Você já fez o PIX manualmente pelo seu banco para esta chave?')) return;
-  try { await api(`/api/admin/withdrawal/${id}/approve`, { method: 'POST' }); showToast('Marcado como pago no sistema!'); loadWithdrawals(); loadDashboard(); } catch (e) { showToast(e.message, 'error'); }
-}
-async function rejectWithdrawal(id) {
-  if (!confirm('Estornar saque? O dinheiro vai voltar pro saldo do cliente.')) return;
-  try { await api(`/api/admin/withdrawal/${id}/reject`, { method: 'POST' }); showToast('Saque estornado para o jogador.'); loadWithdrawals(); } catch (e) { showToast(e.message, 'error'); }
-}
-
-// ===== GAMES =====
-async function loadGames() {
-  try {
-    const gs = await api('/api/admin/games');
-    document.getElementById('gamesTable').innerHTML = gs.map(g => {
-      const won = g.prize > 0;
-      return `<tr>
-        <td style="font-size:11px;color:#666">#${g.id}</td>
-        <td><strong>${g.user_name || 'Desconhecido'}</strong></td>
-        <td style="font-size:13px">R$ ${fmt(g.bet_amount)}</td>
-        <td style="font-weight:700">${g.platforms_reached} pts</td>
-        <td style="color:#b388ff">${g.multiplier ? g.multiplier.toFixed(2) + 'x' : '—'}</td>
-        <td style="color:${won ? '#00e676' : '#ff1744'};font-weight:900">R$ ${fmt(g.prize)}</td>
-        <td>${won ? '<span class="status-badge status-approved">CASH OUT</span>' : '<span class="status-badge status-rejected">DERROTA</span>'}</td>
-        <td style="font-size:11px;color:#a0a0c0">${fmtDate(g.created_at)}</td>
-      </tr>`;
-    }).join('') || '<tr><td colspan="8" style="text-align:center;color:#a0a0c0;padding:40px">O histórico de jogos está vazio.</td></tr>';
-  } catch (e) { showToast(e.message, 'error'); }
-}
-
-// ===== SETTINGS =====
 async function loadSettings() {
   try {
     const s = await api('/api/admin/settings');
-    Object.entries(s).forEach(([key, value]) => {
-      const el = document.getElementById('set-' + key);
-      if (el) el.value = value;
-    });
-  } catch (e) { showToast(e.message, 'error'); }
+    document.getElementById('set-house_edge').value = s.house_edge;
+    document.getElementById('set-min_deposit').value = s.min_deposit;
+    document.getElementById('set-min_withdrawal').value = s.min_withdrawal;
+    document.getElementById('set-game_danger_start_level').value = s.game_danger_start_level;
+  } catch (e) {}
 }
 
 async function saveSettings() {
-  // Lista unificada das variáveis globais e para influenciadores
-  const keys = [
-    'min_deposit', 'min_withdrawal', 'max_multiplier', 'referral_bonus', 'house_edge', 'influencer_house_edge', 'site_name',
-    'game_platform_count', 'game_gravity', 'game_bounce_force', 'game_hole_segments', 'game_rotation_sensitivity', 'game_platform_spacing', 'game_segments_per_platform',
-    'game_danger_start_level', 'game_danger_progression', 'game_danger_max_slices',
-    'inf_game_danger_max_slices', 'inf_game_danger_start_level', 'inf_game_hole_segments'
-  ];
-  
-  const settings = {};
-  keys.forEach(k => { 
-      const el = document.getElementById('set-' + k); 
-      if (el && el.value !== "") settings[k] = el.value; 
-  });
-  
+  const body = {
+    house_edge: document.getElementById('set-house_edge').value,
+    min_deposit: document.getElementById('set-min_deposit').value,
+    min_withdrawal: document.getElementById('set-min_withdrawal').value,
+    game_danger_start_level: document.getElementById('set-game_danger_start_level').value
+  };
   try {
-    await api('/api/admin/settings', { method: 'POST', body: JSON.stringify(settings) });
-    showToast('Sistema atualizado com os novos parâmetros!');
+    await api('/api/admin/settings', { method: 'POST', body: JSON.stringify(body) });
+    showToast('Configurações salvas!');
   } catch (e) { showToast(e.message, 'error'); }
 }
 
-function adminLogout() {
-  localStorage.removeItem('hc_token');
-  localStorage.removeItem('hc_user');
-  window.location.href = '/';
-}
-
-// Inicializadores e Listeners Extras
-document.getElementById('modal').addEventListener('click', (e) => {
-  if (e.target === document.getElementById('modal')) closeModal();
+// Nav items
+document.querySelectorAll('.admin-nav-item').forEach(btn => {
+  btn.onclick = () => {
+    document.querySelectorAll('.admin-nav-item').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('.admin-section').forEach(s => s.classList.remove('active'));
+    document.getElementById('section-' + btn.dataset.section).classList.add('active');
+    
+    if (btn.dataset.section === 'dashboard') loadDashboard();
+    if (btn.dataset.section === 'users' || btn.dataset.section === 'influencers') loadUsers();
+    if (btn.dataset.section === 'settings') loadSettings();
+  };
 });
+
+function adminLogout() { localStorage.clear(); window.location.href = '/'; }
 
 loadDashboard();
 </script>
