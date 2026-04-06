@@ -241,7 +241,7 @@ function closeGame() {
   loadUserData();
 }
 
-// ===================== DEPOSIT (PIX MODAL - UPDATED) =====================
+// ===================== DEPOSIT (PIX MODAL - UPDATED FOR PARADISE) =====================
 document.querySelectorAll('.amount-option[data-dep]').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.amount-option[data-dep]').forEach(b => b.classList.remove('active'));
@@ -267,7 +267,7 @@ document.getElementById('btnDeposit').addEventListener('click', async () => {
       method: 'POST', body: JSON.stringify({ amount, cpf })
     });
 
-    // Captura o deposit_id enviado pela bridge PHP/Node
+    // Captura o deposit_id enviado pela bridge
     currentDepositId = data.deposit_id || (data.deposit ? data.deposit.id : null);
 
     // Preenche o Modal com código PIX e QR Code
@@ -277,8 +277,9 @@ document.getElementById('btnDeposit').addEventListener('click', async () => {
 
     const qrImg = document.getElementById('pixQrImage');
     if (qrImg) {
-      const qrSource = data.qr_code_image || (data.deposit && data.deposit.qr_code_image);
+      let qrSource = data.qr_code_image || (data.deposit && data.deposit.qr_code_image);
       if (qrSource && qrSource.length > 10) {
+        // Paradise envia o Base64 que pode ou não conter o prefixo data:image
         const cleanQr = qrSource.trim();
         qrImg.src = cleanQr.startsWith('data:') ? cleanQr : ('data:image/png;base64,' + cleanQr);
         qrImg.style.display = 'block';
@@ -291,7 +292,7 @@ document.getElementById('btnDeposit').addEventListener('click', async () => {
     const modal = document.getElementById('pixModal');
     if (modal) modal.classList.remove('hidden');
 
-    showToast('PIX gerado com sucesso!');
+    showToast('PIX Paradise gerado!');
 
     // Inicia verificação automática
     if (currentDepositId) {
