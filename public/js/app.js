@@ -170,18 +170,15 @@ document.getElementById('btnPlay').addEventListener('click', async () => {
     user.balance = data.new_balance;
     updateUI();
 
-    // Show game screen
     document.getElementById('page-game').classList.remove('hidden');
     document.getElementById('gameOverOverlay').classList.add('hidden');
 
-    // Fetch game config from server settings (difficulty)
     let serverConfig = null;
     try {
       const settings = await api('/api/game/config');
       if (settings) serverConfig = settings;
-    } catch(e) { /* use defaults */ }
+    } catch(e) { }
 
-    // Start the Helix Jump game
     startHelixGame(currentBet, serverConfig);
   } catch (e) { showToast(e.message, 'error'); }
   finally {
@@ -190,12 +187,8 @@ document.getElementById('btnPlay').addEventListener('click', async () => {
   }
 });
 
-// Called by game engine when platforms are passed
-function onPlatformPassed(count) {
-  // HUD is handled internally by the game engine
-}
+function onPlatformPassed(count) { }
 
-// Called when player dies or cashes out
 async function onGameEnd(platformsReached, cashed) {
   try {
     const data = await api('/api/game/finish', {
@@ -210,22 +203,18 @@ async function onGameEnd(platformsReached, cashed) {
     user.balance = data.new_balance;
     updateUI();
 
-    // Show result overlay
     const overlay = document.getElementById('gameOverOverlay');
     overlay.classList.remove('hidden');
 
     if (cashed && data.prize > 0) {
-      // Player cashed out with a prize - SUCCESS
       document.getElementById('resultTitle').textContent = 'Resgatado!';
       document.getElementById('resultTitle').style.color = 'var(--primary)';
       document.getElementById('resultIcon').textContent = '\uD83D\uDCB0';
     } else if (data.prize > 0) {
-      // Won without cashing out
       document.getElementById('resultTitle').textContent = 'Parabens!';
       document.getElementById('resultTitle').style.color = 'var(--primary)';
       document.getElementById('resultIcon').textContent = '\uD83C\uDF89';
     } else {
-      // Lost
       document.getElementById('resultTitle').textContent = 'Fim de Jogo!';
       document.getElementById('resultTitle').style.color = '#ff4444';
       document.getElementById('resultIcon').textContent = '\uD83D\uDCA5';
@@ -249,7 +238,7 @@ function closeGame() {
   loadUserData();
 }
 
-// ===================== DEPOSIT =====================
+// ===================== DEPOSIT (CORRIGIDO) =====================
 document.querySelectorAll('.amount-option[data-dep]').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.amount-option[data-dep]').forEach(b => b.classList.remove('active'));
@@ -277,15 +266,17 @@ document.getElementById('btnDeposit').addEventListener('click', async () => {
 
     currentDepositId = data.deposit ? data.deposit.id : null;
 
-    // Popula o Modal com a Chave e QR Code
-    const pixCode = data.pix_code || 'Codigo indisponivel';
+    // Tenta pegar o código pix de vários lugares possíveis na resposta
+    const pixCode = data.pix_code || (data.deposit && data.deposit.pix_code) || 'Codigo indisponivel';
+    const qrCodeImage = data.qr_code_image || (data.deposit && data.deposit.qr_code_image);
+
     const codeContainer = document.getElementById('pixCode');
     if (codeContainer) codeContainer.textContent = pixCode;
 
     const qrImg = document.getElementById('pixQrImage');
     if (qrImg) {
-      if (data.qr_code_image) {
-        qrImg.src = data.qr_code_image.startsWith('data:') ? data.qr_code_image : ('data:image/png;base64,' + data.qr_code_image);
+      if (qrCodeImage) {
+        qrImg.src = qrCodeImage.startsWith('data:') ? qrCodeImage : ('data:image/png;base64,' + qrCodeImage);
         qrImg.style.display = 'block';
       } else {
         qrImg.style.display = 'none';
@@ -294,11 +285,9 @@ document.getElementById('btnDeposit').addEventListener('click', async () => {
 
     showToast('PIX gerado com sucesso!');
 
-    // ABRE O MODAL NOVO AQUI
     const modal = document.getElementById('pixModal');
     if (modal) modal.classList.remove('hidden');
 
-    // Inicia verificação do status do pagamento
     if (currentDepositId) {
       if (depositCheckInterval) clearInterval(depositCheckInterval);
       depositCheckInterval = setInterval(checkDepositStatus, 5000);
@@ -322,22 +311,20 @@ async function checkDepositStatus() {
       clearInterval(depositCheckInterval); depositCheckInterval = null;
       user.balance = data.new_balance; 
       updateUI();
-      showToast('Pagamento confirmado! Saldo creditado na conta.', 'success');
+      showToast('Pagamento confirmado! Saldo creditado.', 'success');
       
-      // Fecha o modal automaticamente quando o PIX for pago
       const modal = document.getElementById('pixModal');
       if (modal) modal.classList.add('hidden');
       currentDepositId = null;
     } else if (data.status === 'rejected' || data.status === 'expired') {
       clearInterval(depositCheckInterval); depositCheckInterval = null;
-      showToast('O tempo do PIX expirou ou ele foi rejeitado.', 'error');
+      showToast('O tempo do PIX expirou ou foi rejeitado.', 'error');
       
-      // Fecha o modal em caso de erro
       const modal = document.getElementById('pixModal');
       if (modal) modal.classList.add('hidden');
       currentDepositId = null;
     }
-  } catch (e) { /* silent fail */ }
+  } catch (e) { }
 }
 
 // ===================== WITHDRAW =====================
@@ -368,13 +355,13 @@ async function loadReferrals() {
     document.getElementById('refEarned').textContent = 'R$ ' + formatMoney(data.total_earned);
     const listEl = document.getElementById('referralList');
     if (data.referrals.length === 0) {
-      listEl.innerHTML = '<div class="referral-card" style="text-align:center;color:var(--text-secondary)">Nenhum indicado ainda. Compartilhe seu codigo!</div>';
+      listEl.innerHTML = '<div class="referral-card" style="text-align:center;color:var(--text-secondary)">Nenhum indicado ainda.</div>';
     } else {
       listEl.innerHTML = data.referrals.map(r =>
         '<div class="history-item"><div class="left"><span class="type">' + r.name + '</span><span class="date">' + new Date(r.created_at).toLocaleDateString('pt-BR') + '</span></div><span class="amount positive">+R$ ' + formatMoney(r.amount || 0) + '</span></div>'
       ).join('');
     }
-  } catch (e) { /* silent */ }
+  } catch (e) { }
 }
 
 // ===================== NAVIGATION =====================
