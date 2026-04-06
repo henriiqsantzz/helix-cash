@@ -59,7 +59,6 @@ function createDefaultDB() {
 }
 
 async function loadDB() {
-  // 1. Try Supabase first (permanent storage)
   if (USE_SUPABASE) {
     try {
       var rows = await supaFetch('app_state?select=data&id=eq.1');
@@ -67,13 +66,11 @@ async function loadDB() {
         var data = typeof rows[0].data === 'string' ? JSON.parse(rows[0].data) : rows[0].data;
         if (!data.pending_games) data.pending_games = [];
         if (!data.next_id.pending_games) data.next_id.pending_games = 1;
-        // Also save to /tmp as cache
         try { fs.writeFileSync(DB_FILE, JSON.stringify(data)); } catch(e) {}
         return data;
       }
     } catch (e) { console.error('Supabase load error:', e.message); }
   }
-  // 2. Fallback to /tmp file
   try {
     if (fs.existsSync(DB_FILE)) {
       var data = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
@@ -86,9 +83,7 @@ async function loadDB() {
 }
 
 async function saveDB(db) {
-  // Always save to /tmp
   try { fs.writeFileSync(DB_FILE, JSON.stringify(db)); } catch (e) {}
-  // Also save to Supabase if configured (permanent)
   if (USE_SUPABASE) {
     try {
       await supaFetch('app_state', 'POST',
@@ -130,7 +125,6 @@ function verifyToken(token) {
   } catch (e) { return null; }
 }
 
-// ===================== HELPERS =====================
 function parseBody(req) {
   if (req.body) return Promise.resolve(req.body);
   return new Promise(function (resolve) {
@@ -160,7 +154,6 @@ function num(v) { return parseFloat(v) || 0; }
 
 // ===================== MAIN HANDLER =====================
 module.exports = async function handler(req, res) {
-  // CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
@@ -215,7 +208,6 @@ module.exports = async function handler(req, res) {
       };
       db.users.push(newUser);
 
-      // Referral bonus
       if (referralCode) {
         var referrer = db.users.find(function (u) { return u.referral_code === referralCode; });
         if (referrer) {
@@ -263,7 +255,7 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // ==================== AUTH: ME / USER ME ====================
+    // ==================== AUTH: ME ====================
     if ((url === '/api/auth/me' || url === '/api/user/me') && method === 'GET') {
       var user = getUser(db, req);
       if (!user) return respond(res, 401, { error: 'Nao autorizado' });
@@ -282,7 +274,7 @@ module.exports = async function handler(req, res) {
       return respond(res, 200, { balance: num(user.balance), bonus_balance: num(user.bonus_balance) });
     }
 
-    // ==================== DEPOSIT (PenguimPay PIX) ====================
+    // ==================== DEPOSIT (PenguimPay PIX IN) ====================
     if (url === '/api/deposit' && method === 'POST') {
       var user = getUser(db, req);
       if (!user) return respond(res, 401, { error: 'Nao autorizado' });
@@ -290,9 +282,12 @@ module.exports = async function handler(req, res) {
       var amount = num(body.amount);
       var minDep = num(db.settings.min_deposit) || 10;
       var cpf = (body.cpf || '').trim();
+      
+      // Sanitização do CPF (A API PenguimPay exige sem pontos e traços)
+      var cpfRaw = cpf.replace(/\D/g, '');
 
       if (!amount || amount < minDep) return respond(res, 400, { error: 'Deposito minimo: R$' + minDep });
-      if (!cpf) return respond(res, 400, { error: 'CPF obrigatorio para gerar PIX' });
+      if (!cpfRaw) return respond(res, 400, { error: 'CPF obrigatorio para gerar PIX' });
 
       var dep = {
         id: db.next_id.deposits++, user_id: user.id, amount: amount,
@@ -300,7 +295,6 @@ module.exports = async function handler(req, res) {
         transaction_id: '', created_at: new Date().toISOString(), updated_at: new Date().toISOString()
       };
 
-      // Call PenguimPay API to generate PIX deposit
       if (PENGUIMPAY_KEY) {
         try {
           var ppRes = await fetch('https://api.penguimpay.com/api/external/pix/deposit', {
@@ -313,15 +307,18 @@ module.exports = async function handler(req, res) {
               amount: amount,
               client: {
                 name: user.name || 'Helix Cash User',
-                document: cpf,
+                document: cpfRaw,
                 email: user.email || 'user@helixcash.com'
               }
             })
           });
-          var ppData = await ppRes.json();
+          
+          var rawText = await ppRes.text();
+          var ppData = {};
+          try { ppData = JSON.parse(rawText); } catch(e) {}
 
           if (!ppRes.ok) {
-            return respond(res, 400, { error: 'Erro ao gerar PIX: ' + (ppData.message || ppData.error || 'Tente novamente') });
+            return respond(res, 400, { error: 'Aviso PenguimPay: ' + (ppData.message || ppData.error || 'Verifique seus dados.') });
           }
 
           dep.transaction_id = ppData.transactionId || ppData.id || '';
@@ -329,10 +326,9 @@ module.exports = async function handler(req, res) {
           dep.qr_code_image = ppData.qrCodeImage || ppData.qrCodeBase64 || '';
         } catch (e) {
           console.error('PenguimPay error:', e.message);
-          return respond(res, 500, { error: 'Erro ao conectar com gateway de pagamento. Tente novamente.' });
+          return respond(res, 500, { error: 'Falha tecnica ao comunicar com a pagadora.' });
         }
       } else {
-        // Fallback: generate fake PIX code if no PenguimPay key
         dep.pix_code = 'HELIX' + Date.now().toString(36).toUpperCase() + crypto.randomBytes(4).toString('hex').toUpperCase();
       }
 
@@ -351,37 +347,31 @@ module.exports = async function handler(req, res) {
     // ==================== PENGUIMPAY WEBHOOK ====================
     if (url === '/api/webhook/penguimpay' && method === 'POST') {
       var body = await parseBody(req);
-      console.log('PenguimPay webhook received:', JSON.stringify(body));
+      console.log('PenguimPay Webhook Recebido:', JSON.stringify(body));
 
+      // Processando Confirmação de Depósitos Automáticos (PIX IN)
       if (body.event === 'PAYMENT' && body.data) {
         var txId = body.data.transactionId || body.data.externalId || '';
         var status = (body.data.status || '').toUpperCase();
 
         if (status === 'PAID_OUT' || status === 'APPROVED' || status === 'COMPLETED') {
-          // Find the pending deposit by transaction_id
-          var dep = null;
-          for (var i = 0; i < db.deposits.length; i++) {
-            if (db.deposits[i].transaction_id === txId && db.deposits[i].status === 'pending') {
-              dep = db.deposits[i];
-              break;
-            }
-          }
-
+          var dep = db.deposits.find(d => d.transaction_id === txId && d.status === 'pending');
+          
           if (dep) {
             dep.status = 'approved';
             dep.updated_at = new Date().toISOString();
 
-            // Credit user balance
-            var depositUser = db.users.find(function(u) { return u.id === dep.user_id; });
+            var depositUser = db.users.find(u => u.id === dep.user_id);
             if (depositUser) {
               depositUser.balance = num(depositUser.balance) + num(dep.amount);
               depositUser.total_deposited = num(depositUser.total_deposited) + num(dep.amount);
             }
             await saveDB(db);
-            console.log('Deposit approved via webhook:', txId, 'Amount:', dep.amount);
           }
         }
       }
+      
+      // PenguimPay exige resposta 200 para parar de tentar reenviar
       return respond(res, 200, { received: true });
     }
 
@@ -395,7 +385,6 @@ module.exports = async function handler(req, res) {
       var dep = db.deposits.find(function(d) { return d.id === depId && d.user_id === user.id; });
       if (!dep) return respond(res, 404, { error: 'Deposito nao encontrado' });
 
-      // If still pending and has transaction_id, check with PenguimPay
       if (dep.status === 'pending' && dep.transaction_id && PENGUIMPAY_KEY) {
         try {
           var checkRes = await fetch('https://api.penguimpay.com/api/external/pix/deposit/' + dep.transaction_id, {
@@ -425,13 +414,14 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // ==================== WITHDRAW ====================
+    // ==================== WITHDRAW (CLIENTE SOLICITA) ====================
     if (url === '/api/withdraw' && method === 'POST') {
       var user = getUser(db, req);
       if (!user) return respond(res, 401, { error: 'Nao autorizado' });
       var body = await parseBody(req);
       var amount = num(body.amount);
       var pixKey = (body.pix_key || '').trim();
+      var pixType = (body.pix_type || 'cpf').toLowerCase();
       var minWd = num(db.settings.min_withdrawal) || 20;
 
       if (!pixKey) return respond(res, 400, { error: 'Chave PIX obrigatoria' });
@@ -441,49 +431,20 @@ module.exports = async function handler(req, res) {
       user.balance = num(user.balance) - amount;
       var wd = {
         id: db.next_id.withdrawals++, user_id: user.id, amount: amount,
-        pix_key: pixKey, pix_type: body.pix_type || 'cpf', status: 'pending',
+        pix_key: pixKey, pix_type: pixType, status: 'pending', transaction_id: '',
         created_at: new Date().toISOString(), updated_at: new Date().toISOString()
       };
       db.withdrawals.push(wd);
       await saveDB(db);
 
-      return respond(res, 200, { success: true, message: 'Saque de R$' + amount.toFixed(2) + ' solicitado! Aguarde aprovacao.' });
+      return respond(res, 200, { success: true, message: 'Saque solicitado! Aguardando aprovacao manual.' });
     }
 
-    // ==================== USER DEPOSITS ====================
-    if (url === '/api/deposits' && method === 'GET') {
-      var user = getUser(db, req);
-      if (!user) return respond(res, 401, { error: 'Nao autorizado' });
-      var deps = db.deposits.filter(function (d) { return d.user_id === user.id; }).reverse();
-      return respond(res, 200, deps);
-    }
-
-    // ==================== USER WITHDRAWALS ====================
-    if (url === '/api/withdrawals' && method === 'GET') {
-      var user = getUser(db, req);
-      if (!user) return respond(res, 401, { error: 'Nao autorizado' });
-      var wds = db.withdrawals.filter(function (w) { return w.user_id === user.id; }).reverse();
-      return respond(res, 200, wds);
-    }
-
-    // ==================== GAME: CONFIG (public, returns difficulty settings) ====================
+    // ==================== GAMES API ====================
     if (url === '/api/game/config' && method === 'GET') {
-      // Return game difficulty settings that the client can use
-      var s = db.settings;
-      return respond(res, 200, {
-        platformCount: num(s.game_platform_count) || 25,
-        platformSpacing: num(s.game_platform_spacing) || 2.2,
-        gravity: num(s.game_gravity) || 0.012,
-        ballBounceForce: num(s.game_bounce_force) || 0.18,
-        holeSegments: num(s.game_hole_segments) || 1.5,
-        dangerChance: num(s.game_danger_chance) || 0.12,
-        rotationSensitivity: num(s.game_rotation_sensitivity) || 0.008,
-        targetMultiplier: num(s.max_multiplier) || 7,
-        segmentsPerPlatform: num(s.game_segments_per_platform) || 8
-      });
+      return respond(res, 200, db.settings);
     }
 
-    // ==================== GAME: START ====================
     if (url === '/api/game/start' && method === 'POST') {
       var user = getUser(db, req);
       if (!user) return respond(res, 401, { error: 'Nao autorizado' });
@@ -493,10 +454,8 @@ module.exports = async function handler(req, res) {
       if (!betAmount || betAmount <= 0) return respond(res, 400, { error: 'Valor de aposta invalido' });
       if (betAmount > num(user.balance)) return respond(res, 400, { error: 'Saldo insuficiente' });
 
-      // Deduct bet
       user.balance = num(user.balance) - betAmount;
 
-      // Create pending game
       var pg = {
         id: db.next_id.pending_games++, user_id: user.id,
         bet_amount: betAmount, created_at: new Date().toISOString()
@@ -507,7 +466,6 @@ module.exports = async function handler(req, res) {
       return respond(res, 200, { game_id: pg.id, new_balance: user.balance });
     }
 
-    // ==================== GAME: FINISH ====================
     if (url === '/api/game/finish' && method === 'POST') {
       var user = getUser(db, req);
       if (!user) return respond(res, 401, { error: 'Nao autorizado' });
@@ -516,73 +474,47 @@ module.exports = async function handler(req, res) {
       var gameId = body.game_id;
       var platformsReached = num(body.platforms_reached) || 0;
 
-      // Find pending game
-      var pgIndex = -1;
-      var pg = null;
-      for (var i = 0; i < db.pending_games.length; i++) {
-        if (db.pending_games[i].id === gameId && db.pending_games[i].user_id === user.id) {
-          pgIndex = i;
-          pg = db.pending_games[i];
-          break;
-        }
-      }
-
-      // If no pending game found, use body data as fallback
+      var pgIndex = db.pending_games.findIndex(p => p.id === gameId && p.user_id === user.id);
+      var pg = pgIndex >= 0 ? db.pending_games[pgIndex] : null;
       var betAmount = pg ? num(pg.bet_amount) : num(body.bet_amount);
       if (!betAmount || betAmount <= 0) return respond(res, 400, { error: 'Jogo nao encontrado' });
 
-      // Remove from pending
       if (pgIndex >= 0) db.pending_games.splice(pgIndex, 1);
 
       var cashedOut = !!body.cashed_out;
-
-      // Calculate multiplier from platforms
       var maxMul = num(db.settings.max_multiplier) || 7;
       var multiplier = Math.min(1 + (platformsReached * 0.5), maxMul);
 
-      // Calculate prize based on platforms passed (same formula as client)
       var clientPrize = 0;
       for (var pp = 0; pp < platformsReached; pp++) clientPrize += 0.15 + (pp * 0.05);
       clientPrize = Math.round(betAmount * clientPrize * 100) / 100;
-      var targetPrize = betAmount * maxMul;
 
-      // House edge logic
       var houseEdge = num(db.settings.house_edge) || 15;
       if (user.is_influencer && num(user.influencer_win_rate) > 0) {
         houseEdge = 100 - num(user.influencer_win_rate);
       }
 
-      var rand = Math.random() * 100;
-      var isWin = rand >= houseEdge;
-
+      var isWin = (Math.random() * 100) >= houseEdge;
       var prize = 0;
       var result = 'loss';
 
-      // O jogador recebe o prêmio caso tenha clicado em resgatar e passado de pelo menos 1 plataforma
       if (cashedOut && platformsReached > 0) {
         if (isWin) {
           prize = clientPrize;
           result = 'win';
           user.balance = num(user.balance) + prize;
         } else {
-          // House edge (Vantagem da casa) derrubou o prêmio no momento do saque
           prize = 0;
           result = 'loss';
         }
-      } else {
-        // Morreu antes de sacar (caiu no vermelho)
-        prize = 0;
-        result = 'loss';
       }
 
       user.total_games = (user.total_games || 0) + 1;
 
-      // Record completed game
       var game = {
         id: db.next_id.games++, user_id: user.id,
         bet_amount: betAmount, multiplier: multiplier,
-        platforms_reached: platformsReached,
-        prize: prize, result: result,
+        platforms_reached: platformsReached, prize: prize, result: result,
         created_at: new Date().toISOString()
       };
       db.games.push(game);
@@ -595,261 +527,171 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // ==================== REFERRALS ====================
+    // ==================== LISTS ====================
+    if (url === '/api/deposits' && method === 'GET') {
+      var user = getUser(db, req);
+      if (!user) return respond(res, 401, { error: 'Nao autorizado' });
+      return respond(res, 200, db.deposits.filter(d => d.user_id === user.id).reverse());
+    }
+
+    if (url === '/api/withdrawals' && method === 'GET') {
+      var user = getUser(db, req);
+      if (!user) return respond(res, 401, { error: 'Nao autorizado' });
+      return respond(res, 200, db.withdrawals.filter(w => w.user_id === user.id).reverse());
+    }
+    
     if ((url === '/api/referral' || url === '/api/referrals') && method === 'GET') {
       var user = getUser(db, req);
       if (!user) return respond(res, 401, { error: 'Nao autorizado' });
-
-      var earnings = db.referral_earnings.filter(function (e) { return e.user_id === user.id; });
-      var referred = db.users.filter(function (u) { return u.referred_by === user.referral_code; });
-      var totalEarned = earnings.reduce(function (s, e) { return s + num(e.amount); }, 0);
-
+      var earnings = db.referral_earnings.filter(e => e.user_id === user.id);
+      var referred = db.users.filter(u => u.referred_by === user.referral_code);
+      var totalEarned = earnings.reduce((s, e) => s + num(e.amount), 0);
       return respond(res, 200, {
-        code: user.referral_code,
-        total_earned: totalEarned,
-        referred_count: referred.length,
-        referrals: referred.map(function (r) {
-          var earn = earnings.find(function (e) { return e.from_user_id === r.id; });
+        code: user.referral_code, total_earned: totalEarned, referred_count: referred.length,
+        referrals: referred.map(r => {
+          var earn = earnings.find(e => e.from_user_id === r.id);
           return { name: r.name, created_at: r.created_at, amount: earn ? num(earn.amount) : 0 };
-        }),
-        earnings: earnings.map(function (e) { return { id: e.id, amount: num(e.amount), created_at: e.created_at }; })
+        })
       });
     }
 
-    // ==================== REFERRAL EARNINGS ====================
-    if (url === '/api/referral/earnings' && method === 'GET') {
-      var user = getUser(db, req);
-      if (!user) return respond(res, 401, { error: 'Nao autorizado' });
-      var earnings = db.referral_earnings.filter(function (e) { return e.user_id === user.id; });
-      return respond(res, 200, earnings);
-    }
+    // ==================== ADMIN PANEL ROUTES ====================
+    var isAdminUser = (req) => { var u = getUser(db, req); return u && u.is_admin ? u : null; };
 
-    // ==================== ADMIN: DASHBOARD ====================
     if (url === '/api/admin/dashboard' && method === 'GET') {
-      var admin = getUser(db, req);
-      if (!admin || !admin.is_admin) return respond(res, 401, { error: 'Nao autorizado' });
-
-      var users = db.users.filter(function (u) { return !u.is_admin; });
-      var today = new Date().toISOString().split('T')[0];
-
-      var totalDep = 0, depCount = 0;
-      db.deposits.forEach(function (d) { if (d.status === 'approved') { totalDep += num(d.amount); depCount++; } });
-
-      var totalWd = 0, wdCount = 0;
-      db.withdrawals.forEach(function (w) { if (w.status === 'approved') { totalWd += num(w.amount); wdCount++; } });
-
-      var totalBets = 0, totalPrizes = 0;
-      db.games.forEach(function (g) { totalBets += num(g.bet_amount); totalPrizes += num(g.prize); });
-
-      var todayDep = 0, todayWd = 0, todayUsers = 0, todayGames = 0;
-      db.deposits.forEach(function (d) { if (d.created_at && d.created_at.startsWith(today) && d.status === 'approved') todayDep += num(d.amount); });
-      db.withdrawals.forEach(function (w) { if (w.created_at && w.created_at.startsWith(today) && w.status === 'approved') todayWd += num(w.amount); });
-      users.forEach(function (u) { if (u.created_at && u.created_at.startsWith(today)) todayUsers++; });
-      db.games.forEach(function (g) { if (g.created_at && g.created_at.startsWith(today)) todayGames++; });
-
-      var pendingDep = 0, pendingWd = 0;
-      db.deposits.forEach(function (d) { if (d.status === 'pending') pendingDep++; });
-      db.withdrawals.forEach(function (w) { if (w.status === 'pending') pendingWd++; });
-
+      if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
+      var users = db.users.filter(u => !u.is_admin);
+      var totalDep = 0, totalWd = 0, totalBets = 0, totalPrizes = 0;
+      db.deposits.forEach(d => { if(d.status==='approved') totalDep += num(d.amount); });
+      db.withdrawals.forEach(w => { if(w.status==='approved') totalWd += num(w.amount); });
+      db.games.forEach(g => { totalBets += num(g.bet_amount); totalPrizes += num(g.prize); });
+      
       return respond(res, 200, {
-        users: users.length,
-        influencers: users.filter(function (u) { return u.is_influencer; }).length,
-        deposits: { total: totalDep, count: depCount },
-        withdrawals: { total: totalWd, count: wdCount },
+        users: users.length, influencers: users.filter(u => u.is_influencer).length,
+        deposits: { total: totalDep }, withdrawals: { total: totalWd },
         games: { count: db.games.length, total_bets: totalBets, total_prizes: totalPrizes },
-        profit: totalDep - totalWd,
-        game_profit: totalBets - totalPrizes,
-        pending: { deposits: pendingDep, withdrawals: pendingWd },
-        today: { deposits: todayDep, withdrawals: todayWd, new_users: todayUsers, games: todayGames }
+        profit: totalDep - totalWd, game_profit: totalBets - totalPrizes,
+        pending: {
+          deposits: db.deposits.filter(d=>d.status==='pending').length,
+          withdrawals: db.withdrawals.filter(w=>w.status==='pending').length
+        },
+        today: {
+          deposits: 0, withdrawals: 0, new_users: 0, games: 0 
+        }
       });
     }
 
-    // ==================== ADMIN: USERS ====================
     if (url === '/api/admin/users' && method === 'GET') {
-      var admin = getUser(db, req);
-      if (!admin || !admin.is_admin) return respond(res, 401, { error: 'Nao autorizado' });
-
-      var users = db.users.filter(function (u) { return !u.is_admin; });
-      return respond(res, 200, users.map(function (u) {
-        return {
-          id: u.id, name: u.name, email: u.email, phone: u.phone,
-          balance: num(u.balance), bonus_balance: num(u.bonus_balance),
-          referral_code: u.referral_code, referred_by: u.referred_by,
-          is_blocked: u.is_blocked, is_influencer: u.is_influencer,
-          influencer_win_rate: num(u.influencer_win_rate),
-          total_deposited: num(u.total_deposited), total_withdrawn: num(u.total_withdrawn),
-          total_games: u.total_games || 0,
-          created_at: u.created_at, last_login: u.last_login
-        };
-      }));
+      if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
+      return respond(res, 200, db.users.filter(u => !u.is_admin));
     }
-
-    // ==================== ADMIN: ADD BALANCE ====================
+    
     var addBalMatch = url.match(/^\/api\/admin\/user\/(\d+)\/add-balance$/);
     if (addBalMatch && method === 'POST') {
-      var admin = getUser(db, req);
-      if (!admin || !admin.is_admin) return respond(res, 401, { error: 'Nao autorizado' });
-      var body = await parseBody(req);
-      var userId = parseInt(addBalMatch[1]);
-      var user = db.users.find(function (u) { return u.id === userId; });
+      if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
+      var user = db.users.find(u => u.id === parseInt(addBalMatch[1]));
       if (!user) return respond(res, 404, { error: 'Usuario nao encontrado' });
-
+      var body = await parseBody(req);
       user.balance = num(user.balance) + num(body.amount);
       await saveDB(db);
       return respond(res, 200, { success: true });
     }
 
-    // ==================== ADMIN: SET INFLUENCER ====================
     var infMatch = url.match(/^\/api\/admin\/user\/(\d+)\/influencer$/);
     if (infMatch && method === 'POST') {
-      var admin = getUser(db, req);
-      if (!admin || !admin.is_admin) return respond(res, 401, { error: 'Nao autorizado' });
-      var body = await parseBody(req);
-      var userId = parseInt(infMatch[1]);
-      var user = db.users.find(function (u) { return u.id === userId; });
+      if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
+      var user = db.users.find(u => u.id === parseInt(infMatch[1]));
       if (!user) return respond(res, 404, { error: 'Usuario nao encontrado' });
-
+      var body = await parseBody(req);
       user.is_influencer = !!body.is_influencer;
       user.influencer_win_rate = num(body.influencer_win_rate) || 0;
       await saveDB(db);
       return respond(res, 200, { success: true });
     }
 
-    // ==================== ADMIN: BLOCK/UNBLOCK ====================
-    var blockMatch = url.match(/^\/api\/admin\/user\/(\d+)\/block$/);
-    if (blockMatch && method === 'POST') {
-      var admin = getUser(db, req);
-      if (!admin || !admin.is_admin) return respond(res, 401, { error: 'Nao autorizado' });
-      var userId = parseInt(blockMatch[1]);
-      var user = db.users.find(function (u) { return u.id === userId; });
-      if (!user) return respond(res, 404, { error: 'Usuario nao encontrado' });
-
-      user.is_blocked = !user.is_blocked;
-      await saveDB(db);
-      return respond(res, 200, { success: true });
-    }
-
-    // ==================== ADMIN: DEPOSITS ====================
     if (url === '/api/admin/deposits' && method === 'GET') {
-      var admin = getUser(db, req);
-      if (!admin || !admin.is_admin) return respond(res, 401, { error: 'Nao autorizado' });
-
-      return respond(res, 200, db.deposits.slice().reverse().map(function (d) {
-        var u = db.users.find(function (u) { return u.id === d.user_id; });
-        return {
-          id: d.id, user_id: d.user_id, amount: num(d.amount),
-          method: d.method, status: d.status, pix_key: d.pix_key,
-          created_at: d.created_at, updated_at: d.updated_at,
-          user_name: u ? u.name : 'N/A', user_email: u ? u.email : 'N/A'
-        };
+      if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
+      return respond(res, 200, db.deposits.slice().reverse().map(d => {
+        var u = db.users.find(u => u.id === d.user_id);
+        return { ...d, user_name: u ? u.name : 'N/A', user_email: u ? u.email : 'N/A' };
       }));
     }
 
-    // ==================== ADMIN: APPROVE/REJECT DEPOSIT ====================
     var depMatch = url.match(/^\/api\/admin\/deposit\/(\d+)\/(approve|reject)$/);
     if (depMatch && method === 'POST') {
-      var admin = getUser(db, req);
-      if (!admin || !admin.is_admin) return respond(res, 401, { error: 'Nao autorizado' });
-
-      var depId = parseInt(depMatch[1]);
-      var action = depMatch[2];
-      var dep = db.deposits.find(function (d) { return d.id === depId; });
-      if (!dep) return respond(res, 404, { error: 'Deposito nao encontrado' });
-      if (dep.status !== 'pending') return respond(res, 400, { error: 'Deposito ja processado' });
-
-      dep.status = action === 'approve' ? 'approved' : 'rejected';
+      if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
+      var dep = db.deposits.find(d => d.id === parseInt(depMatch[1]));
+      if (!dep) return respond(res, 404, { error: 'Nao encontrado' });
+      
+      dep.status = depMatch[2] === 'approve' ? 'approved' : 'rejected';
       dep.updated_at = new Date().toISOString();
 
-      if (action === 'approve') {
-        var user = db.users.find(function (u) { return u.id === dep.user_id; });
+      if (dep.status === 'approved') {
+        var user = db.users.find(u => u.id === dep.user_id);
         if (user) {
           user.balance = num(user.balance) + num(dep.amount);
           user.total_deposited = num(user.total_deposited) + num(dep.amount);
         }
       }
-
       await saveDB(db);
       return respond(res, 200, { success: true });
     }
 
-    // ==================== ADMIN: WITHDRAWALS ====================
     if (url === '/api/admin/withdrawals' && method === 'GET') {
-      var admin = getUser(db, req);
-      if (!admin || !admin.is_admin) return respond(res, 401, { error: 'Nao autorizado' });
-
-      return respond(res, 200, db.withdrawals.slice().reverse().map(function (w) {
-        var u = db.users.find(function (u) { return u.id === w.user_id; });
-        return {
-          id: w.id, user_id: w.user_id, amount: num(w.amount),
-          pix_key: w.pix_key, status: w.status,
-          created_at: w.created_at, updated_at: w.updated_at,
-          user_name: u ? u.name : 'N/A', user_email: u ? u.email : 'N/A'
-        };
+      if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
+      return respond(res, 200, db.withdrawals.slice().reverse().map(w => {
+        var u = db.users.find(u => u.id === w.user_id);
+        return { ...w, user_name: u ? u.name : 'N/A', user_email: u ? u.email : 'N/A' };
       }));
     }
 
-    // ==================== ADMIN: APPROVE/REJECT WITHDRAWAL ====================
+    // ==================== ADMIN: APPROVE WITHDRAWAL (APROVAÇÃO MANUAL) ====================
     var wdMatch = url.match(/^\/api\/admin\/withdrawal\/(\d+)\/(approve|reject)$/);
     if (wdMatch && method === 'POST') {
-      var admin = getUser(db, req);
-      if (!admin || !admin.is_admin) return respond(res, 401, { error: 'Nao autorizado' });
-
-      var wdId = parseInt(wdMatch[1]);
-      var action = wdMatch[2];
-      var wd = db.withdrawals.find(function (w) { return w.id === wdId; });
+      if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
+      var wd = db.withdrawals.find(w => w.id === parseInt(wdMatch[1]));
       if (!wd) return respond(res, 404, { error: 'Saque nao encontrado' });
       if (wd.status !== 'pending') return respond(res, 400, { error: 'Saque ja processado' });
 
-      wd.status = action === 'approve' ? 'approved' : 'rejected';
+      var action = wdMatch[2];
+
+      if (action === 'approve') {
+        wd.status = 'approved';
+        var user = db.users.find(u => u.id === wd.user_id);
+        if (user) user.total_withdrawn = num(user.total_withdrawn) + num(wd.amount);
+
+      } else if (action === 'reject') {
+        wd.status = 'rejected';
+        var user = db.users.find(u => u.id === wd.user_id);
+        if (user) user.balance = num(user.balance) + num(wd.amount); // Estorna o saldo
+      }
+
       wd.updated_at = new Date().toISOString();
-
-      var user = db.users.find(function (u) { return u.id === wd.user_id; });
-      if (action === 'approve' && user) {
-        user.total_withdrawn = num(user.total_withdrawn) + num(wd.amount);
-      }
-      if (action === 'reject' && user) {
-        user.balance = num(user.balance) + num(wd.amount);
-      }
-
       await saveDB(db);
       return respond(res, 200, { success: true });
     }
 
-    // ==================== ADMIN: GAMES ====================
     if (url === '/api/admin/games' && method === 'GET') {
-      var admin = getUser(db, req);
-      if (!admin || !admin.is_admin) return respond(res, 401, { error: 'Nao autorizado' });
-
-      return respond(res, 200, db.games.slice().reverse().map(function (g) {
-        var u = db.users.find(function (u) { return u.id === g.user_id; });
-        return {
-          id: g.id, user_id: g.user_id,
-          bet_amount: num(g.bet_amount), multiplier: num(g.multiplier),
-          prize: num(g.prize), result: g.result,
-          platforms_reached: g.platforms_reached || 0,
-          created_at: g.created_at,
-          user_name: u ? u.name : 'N/A', user_email: u ? u.email : 'N/A'
-        };
+      if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
+      return respond(res, 200, db.games.slice().reverse().map(g => {
+        var u = db.users.find(u => u.id === g.user_id);
+        return { ...g, user_name: u ? u.name : 'N/A' };
       }));
     }
 
-    // ==================== ADMIN: SETTINGS ====================
     if (url === '/api/admin/settings' && method === 'GET') {
-      var admin = getUser(db, req);
-      if (!admin || !admin.is_admin) return respond(res, 401, { error: 'Nao autorizado' });
+      if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
       return respond(res, 200, db.settings);
     }
 
     if (url === '/api/admin/settings' && method === 'POST') {
-      var admin = getUser(db, req);
-      if (!admin || !admin.is_admin) return respond(res, 401, { error: 'Nao autorizado' });
+      if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
       var body = await parseBody(req);
-      Object.keys(body).forEach(function (key) { db.settings[key] = body[key]; });
+      Object.keys(body).forEach(k => { db.settings[k] = body[k]; });
       await saveDB(db);
       return respond(res, 200, { success: true });
     }
 
-    // ==================== 404 ====================
     return respond(res, 404, { error: 'Rota nao encontrada: ' + url });
 
   } catch (err) {
