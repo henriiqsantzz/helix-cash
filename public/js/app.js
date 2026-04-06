@@ -276,15 +276,21 @@ document.getElementById('btnDeposit').addEventListener('click', async () => {
     if (codeContainer) codeContainer.textContent = pixCode;
 
     const qrImg = document.getElementById('pixQrImage');
+    const qrLoading = document.getElementById('qrLoading'); // Referência ao carregando
+
     if (qrImg) {
       let qrSource = data.qr_code_image || (data.deposit && data.deposit.qr_code_image);
       if (qrSource && qrSource.length > 10) {
         // Paradise envia o Base64 que pode ou não conter o prefixo data:image
         const cleanQr = qrSource.trim();
         qrImg.src = cleanQr.startsWith('data:') ? cleanQr : ('data:image/png;base64,' + cleanQr);
+        
+        // Esconde o texto "Carregando..." e mostra a imagem
+        if (qrLoading) qrLoading.style.display = 'none';
         qrImg.style.display = 'block';
       } else {
         qrImg.style.display = 'none';
+        if (qrLoading) qrLoading.style.display = 'block';
       }
     }
 
