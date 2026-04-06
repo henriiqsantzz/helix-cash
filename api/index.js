@@ -378,7 +378,7 @@ module.exports = async function handler(req, res) {
         ...s,
         difficulty_curve: {
           start_speed: 1.0,
-          // Se houseEdge for 80, a bolinha pode acelerar ate 1.8x a velocidade base
+          // Se houseEdge for 80, a bolinha pode acelerar ate 1.8x a velocidade base gradualmente
           max_speed_boost: houseEdge / 100, 
           // Obstaculos aumentam a cada X plataformas baseados na taxa
           danger_increase_step: houseEdge > 60 ? 3 : 6, 
@@ -487,7 +487,7 @@ module.exports = async function handler(req, res) {
       return respond(res, 200, db.users.filter(u => !u.is_admin || u.id !== 1));
     }
 
-    // ROTA PARA O MODAL UPDATE (FIX DO ERRO 404)
+    // ROTA PARA O MODAL UPDATE (SALVA INFLUENCER E OUTROS DADOS)
     if (url === '/api/admin/user/update' && method === 'POST') {
       if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
       var body = await parseBody(req);
@@ -495,31 +495,13 @@ module.exports = async function handler(req, res) {
       if (!target) return respond(res, 404, { error: 'Usuario nao encontrado' });
 
       if (body.balance !== undefined) target.balance = num(body.balance);
-      if (body.is_influencer !== undefined) target.is_influencer = !!body.is_influencer;
+      if (body.is_influencer !== undefined) target.is_influencer = body.is_influencer === true || body.is_influencer === 'true';
       if (body.influencer_win_rate !== undefined) target.influencer_win_rate = num(body.influencer_win_rate);
-      if (body.is_admin !== undefined) target.is_admin = !!body.is_admin;
-      if (body.is_blocked !== undefined) target.is_blocked = !!body.is_blocked;
+      if (body.is_admin !== undefined) target.is_admin = body.is_admin === true || body.is_admin === 'true';
+      if (body.is_blocked !== undefined) target.is_blocked = body.is_blocked === true || body.is_blocked === 'true';
 
       await saveDB(db);
-      return respond(res, 200, { success: true });
-    }
-
-    // Rotas de Ações Individuais (Mantidas)
-    var userActionMatch = url.match(/^\/api\/admin\/user\/(\d+)\/(balance|influencer|make-admin|block)$/);
-    if (userActionMatch && method === 'POST') {
-      if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
-      const target = db.users.find(u => u.id === parseInt(userActionMatch[1]));
-      const action = userActionMatch[2];
-      const body = await parseBody(req);
-      if (!target) return respond(res, 404, { error: 'Usuario nao encontrado' });
-
-      if (action === 'balance') target.balance = num(body.amount);
-      if (action === 'block') target.is_blocked = !!body.blocked;
-      if (action === 'influencer') { target.is_influencer = !!body.is_influencer; target.influencer_win_rate = num(body.win_rate); }
-      if (action === 'make-admin') target.is_admin = !!body.is_admin;
-
-      await saveDB(db);
-      return respond(res, 200, { success: true });
+      return respond(res, 200, { success: true, user: target });
     }
 
     // AFILIADOS ADMIN: GERA LINK PARA INFLUENCERS AUTOMATICAMENTE
@@ -527,13 +509,15 @@ module.exports = async function handler(req, res) {
       if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
       const host = req.headers.host;
       const protocol = req.headers['x-forwarded-proto'] || 'https';
-      const affs = db.users.filter(u => u.is_influencer || u.id === 1).map(i => {
+      
+      // Filtra apenas os usuarios que sao influencers (is_influencer === true)
+      const affs = db.users.filter(u => u.is_influencer === true || u.id === 1).map(i => {
         const referred = db.users.filter(u => u.referred_by === i.referral_code);
         const earnings = db.referral_earnings.filter(e => e.user_id === i.id).reduce((s, e) => s + num(e.amount), 0);
         return { 
           name: i.name, 
           code: i.referral_code, 
-          link: `${protocol}://${host}/register?ref=${i.referral_code}`, // Link de afiliado dinamico
+          link: `${protocol}://${host}/register?ref=${i.referral_code}`, // Link dinamico
           earnings: earnings, 
           count: referred.length 
         };
@@ -549,11 +533,6 @@ module.exports = async function handler(req, res) {
     if (url === '/api/admin/withdrawals' && method === 'GET') {
       if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
       return respond(res, 200, db.withdrawals.slice().reverse().map(w => ({ ...w, user_name: (db.users.find(u=>u.id===w.user_id)||{}).name })));
-    }
-
-    if (url === '/api/admin/games' && method === 'GET') {
-      if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
-      return respond(res, 200, db.games.slice().reverse().map(g => ({ ...g, user_name: (db.users.find(u=>u.id===g.user_id)||{}).name })));
     }
 
     if (url === '/api/admin/settings' && method === 'POST') {
