@@ -95,6 +95,20 @@
       color: #ff1744; border: 1px solid rgba(255, 23, 68, 0.2); padding: 14px; border-radius: 12px;
       font-weight: 700; cursor: pointer;
     }
+
+    /* Estilos específicos para o link de indicação */
+    .referral-link-box {
+      background: var(--bg-dark);
+      border: 1px solid rgba(255,255,255,0.1);
+      padding: 12px;
+      border-radius: 10px;
+      font-size: 12px;
+      word-break: break-all;
+      color: var(--primary);
+      margin-bottom: 15px;
+      font-family: monospace;
+      text-align: center;
+    }
   </style>
 </head>
 <body>
@@ -265,7 +279,7 @@
         </div>
         <div class="form-group">
           <label>Código de indicação (opcional)</label>
-          <input type="text" class="form-input" name="referral_code" placeholder="Ex: HC3K8A2B">
+          <input type="text" class="form-input" id="registerReferralInput" name="referral_code" placeholder="Ex: HC3K8A2B">
         </div>
         <div id="registerError" class="form-error hidden"></div>
         <button type="submit" class="btn btn-primary btn-block" style="margin-top:20px">CRIAR CONTA</button>
@@ -438,9 +452,9 @@
         <p style="color:var(--text-secondary);margin-bottom:20px">Ganhe bônus por cada amigo que jogar</p>
 
         <div class="referral-card">
-          <p style="font-size:13px;color:var(--text-secondary);text-align:center">Seu código de indicação</p>
-          <div class="referral-code-display" id="referralCode">---</div>
-          <button class="btn btn-accent btn-block btn-sm" onclick="navigator.clipboard.writeText(document.getElementById('referralCode').textContent.trim());showToast('Código copiado!')">Copiar código</button>
+          <p style="font-size:13px;color:var(--text-secondary);text-align:center">Seu link de indicação</p>
+          <div class="referral-link-box" id="referralLinkDisplay">Gerando link...</div>
+          <button class="btn btn-accent btn-block btn-sm" onclick="copyReferralLink()">Copiar link de convite</button>
 
           <div class="referral-stats">
             <div class="ref-stat"><div class="value" id="refCount">0</div><div class="label">Indicados</div></div>
@@ -451,7 +465,7 @@
         <div class="referral-card">
           <p style="font-weight:700;margin-bottom:12px">Como funciona?</p>
           <p style="font-size:14px;color:var(--text-secondary);line-height:1.6">
-            Compartilhe seu código com amigos. Quando eles se cadastrarem e jogarem, você ganha 5% do valor da primeira aposta deles como bônus!
+            Compartilhe seu link exclusivo. Quando seus amigos se cadastrarem e jogarem, você ganha 5% do valor da primeira aposta deles como bônus direto no seu saldo!
           </p>
         </div>
 
@@ -533,10 +547,21 @@
 <script src="/js/game.js"></script>
 <script src="/js/app.js"></script>
 <script>
+  // Função para copiar o link de indicação
+  function copyReferralLink() {
+    const link = document.getElementById('referralLinkDisplay').textContent;
+    if(link && link !== "Gerando link...") {
+      navigator.clipboard.writeText(link);
+      showToast('Link de convite copiado!');
+    }
+  }
+
   // Função para abrir/fechar o menu lateral
   function toggleMenu() {
     const menu = document.getElementById('sideMenu');
     const overlay = document.getElementById('menuOverlay');
+    if(!menu || !overlay) return;
+    
     const isActive = menu.classList.toggle('active');
     overlay.classList.toggle('active');
     
@@ -559,7 +584,6 @@
     const user = JSON.parse(localStorage.getItem('hc_user') || '{}');
     const adminBtn = document.getElementById('btnAdminPanel');
     if (user && user.is_admin) {
-      // O botão fixo no header agora fica invisível pois o acesso será pelo menu
       if(adminBtn) adminBtn.style.display = 'none';
     }
   }
