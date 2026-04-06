@@ -241,7 +241,7 @@ function closeGame() {
   loadUserData();
 }
 
-// ===================== DEPOSIT (PIX MODAL - PARADISE FIXED) =====================
+// ===================== DEPOSIT (PIX MODAL - PARADISE DIRECT) =====================
 document.querySelectorAll('.amount-option[data-dep]').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.amount-option[data-dep]').forEach(b => b.classList.remove('active'));
@@ -277,10 +277,11 @@ document.getElementById('btnDeposit').addEventListener('click', async () => {
     const qrLoading = document.getElementById('qrLoading');
 
     if (qrImg) {
-      // AJUSTE CRÍTICO: Tenta capturar de todas as chaves possíveis enviadas pelo index.js
-      let qrSource = data.qr_code_image || data.qr_code_base64 || (data.deposit && (data.deposit.qr_code_image || data.deposit.qr_code_base64));
+      // USANDO O CAMPO DIRETO DA PARADISE/PHP
+      let qrSource = data.qr_code_base64 || (data.deposit && data.deposit.qr_code_base64);
       
       if (qrSource && qrSource.length > 20) {
+        // Limpa espaços e garante o prefixo data:image
         qrSource = qrSource.replace(/\s/g, ''); 
         qrImg.src = qrSource.startsWith('data:') ? qrSource : ('data:image/png;base64,' + qrSource);
         
@@ -311,12 +312,12 @@ async function checkDepositStatus() {
     const data = await api('/api/deposit/status', {
       method: 'POST', body: JSON.stringify({ deposit_id: currentDepositId })
     });
-    
-    // Tenta atualizar o QR Code caso ele não tenha carregado na primeira tentativa
+
+    // Se a imagem não carregou na primeira, tentamos pelo status
     const qrImg = document.getElementById('pixQrImage');
     const qrLoading = document.getElementById('qrLoading');
     if (qrImg && qrImg.style.display === 'none') {
-        let qrSource = data.qr_code_image || data.qr_code_base64;
+        let qrSource = data.qr_code_base64;
         if (qrSource && qrSource.length > 20) {
             qrSource = qrSource.replace(/\s/g, '');
             qrImg.src = qrSource.startsWith('data:') ? qrSource : ('data:image/png;base64,' + qrSource);
