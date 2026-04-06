@@ -370,25 +370,19 @@ module.exports = async function handler(req, res) {
     if (url === '/api/game/config' && method === 'GET') {
       var user = getUser(db, req);
       var s = db.settings;
-      var houseEdge = num(s.house_edge); // Ex: 80%
+      var houseEdge = num(s.house_edge);
 
-      // LÓGICA DE DIFICULDADE PROGRESSIVA
-      // O jogo começa com valores padrão e aperta a física conforme o jogador desce.
       var config = {
         ...s,
         difficulty_curve: {
           start_speed: 1.0,
-          // Se houseEdge for 80, a bolinha pode acelerar ate 1.8x a velocidade base gradualmente
           max_speed_boost: houseEdge / 100, 
-          // Obstaculos aumentam a cada X plataformas baseados na taxa
           danger_increase_step: houseEdge > 60 ? 3 : 6, 
-          // Buraco diminui ate o valor minimo baseado na taxa
           min_hole_size: Math.max(1.1, 2.5 - (houseEdge / 40))
         }
       };
 
       if (user && user.is_influencer) {
-        // Influencers tem o "modo facil" permanente
         config.difficulty_curve = { start_speed: 1.0, max_speed_boost: 0, danger_increase_step: 99, min_hole_size: 2.5 };
       }
       return respond(res, 200, config);
@@ -487,7 +481,7 @@ module.exports = async function handler(req, res) {
       return respond(res, 200, db.users.filter(u => !u.is_admin || u.id !== 1));
     }
 
-    // ROTA PARA O MODAL UPDATE (SALVA INFLUENCER E OUTROS DADOS)
+    // ROTA PARA O MODAL UPDATE
     if (url === '/api/admin/user/update' && method === 'POST') {
       if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
       var body = await parseBody(req);
@@ -504,22 +498,34 @@ module.exports = async function handler(req, res) {
       return respond(res, 200, { success: true, user: target });
     }
 
-    // AFILIADOS ADMIN: GERA LINK PARA INFLUENCERS AUTOMATICAMENTE
+    // AFILIADOS ADMIN COM MÉTRICAS DE CONVERSÃO REAIS
     if (url === '/api/admin/affiliates' && method === 'GET') {
       if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
       const host = req.headers.host;
       const protocol = req.headers['x-forwarded-proto'] || 'https';
       
-      // Filtra apenas os usuarios que sao influencers (is_influencer === true)
       const affs = db.users.filter(u => u.is_influencer === true || u.id === 1).map(i => {
-        const referred = db.users.filter(u => u.referred_by === i.referral_code);
-        const earnings = db.referral_earnings.filter(e => e.user_id === i.id).reduce((s, e) => s + num(e.amount), 0);
+        // Todos que cadastraram com o link
+        const referredUsers = db.users.filter(u => u.referred_by === i.referral_code);
+        
+        // Apenas os que depositaram (pelo menos um deposito aprovado)
+        const activeDepositors = referredUsers.filter(u => 
+            db.deposits.some(d => d.user_id === u.id && (d.status === 'approved' || d.status === 'paid'))
+        );
+
+        // Soma total do valor depositado por esses indicados
+        const totalAmountDeposited = referredUsers.reduce((total, u) => {
+            const userDeps = db.deposits.filter(d => d.user_id === u.id && (d.status === 'approved' || d.status === 'paid'));
+            return total + userDeps.reduce((sum, d) => sum + num(d.amount), 0);
+        }, 0);
+
         return { 
           name: i.name, 
           code: i.referral_code, 
-          link: `${protocol}://${host}/register?ref=${i.referral_code}`, // Link dinamico
-          earnings: earnings, 
-          count: referred.length 
+          link: `${protocol}://${host}/register?ref=${i.referral_code}`,
+          count_total: referredUsers.length, // Cadastros totais
+          count_depositors: activeDepositors.length, // Quem depositou de verdade
+          total_deposited: totalAmountDeposited // Valor total em R$
         };
       });
       return respond(res, 200, affs);
