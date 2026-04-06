@@ -376,7 +376,7 @@ module.exports = async function handler(req, res) {
       return respond(res, 200, { received: true });
     }
 
-    // ==================== CHECK DEPOSIT STATUS ====================
+    // ==================== CHECK DEPOSIT STATUS (CORRIGIDO PARA PARADISE) ====================
     if (url === '/api/deposit/status' && method === 'POST') {
       var user = getUser(db, req);
       if (!user) return respond(res, 401, { error: 'Nao autorizado' });
@@ -411,7 +411,9 @@ module.exports = async function handler(req, res) {
       return respond(res, 200, {
         status: dep.status,
         amount: num(dep.amount),
-        new_balance: num(user.balance)
+        new_balance: num(user.balance),
+        pix_code: dep.pix_code,
+        qr_code_image: dep.qr_code_image
       });
     }
 
