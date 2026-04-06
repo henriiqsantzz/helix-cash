@@ -241,7 +241,7 @@ function closeGame() {
   loadUserData();
 }
 
-// ===================== DEPOSIT (PIX MODAL) =====================
+// ===================== DEPOSIT (PIX MODAL - UPDATED) =====================
 document.querySelectorAll('.amount-option[data-dep]').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.amount-option[data-dep]').forEach(b => b.classList.remove('active'));
@@ -267,7 +267,8 @@ document.getElementById('btnDeposit').addEventListener('click', async () => {
       method: 'POST', body: JSON.stringify({ amount, cpf })
     });
 
-    currentDepositId = data.deposit ? data.deposit.id : null;
+    // Captura o deposit_id enviado pela bridge PHP/Node
+    currentDepositId = data.deposit_id || (data.deposit ? data.deposit.id : null);
 
     // Preenche o Modal com código PIX e QR Code
     const pixCode = data.pix_code || (data.deposit && data.deposit.pix_code) || 'Codigo indisponivel';
@@ -277,8 +278,9 @@ document.getElementById('btnDeposit').addEventListener('click', async () => {
     const qrImg = document.getElementById('pixQrImage');
     if (qrImg) {
       const qrSource = data.qr_code_image || (data.deposit && data.deposit.qr_code_image);
-      if (qrSource) {
-        qrImg.src = qrSource.startsWith('data:') ? qrSource : ('data:image/png;base64,' + qrSource);
+      if (qrSource && qrSource.length > 10) {
+        const cleanQr = qrSource.trim();
+        qrImg.src = cleanQr.startsWith('data:') ? cleanQr : ('data:image/png;base64,' + cleanQr);
         qrImg.style.display = 'block';
       } else {
         qrImg.style.display = 'none';
