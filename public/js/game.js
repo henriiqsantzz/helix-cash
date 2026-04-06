@@ -1,5 +1,5 @@
 // ===================== HELIX JUMP 3D GAME =====================
-// Three.js WebGL Helix Jump - Dificuldade Progressiva e Justa
+// Three.js WebGL Helix Jump - Hitboxes e Colisões 100% Precisas
 (function() {
   'use strict';
 
@@ -14,8 +14,13 @@
     ballRadius: 0.30,
     ballBounceForce: 0.22,
     gravity: 0.015,
-    segmentsPerPlatform: 12, // Plataforma dividida em 12 fatias de pizza
-    holeSegments: 2,         // O buraco ocupa 2 fatias
+    segmentsPerPlatform: 12,
+    holeSegments: 2,
+    
+    // VARIÁVEIS DO PAINEL ADMIN
+    dangerStartLevel: 2,
+    dangerProgression: 5,
+    dangerMaxSlices: 6,
     
     // CÂMERA E ENQUADRAMENTO
     cameraFov: 60,
@@ -26,7 +31,6 @@
     
     cameraFollowSpeed: 0.08,
     rotationSensitivity: 0.008,
-    dangerChance: 0.12, // (Não é mais usado de forma fixa, substituído pela progressão dinâmica)
     targetMultiplier: 8,
     latheSegments: 32
   };
@@ -180,7 +184,6 @@
     };
 
     var geo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
-    
     geo.rotateX(-Math.PI / 2); 
     geo.translate(0, - (extrudeSettings.depth / 2), 0);
 
@@ -191,7 +194,6 @@
     return mesh;
   }
 
-  // === AQUI ESTÁ A LÓGICA DINÂMICA E PROGRESSIVA DAS PLATAFORMAS VERMELHAS ===
   function createPlatforms() {
     platforms = [];
     var pal = PALETTES[currentPaletteIndex];
@@ -211,19 +213,18 @@
       pData.group.position.y = y;
       helixGroup.add(pData.group);
 
-      // 1. Descobre quantas fatias vão ser perigosas baseada no andar (Dificuldade Progressiva)
       var dangerSlicesCount = 0;
-      if (i > 1) { // Os 2 primeiros andares são 100% seguros
-        var minRed = Math.floor(i / 6); // Aumenta 1 vermelha no mínimo a cada 6 andares
-        var maxRed = Math.floor(i / 3) + 1; // Máximo vai subindo gradativamente
+      if (i >= CONFIG.dangerStartLevel) { 
+        var andaresDeRisco = i - CONFIG.dangerStartLevel;
+        var minRed = Math.floor(andaresDeRisco / CONFIG.dangerProgression); 
+        var maxRed = minRed + 2; 
         
         dangerSlicesCount = minRed + Math.floor(Math.random() * (maxRed - minRed + 1));
-        
-        // Garante que nunca vai passar de 6 fatias vermelhas para ser impossível de passar
-        if (dangerSlicesCount > 6) dangerSlicesCount = 6; 
+        if (dangerSlicesCount > CONFIG.dangerMaxSlices) {
+            dangerSlicesCount = CONFIG.dangerMaxSlices; 
+        }
       }
 
-      // 2. Mapeia quais fatias existem (tirando as do buraco)
       var validSegmentsIndices = [];
       for (var s = 0; s < CONFIG.segmentsPerPlatform; s++) {
         var sStart = s * segAngle;
@@ -233,22 +234,18 @@
         }
       }
 
-      // 3. Embaralha as fatias válidas e escolhe as que vão ficar vermelhas
       var shuffled = validSegmentsIndices.sort(function() { return 0.5 - Math.random() });
       var dangerIndices = shuffled.slice(0, dangerSlicesCount);
 
-      // 4. Constrói a plataforma aplicando as cores
       for (var s = 0; s < CONFIG.segmentsPerPlatform; s++) {
         var sStart = s * segAngle;
         var sMid = sStart + segAngle / 2;
         
-        // Se a fatia cair no espaço do buraco, não constrói nada
         if (isAngleInRange(sMid, holeStart, holeEnd)) continue;
 
-        // Checa se a fatia atual foi sorteada pra ser vermelha (perigo)
         var isDanger = dangerIndices.includes(s);
-
         var col = isDanger ? pal.killer : (s % 2 === 0 ? pal.platforms : pal.alt);
+        
         var mesh = createRingSegment(
           CONFIG.platformInnerRadius, CONFIG.platformOuterRadius,
           CONFIG.platformHeight, sStart, segAngle, col
@@ -256,10 +253,11 @@
         
         if(isDanger) {
             mesh.material.emissive = new THREE.Color(pal.killer);
-            mesh.material.emissiveIntensity = 0.2; // Efeito neon na vermelha
+            mesh.material.emissiveIntensity = 0.2;
         }
 
         pData.group.add(mesh);
+        // SALVANDO A HITBOX CORRETA DA FATIA
         pData.segments.push({ mesh: mesh, startAngle: sStart, endAngle: sStart + segAngle, isKiller: isDanger });
       }
       platforms.push(pData);
@@ -496,13 +494,13 @@
     updateHUD();
   }
 
+  // ===================== COLISÃO REESCRITA (100% PRECISA) =====================
   function checkCollisions() {
     if (ballVelY <= 0) return;
 
-    var bz = (CONFIG.platformInnerRadius + CONFIG.platformOuterRadius) / 2;
-    var localX = -bz * Math.sin(helixRotation);
-    var localZ = bz * Math.cos(helixRotation);
-    var ballAngle = normAngle(Math.atan2(localX, localZ));
+    // A mágica: No Three.js, a bola parada na frente da câmera fica exatamente no ângulo 270 graus (3*PI / 2). 
+    // Nós subtraímos a rotação do pilar para saber o ângulo exato da bola dentro do "relógio" da plataforma.
+    var ballAngle = normAngle((3 * Math.PI / 2) - helixRotation);
 
     for (var i = 0; i < platforms.length; i++) {
       var p = platforms[i];
@@ -511,10 +509,12 @@
       var platTop = p.y + CONFIG.platformHeight / 2;
       var platBottom = p.y - CONFIG.platformHeight / 2;
 
+      // Se a bola tocou a altura da plataforma atual
       if (ballWorldY <= platTop + CONFIG.ballRadius && ballWorldY >= platBottom - 0.15 && ballVelY > 0) {
         var hEnd = p.holeStart + p.holeSize;
         var inHole = isAngleInRange(ballAngle, p.holeStart, hEnd);
 
+        // Se o ângulo bate com o buraco, a bola cai liso!
         if (inHole) {
           p.passed = true;
           platformsPassed++;
@@ -530,7 +530,27 @@
 
           if (typeof onPlatformPassed === 'function') onPlatformPassed(platformsPassed);
         } else {
-          if (p.isDanger) { triggerGameOver(); return; }
+          
+          // Se não caiu no buraco, bateu em alguma fatia. 
+          // O CÓDIGO NOVO: Procura exatament qual fatia ela tocou para saber se é a vermelha!
+          var hitDanger = false;
+          for (var s = 0; s < p.segments.length; s++) {
+            var seg = p.segments[s];
+            if (isAngleInRange(ballAngle, seg.startAngle, seg.endAngle)) {
+              if (seg.isKiller) {
+                  hitDanger = true;
+              }
+              break;
+            }
+          }
+
+          // Se a fatia lida era vermelha (killer), encerra a bet.
+          if (hitDanger) { 
+            triggerGameOver(); 
+            return; 
+          }
+
+          // Se a fatia era normal (segura), a bola quica e o jogo continua.
           ballWorldY = platTop + CONFIG.ballRadius;
           ballVelY = -CONFIG.ballBounceForce;
           comboCount = 0; comboTimer = 0;
@@ -539,7 +559,7 @@
             ballMesh.scale.set(1.3, 0.6, 1.3);
             setTimeout(function(){ if(ballMesh) ballMesh.scale.set(1,1,1); }, 100);
           }
-          break;
+          break; // Achou a plataforma, não precisa testar os andares de baixo
         }
       }
     }
