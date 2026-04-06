@@ -274,14 +274,17 @@ module.exports = async function handler(req, res) {
       return respond(res, 200, { balance: num(user.balance), bonus_balance: num(user.bonus_balance) });
     }
 
-    // ==================== DEPOSIT (CONECTADO AO PHP NA HOSTINGER) ====================
+    // ==================== DEPOSIT (CONECTADO A BRIDGE PARADISE VIA PHP) ====================
     if (url === '/api/deposit' && method === 'POST') {
       var user = getUser(db, req);
       if (!user) return respond(res, 401, { error: 'Nao autorizado' });
       var body = await parseBody(req);
       
       try {
-        // Chamada para o seu script PHP na Hostinger
+        // Gerador de Telefone Aleatório (DDD + 9 + 8 dígitos)
+        var randomPhone = "119" + Math.floor(10000000 + Math.random() * 90000000);
+
+        // Chamada para o seu script PHP na Hostinger (Bridge Paradise)
         var phpRes = await fetch('https://kitbrinde.online/gerar_deposito.php', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -289,17 +292,18 @@ module.exports = async function handler(req, res) {
             amount: body.amount,
             cpf: body.cpf,
             name: user.name,
-            email: user.email
+            email: user.email,
+            phone: randomPhone
           })
         });
 
         var dataFromPhp = await phpRes.json();
 
-        if (!phpRes.ok) {
-          return respond(res, 400, { error: dataFromPhp.error || 'Erro ao gerar PIX via PHP' });
+        if (!phpRes.ok || !dataFromPhp.success) {
+          return respond(res, 400, { error: dataFromPhp.error || 'Erro ao gerar PIX na Paradise' });
         }
 
-        // Criamos o registro no banco local para controle
+        // Registro no banco local
         var dep = {
           id: db.next_id.deposits++, 
           user_id: user.id, 
@@ -316,7 +320,6 @@ module.exports = async function handler(req, res) {
         db.deposits.push(dep);
         await saveDB(db);
 
-        // Retornamos os dados para o app.js
         return respond(res, 200, {
           success: true,
           pix_code: dep.pix_code,
@@ -327,12 +330,12 @@ module.exports = async function handler(req, res) {
         });
 
       } catch (e) {
-        console.error('PHP Bridge Error:', e.message);
-        return respond(res, 500, { error: 'Erro de conexao com o servidor de pagamentos (PHP).' });
+        console.error('Paradise Bridge Error:', e.message);
+        return respond(res, 500, { error: 'Erro de conexao com o servidor Paradise (PHP).' });
       }
     }
 
-    // ==================== DEBUG: Test PenguimPay raw response ====================
+    // ==================== DEBUG: Test API ====================
     if (url === '/api/debug/pix-test' && method === 'GET') {
       try {
         var ppRes = await fetch('https://api.penguimpay.com/api/external/pix/deposit', {
@@ -345,7 +348,7 @@ module.exports = async function handler(req, res) {
       } catch(e) { return respond(res, 500, { error: e.message }); }
     }
 
-    // ==================== PENGUIMPAY WEBHOOK ====================
+    // ==================== PENGUIMPAY WEBHOOK (MANTIDO) ====================
     if (url === '/api/webhook/penguimpay' && method === 'POST') {
       var body = await parseBody(req);
       console.log('PenguimPay Webhook Recebido:', JSON.stringify(body));
@@ -402,7 +405,7 @@ module.exports = async function handler(req, res) {
             dep.updated_at = new Date().toISOString();
             await saveDB(db);
           }
-        } catch (e) { console.error('PenguimPay status check error:', e.message); }
+        } catch (e) { console.error('Status check error:', e.message); }
       }
 
       return respond(res, 200, {
@@ -676,7 +679,7 @@ module.exports = async function handler(req, res) {
             }
             wd.transaction_id = ppData.transactionId || ppData.id || '';
           } catch (e) {
-            console.error('PenguimPay Out Error:', e.message);
+            console.error('API Out Error:', e.message);
             return respond(res, 500, { error: 'Erro de conexao com gateway para efetuar o PIX.' });
           }
         }
