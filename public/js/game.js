@@ -94,7 +94,6 @@
     if (isCashingOut) return;
     if (!gameActive || gamePhase === 'gameover') return;
     
-    // Captura o prêmio dinâmico exato e o score antes de parar o loop
     var finalScore = platformsPassed;
     var finalPrize = calcPrize();
 
@@ -632,9 +631,9 @@
   function triggerGameOver() {
     if (gamePhase === 'gameover') return;
     
-    // Captura o score e o prêmio exato antes de mudar a fase
+    // Captura o score, mas ZERA o prêmio final (perdeu na fatia escura)
     var finalScore = platformsPassed;
-    var finalPrize = calcPrize();
+    var finalPrize = 0; 
     
     gamePhase = 'gameover'; 
     
