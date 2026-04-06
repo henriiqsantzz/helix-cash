@@ -1,9 +1,9 @@
 // ===================== HELIX JUMP 3D GAME =====================
-// Three.js WebGL Helix Jump - Premium UI & Physics
+// Three.js WebGL Helix Jump - 100% Original Perspective
 (function() {
   'use strict';
 
-  // CONFIGURAÇÕES 100% HELIX JUMP (Câmera distante e bola no topo)
+  // CONFIGURAÇÕES IDÊNTICAS AO HELIX JUMP ORIGINAL (Visão de abismo)
   var CONFIG = {
     platformCount: 30,
     platformSpacing: 2.5,
@@ -18,12 +18,12 @@
     segmentsPerPlatform: 12,
     holeSegments: 2,
     
-    // === NOVOS AJUSTES DE CÂMERA E PILAR ===
-    cameraFov: 65,            // Ângulo um pouco mais aberto para ver mais
-    cameraDistance: 10.0,     // Câmera BEM mais longe da tela
-    cameraHeight: 6.5,        // Altura da câmera
-    cameraOffsetDown: 4.5,    // Quanto a câmera olha para baixo (Joga a bola pro topo da tela)
-    postExtraTop: 3.5,        // Extensão do pilar para cima (Até sumir da tela)
+    // === O SEGREDO DA CÂMERA E DO PILAR INFINITO ===
+    cameraFov: 75,            // Campo de visão bem aberto para dar profundidade
+    cameraDistance: 6.2,      // Distância horizontal mais justa com o pilar
+    cameraHeight: 5.8,        // Altura da câmera bem acima da bola
+    cameraOffsetDown: 10.0,   // Força a câmera a olhar BEM para baixo (Joga a bola pro topo da tela)
+    postExtraTop: 50.0,       // Faz o pilar subir 50 metros a mais (nunca vai aparecer o topo na tela)
     
     cameraFollowSpeed: 0.08,
     rotationSensitivity: 0.008,
@@ -119,7 +119,7 @@
     createPlatforms();
     createBall();
 
-    // AJUSTE: Câmera nasce longe e olha para BAIXO, colocando a bola no topo
+    // AJUSTE: Câmera nasce com as novas proporções de "abismo"
     camera.position.set(0, ballWorldY + CONFIG.cameraHeight, CONFIG.cameraDistance);
     camera.lookAt(0, ballWorldY - CONFIG.cameraOffsetDown, 0);
     cameraTargetY = ballWorldY + CONFIG.cameraHeight;
@@ -150,7 +150,7 @@
     var mat = new THREE.MeshStandardMaterial({ color: pal.pole, roughness: 0.3, metalness: 0.1 });
     postMesh = new THREE.Mesh(geo, mat);
     
-    // AJUSTE: Sobe o pilar para ele varar o topo da tela
+    // Pilar infinito pra cima
     postMesh.position.y = (-CONFIG.postHeight / 2) + CONFIG.postExtraTop;
     postMesh.receiveShadow = true;
     postMesh.castShadow = true;
@@ -163,7 +163,7 @@
     var capMat = new THREE.MeshStandardMaterial({ color: pal.topCap, roughness: 0.3, metalness: 0.1 });
     topCapMesh = new THREE.Mesh(capGeo, capMat);
     
-    // Acompanha a ponta do pilar novo
+    // Topo escondido lá em cima, fora da visão da câmera
     topCapMesh.position.y = CONFIG.postExtraTop; 
     helixGroup.add(topCapMesh);
   }
@@ -444,11 +444,10 @@
       if (ballWorldY < -(CONFIG.platformCount + 2) * CONFIG.platformSpacing) triggerGameOver();
     }
 
-    // AJUSTE CÂMERA: Acompanha mantendo a bola na tela superior
+    // AJUSTE CÂMERA: Mantém a inclinação de abismo enquanto cai
     if (camera && gamePhase !== 'ready') {
       cameraTargetY = ballWorldY + CONFIG.cameraHeight;
       camera.position.y += (cameraTargetY - camera.position.y) * CONFIG.cameraFollowSpeed;
-      // O segredo do enquadramento: a câmera "olha" pro chão, não pra bola
       camera.lookAt(0, camera.position.y - CONFIG.cameraHeight - CONFIG.cameraOffsetDown, 0);
     }
 
