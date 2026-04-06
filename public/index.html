@@ -21,6 +21,23 @@
       display: block;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
+    
+    /* Estilo do Botão Admin */
+    .admin-badge-btn {
+      background: rgba(124, 77, 255, 0.2);
+      border: 1px solid rgba(124, 77, 255, 0.5);
+      color: #b388ff;
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      text-decoration: none;
+      display: none; /* Escondido por padrão */
+      align-items: center;
+      gap: 4px;
+    }
+    .admin-badge-btn:active { transform: scale(0.95); }
   </style>
 </head>
 <body>
@@ -201,6 +218,8 @@
         <img src="https://helix-cash.vercel.app/public/images/helixcash.png" alt="" style="height: 50px;">
       </div>
       <div style="display:flex;align-items:center;gap:12px">
+        <a href="/admin.html" id="btnAdminPanel" class="admin-badge-btn">⚙️ Admin</a>
+        
         <div class="balance-chip">R$ <span id="userBalance">0,00</span></div>
         <div class="user-avatar" id="userAvatar">U</div>
       </div>
@@ -422,5 +441,20 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="/js/game.js"></script>
 <script src="/js/app.js"></script>
+<script>
+  // Script para mostrar o botão Admin apenas para administradores
+  function checkAdmin() {
+    const user = JSON.parse(localStorage.getItem('hc_user') || '{}');
+    const adminBtn = document.getElementById('btnAdminPanel');
+    if (user && user.is_admin) {
+      adminBtn.style.display = 'flex';
+    }
+  }
+  
+  // Executar a checagem após o carregamento da página e quando houver login
+  window.addEventListener('load', checkAdmin);
+  // Observa mudanças no localStorage (ex: login bem sucedido)
+  window.addEventListener('storage', checkAdmin);
+</script>
 </body>
 </html>
