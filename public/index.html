@@ -38,9 +38,98 @@
       gap: 4px;
     }
     .admin-badge-btn:active { transform: scale(0.95); }
+
+    /* --- NOVOS ESTILOS HEADER E MENU LATERAL --- */
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: rgba(255, 255, 255, 0.05);
+      padding: 5px 5px 5px 15px;
+      border-radius: 50px;
+      border: 1px solid rgba(124, 77, 255, 0.1);
+      cursor: pointer;
+    }
+    .balance-display { text-align: right; }
+    .balance-display small { display: block; font-size: 9px; color: #a0a0c0; text-transform: uppercase; font-weight: 700; }
+    .balance-display strong { color: #00e676; font-size: 14px; font-weight: 900; }
+
+    .side-menu {
+      position: fixed; top: 0; right: -300px; width: 300px; height: 100%;
+      background: #12122a; z-index: 10000; transition: 0.3s;
+      box-shadow: -5px 0 20px rgba(0,0,0,0.5); padding: 25px;
+      display: flex; flex-direction: column;
+    }
+    .side-menu.active { right: 0; }
+    .menu-overlay {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.7); z-index: 9999; display: none; backdrop-filter: blur(4px);
+    }
+    .menu-overlay.active { display: block; }
+
+    .side-menu-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
+    .close-btn { background: none; border: none; color: #fff; font-size: 30px; cursor: pointer; }
+    
+    .user-info-large { text-align: center; margin-bottom: 30px; }
+    .avatar-big { 
+        width: 80px; height: 80px; background: var(--primary); border-radius: 50%; 
+        margin: 0 auto 15px; display: flex; align-items: center; justify-content: center;
+        font-size: 32px; font-weight: 900; color: #fff; border: 4px solid rgba(255,255,255,0.1);
+    }
+    .user-info-large h4 { font-size: 18px; margin-bottom: 5px; }
+    .user-info-large p { font-size: 13px; color: #a0a0c0; }
+
+    .menu-items { background: rgba(255,255,255,0.03); border-radius: 16px; padding: 10px; margin-bottom: 20px; }
+    .menu-item { display: flex; justify-content: space-between; padding: 12px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+    .menu-item:last-child { border: none; }
+    .menu-item span { font-size: 13px; color: #a0a0c0; }
+    
+    .btn-admin-link {
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+      background: linear-gradient(135deg, #7c4dff, #b388ff);
+      color: white; padding: 16px; border-radius: 12px; font-weight: 800; text-decoration: none;
+      font-size: 14px; text-transform: uppercase; margin-bottom: 10px;
+    }
+    .btn-logout-menu {
+      width: 100%; margin-top: auto; background: rgba(255, 23, 68, 0.1);
+      color: #ff1744; border: 1px solid rgba(255, 23, 68, 0.2); padding: 14px; border-radius: 12px;
+      font-weight: 700; cursor: pointer;
+    }
   </style>
 </head>
 <body>
+
+<div id="sideMenu" class="side-menu">
+  <div class="side-menu-header">
+    <h3 style="font-weight: 900; color: var(--primary);">MINHA CONTA</h3>
+    <button onclick="toggleMenu()" class="close-btn">&times;</button>
+  </div>
+  <div class="side-menu-content" style="flex: 1; display: flex; flex-direction: column;">
+    <div class="user-info-large">
+      <div class="avatar-big" id="menuAvatar">U</div>
+      <h4 id="menuUserName">Carregando...</h4>
+      <p id="menuUserEmail">...</p>
+    </div>
+    
+    <div class="menu-items">
+      <div class="menu-item">
+        <span>Saldo Real</span>
+        <strong style="color: #00e676;">R$ <span id="menuBalance">0,00</span></strong>
+      </div>
+      <div class="menu-item">
+        <span>Bônus</span>
+        <strong style="color: #b388ff;">R$ <span id="menuBonus">0,00</span></strong>
+      </div>
+    </div>
+
+    <div id="adminMenuArea" style="display:none;">
+      <a href="/admin.html" class="btn btn-admin-link">⚙️ Painel Admin</a>
+    </div>
+
+    <button onclick="logout()" class="btn btn-logout-menu">SAIR DA CONTA</button>
+  </div>
+</div>
+<div id="menuOverlay" class="menu-overlay" onclick="toggleMenu()"></div>
 
 <div id="page-landing" class="page active">
   <header class="header">
@@ -217,10 +306,12 @@
       <div class="logo">
         <img src="https://helix-cash.vercel.app/public/images/helixcash.png" alt="" style="height: 50px;">
       </div>
-      <div style="display:flex;align-items:center;gap:12px">
-        <a href="/admin.html" id="btnAdminPanel" class="admin-badge-btn">⚙️ Admin</a>
-        
-        <div class="balance-chip">R$ <span id="userBalance">0,00</span></div>
+      
+      <div class="header-right" onclick="toggleMenu()">
+        <div class="balance-display">
+          <small>Saldo</small>
+          <strong>R$ <span id="userBalance">0,00</span></strong>
+        </div>
         <div class="user-avatar" id="userAvatar">U</div>
       </div>
     </div>
@@ -442,18 +533,38 @@
 <script src="/js/game.js"></script>
 <script src="/js/app.js"></script>
 <script>
+  // Função para abrir/fechar o menu lateral
+  function toggleMenu() {
+    const menu = document.getElementById('sideMenu');
+    const overlay = document.getElementById('menuOverlay');
+    const isActive = menu.classList.toggle('active');
+    overlay.classList.toggle('active');
+    
+    if(isActive) {
+      const user = JSON.parse(localStorage.getItem('hc_user') || '{}');
+      document.getElementById('menuUserName').textContent = user.name || 'Usuário';
+      document.getElementById('menuUserEmail').textContent = user.email || '';
+      document.getElementById('menuBalance').textContent = parseFloat(user.balance || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+      document.getElementById('menuBonus').textContent = parseFloat(user.bonus_balance || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+      document.getElementById('menuAvatar').textContent = (user.name || 'U').charAt(0).toUpperCase();
+      
+      if(user.is_admin) {
+        document.getElementById('adminMenuArea').style.display = 'block';
+      }
+    }
+  }
+
   // Script para mostrar o botão Admin apenas para administradores
   function checkAdmin() {
     const user = JSON.parse(localStorage.getItem('hc_user') || '{}');
     const adminBtn = document.getElementById('btnAdminPanel');
     if (user && user.is_admin) {
-      adminBtn.style.display = 'flex';
+      // O botão fixo no header agora fica invisível pois o acesso será pelo menu
+      if(adminBtn) adminBtn.style.display = 'none';
     }
   }
   
-  // Executar a checagem após o carregamento da página e quando houver login
   window.addEventListener('load', checkAdmin);
-  // Observa mudanças no localStorage (ex: login bem sucedido)
   window.addEventListener('storage', checkAdmin);
 </script>
 </body>
