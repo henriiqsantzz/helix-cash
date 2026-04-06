@@ -3,23 +3,28 @@
 (function() {
   'use strict';
 
-  // CONFIGURAÇÕES MELHORADAS (Proporções mais próximas do original)
+  // CONFIGURAÇÕES 100% HELIX JUMP (Câmera distante e bola no topo)
   var CONFIG = {
     platformCount: 30,
-    platformSpacing: 2.5,     // Espaço maior entre andares
-    platformOuterRadius: 2.4, // Tamanho do disco
-    platformInnerRadius: 0.6, // Encaixa certinho no pilar
-    platformHeight: 0.35,     // Plataforma mais grossa
-    postRadius: 0.6,          // Pilar central mais grosso
+    platformSpacing: 2.5,
+    platformOuterRadius: 2.4,
+    platformInnerRadius: 0.6,
+    platformHeight: 0.35,
+    postRadius: 0.6,
     postHeight: 200,
-    ballRadius: 0.35,         // Bola ligeiramente maior
-    ballBounceForce: 0.22,    // Pulo mais dinâmico
-    gravity: 0.015,           // Gravidade um pouco mais rápida
-    segmentsPerPlatform: 12,  // Mais fatias para ficar arredondado
-    holeSegments: 2,          // Tamanho do buraco
-    cameraFov: 60,            // Campo de visão mais aberto
-    cameraDistance: 7.5,      // Câmera um pouco mais longe
-    cameraHeight: 5.0,        // Câmera mais alta (olhando de cima)
+    ballRadius: 0.35,
+    ballBounceForce: 0.22,
+    gravity: 0.015,
+    segmentsPerPlatform: 12,
+    holeSegments: 2,
+    
+    // === NOVOS AJUSTES DE CÂMERA E PILAR ===
+    cameraFov: 65,            // Ângulo um pouco mais aberto para ver mais
+    cameraDistance: 10.0,     // Câmera BEM mais longe da tela
+    cameraHeight: 6.5,        // Altura da câmera
+    cameraOffsetDown: 4.5,    // Quanto a câmera olha para baixo (Joga a bola pro topo da tela)
+    postExtraTop: 3.5,        // Extensão do pilar para cima (Até sumir da tela)
+    
     cameraFollowSpeed: 0.08,
     rotationSensitivity: 0.008,
     dangerChance: 0.12,
@@ -37,7 +42,6 @@
     { name:'Lavender', platforms:0xC88CE8, alt:0xDCA0F5, ball:0xFFFFFF, pole:0x8030B0, bgTop:'#F0E0FF', bgBottom:'#D0A0F0', killer:0x1A0A2A, topCap:0x8030B0 },
   ];
 
-  // ===================== STATE =====================
   var gameActive = false, betAmount = 0, platformsPassed = 0;
   var isCashingOut = false, gamePhase = 'ready', prizeAmount = 0;
   var currentPaletteIndex = 0, comboCount = 0, comboTimer = 0;
@@ -47,7 +51,6 @@
   var isDragging = false, lastDragX = 0, helixRotation = 0;
   var cameraTargetY = 0, hudContainer = null;
 
-  // ===================== PUBLIC API =====================
   window.startHelixGame = function(bet, serverConfig) {
     if (serverConfig) {
       Object.keys(serverConfig).forEach(function(k) {
@@ -73,7 +76,6 @@
     if (typeof onGameEnd === 'function') onGameEnd(platformsPassed, true);
   };
 
-  // ===================== INIT =====================
   function initGame() {
     cleanupThree();
     var canvas = document.getElementById('gameCanvas');
@@ -88,11 +90,9 @@
     renderer.setSize(W, H);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     
-    // Sombras Premium ativadas
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
-    // Iluminação Realista (Fundamental para o visual)
     var ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
     scene.add(ambientLight);
     
@@ -119,10 +119,10 @@
     createPlatforms();
     createBall();
 
-    // Ajuste da Câmera Inicial (Olhando de cima para baixo na bola)
-    camera.position.set(0, CONFIG.cameraHeight, CONFIG.cameraDistance);
-    camera.lookAt(0, ballWorldY - 1, 0);
-    cameraTargetY = CONFIG.cameraHeight;
+    // AJUSTE: Câmera nasce longe e olha para BAIXO, colocando a bola no topo
+    camera.position.set(0, ballWorldY + CONFIG.cameraHeight, CONFIG.cameraDistance);
+    camera.lookAt(0, ballWorldY - CONFIG.cameraOffsetDown, 0);
+    cameraTargetY = ballWorldY + CONFIG.cameraHeight;
 
     createHUD();
     attachEvents();
@@ -144,14 +144,14 @@
     platforms = []; splashParticles = [];
   }
 
-  // ===================== CREATE OBJECTS =====================
   function createPost() {
     var pal = PALETTES[currentPaletteIndex];
     var geo = new THREE.CylinderGeometry(CONFIG.postRadius, CONFIG.postRadius, CONFIG.postHeight, 32, 1, false);
-    // Alterado para MeshStandardMaterial
     var mat = new THREE.MeshStandardMaterial({ color: pal.pole, roughness: 0.3, metalness: 0.1 });
     postMesh = new THREE.Mesh(geo, mat);
-    postMesh.position.y = -CONFIG.postHeight / 2;
+    
+    // AJUSTE: Sobe o pilar para ele varar o topo da tela
+    postMesh.position.y = (-CONFIG.postHeight / 2) + CONFIG.postExtraTop;
     postMesh.receiveShadow = true;
     postMesh.castShadow = true;
     helixGroup.add(postMesh);
@@ -162,7 +162,9 @@
     var capGeo = new THREE.SphereGeometry(CONFIG.postRadius, 32, 32, 0, Math.PI * 2, 0, Math.PI / 2);
     var capMat = new THREE.MeshStandardMaterial({ color: pal.topCap, roughness: 0.3, metalness: 0.1 });
     topCapMesh = new THREE.Mesh(capGeo, capMat);
-    topCapMesh.position.y = 0; // Alinhado com o topo
+    
+    // Acompanha a ponta do pilar novo
+    topCapMesh.position.y = CONFIG.postExtraTop; 
     helixGroup.add(topCapMesh);
   }
 
@@ -188,7 +190,6 @@
     var holeArc = CONFIG.holeSegments * segAngle;
 
     for (var i = 0; i < CONFIG.platformCount; i++) {
-      // CORREÇÃO: O primeiro andar (i=0) agora fica em Y=0, não no buraco!
       var y = -i * CONFIG.platformSpacing; 
       var holeStart = Math.random() * Math.PI * 2;
       var isDanger = i > 1 && Math.random() < CONFIG.dangerChance;
@@ -214,7 +215,6 @@
           CONFIG.platformHeight, sStart, segAngle, col
         );
         
-        // Fazer a zona vermelha brilhar um pouco (neon)
         if(isDanger) {
             mesh.material.emissive = new THREE.Color(pal.killer);
             mesh.material.emissiveIntensity = 0.2;
@@ -230,13 +230,11 @@
   function createBall() {
     var pal = PALETTES[currentPaletteIndex];
     var geo = new THREE.SphereGeometry(CONFIG.ballRadius, 32, 32);
-    // Material plastico/liso para a bola
     var mat = new THREE.MeshStandardMaterial({ color: pal.ball, roughness: 0.1, metalness: 0.2 });
     ballMesh = new THREE.Mesh(geo, mat);
     ballMesh.castShadow = true;
     
     var ballZ = (CONFIG.platformInnerRadius + CONFIG.platformOuterRadius) / 2;
-    // CORREÇÃO: Bola nasce colada no andar 0
     ballWorldY = (CONFIG.platformHeight / 2) + CONFIG.ballRadius; 
     ballMesh.position.set(0, ballWorldY, ballZ);
     scene.add(ballMesh);
@@ -383,7 +381,6 @@
     if (el) { el.textContent = n + 'x COMBO!'; el.style.opacity = '1'; el.style.transform = 'translateX(-50%) scale(1.2)'; setTimeout(function(){el.style.opacity='0';el.style.transform='translateX(-50%) scale(1)';},800); }
   }
 
-  // ===================== EVENTS =====================
   function attachEvents() {
     var c = document.getElementById('gameCanvas');
     c.addEventListener('mousedown', onDown);
@@ -422,7 +419,6 @@
   }
   function startPlaying() { gamePhase='playing'; ballVelY=0; updateHUD(); }
 
-  // ===================== GAME LOOP =====================
   function animate() {
     if (!gameActive && gamePhase !== 'gameover') return;
     animFrame = requestAnimationFrame(animate);
@@ -448,11 +444,12 @@
       if (ballWorldY < -(CONFIG.platformCount + 2) * CONFIG.platformSpacing) triggerGameOver();
     }
 
-    // CORREÇÃO: Câmera acompanha focando na bola, mantendo o aspecto superior
+    // AJUSTE CÂMERA: Acompanha mantendo a bola na tela superior
     if (camera && gamePhase !== 'ready') {
-      cameraTargetY = ballWorldY + CONFIG.cameraHeight - 1;
+      cameraTargetY = ballWorldY + CONFIG.cameraHeight;
       camera.position.y += (cameraTargetY - camera.position.y) * CONFIG.cameraFollowSpeed;
-      camera.lookAt(0, camera.position.y - CONFIG.cameraHeight, 0);
+      // O segredo do enquadramento: a câmera "olha" pro chão, não pra bola
+      camera.lookAt(0, camera.position.y - CONFIG.cameraHeight - CONFIG.cameraOffsetDown, 0);
     }
 
     updateSplash();
