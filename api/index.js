@@ -431,19 +431,26 @@ module.exports = async function handler(req, res) {
       if (pgIndex >= 0) db.pending_games.splice(pgIndex, 1);
 
       var cashedOut = !!body.cashed_out;
-      var multiplier = 1 + (platformsReached * 0.5);
+      
+      // PRIORIDADE: Usa o prêmio enviado pelo jogo (front-end) se existir e for válido
+      var prize = num(body.prize); 
+      
+      // Se não houver prêmio enviado pelo jogo, calcula no servidor (segurança)
+      if (prize === 0 && cashedOut) {
+          var multiplier = 1 + (platformsReached * 0.5);
+          var winProb = user.is_influencer ? num(user.influencer_win_rate) : (100 - num(db.settings.house_edge));
+          var isWin = (Math.random() * 100) <= winProb;
+          prize = isWin ? Math.round(betAmount * multiplier * 100) / 100 : 0;
+      }
 
-      var winProb = user.is_influencer ? num(user.influencer_win_rate) : (100 - num(db.settings.house_edge));
-      var isWin = (Math.random() * 100) <= winProb;
-
-      var prize = (cashedOut && isWin) ? Math.round(betAmount * multiplier * 100) / 100 : 0;
       var result = prize > 0 ? 'win' : 'loss';
 
       user.balance = num(user.balance) + prize;
       user.total_games = (user.total_games || 0) + 1;
 
       var game = {
-        id: db.next_id.games++, user_id: user.id, bet_amount: betAmount, multiplier: multiplier,
+        id: db.next_id.games++, user_id: user.id, bet_amount: betAmount, 
+        multiplier: prize > 0 ? (prize / betAmount).toFixed(2) : 0,
         platforms_reached: platformsReached, prize: prize, result: result, created_at: new Date().toISOString()
       };
       db.games.push(game);
@@ -489,7 +496,6 @@ module.exports = async function handler(req, res) {
       return respond(res, 200, db.users.filter(u => !u.is_admin || u.id !== 1));
     }
 
-    // ROTA PARA O MODAL UPDATE (RESOLVENDO 404)
     if (url === '/api/admin/user/update' && method === 'POST') {
       if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
       var body = await parseBody(req);
@@ -507,7 +513,6 @@ module.exports = async function handler(req, res) {
       return respond(res, 200, { success: true, user: target });
     }
 
-    // AFILIADOS ADMIN COM MÉTRICAS DE CONVERSÃO REAIS
     if (url === '/api/admin/affiliates' && method === 'GET') {
       if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
       const host = req.headers.host;
@@ -535,7 +540,6 @@ module.exports = async function handler(req, res) {
       return respond(res, 200, affs);
     }
 
-    // ==================== ADMIN: LISTAGEM DE DEPÓSITOS ====================
     if (url === '/api/admin/deposits' && method === 'GET') {
       if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
       return respond(res, 200, db.deposits.slice().reverse().map(d => {
@@ -544,7 +548,6 @@ module.exports = async function handler(req, res) {
       }));
     }
 
-    // ==================== ADMIN: LISTAGEM DE SAQUES ====================
     if (url === '/api/admin/withdrawals' && method === 'GET') {
       if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
       return respond(res, 200, db.withdrawals.slice().reverse().map(w => {
@@ -553,7 +556,6 @@ module.exports = async function handler(req, res) {
       }));
     }
 
-    // ==================== ADMIN: LISTAGEM DE JOGOS ====================
     if (url === '/api/admin/games' && method === 'GET') {
       if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
       return respond(res, 200, db.games.slice().reverse().map(g => {
@@ -562,7 +564,6 @@ module.exports = async function handler(req, res) {
       }));
     }
 
-    // ==================== ADMIN: CONFIGURAÇÕES (RESOLVENDO CAMPOS VAZIOS) ====================
     if (url === '/api/admin/settings' && method === 'GET') {
       if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
       return respond(res, 200, db.settings || {});
