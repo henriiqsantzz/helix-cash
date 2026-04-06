@@ -269,35 +269,44 @@ document.getElementById('btnDeposit').addEventListener('click', async () => {
 
   try {
     const data = await api('/api/deposit', {
-      method: 'POST', 
-      body: JSON.stringify({ amount, cpf })
-    });
+  method: 'POST', body: JSON.stringify({ amount, cpf })
+});
 
-    currentDepositId = data.deposit_id || (data.deposit ? data.deposit.id : null);
+currentDepositId = data.deposit_id || (data.deposit ? data.deposit.id : null);
 
-    // Atualiza código copia e cola
-    const pixCode = data.pix_code || (data.deposit && data.deposit.pix_code) || 'Codigo indisponivel';
-    const codeContainer = document.getElementById('pixCode');
-    if (codeContainer) codeContainer.textContent = pixCode;
+// 1. Pega o código PIX Texto (Copia e Cola)
+const pixCode = data.pix_code || (data.deposit && data.deposit.pix_code);
+if (document.getElementById('pixCode')) {
+    document.getElementById('pixCode').textContent = pixCode || 'Erro ao gerar código';
+}
 
-    // Atualiza QR Code
-    const qrImg = document.getElementById('pixQrImage');
-    const qrLoading = document.getElementById('qrLoading');
+// 2. EXIBIÇÃO DO QR CODE (Ajuste aqui)
+const qrImg = document.getElementById('pixQrImage');
+const qrLoading = document.getElementById('qrLoading');
 
-    if (qrImg) {
-      let qrSource = data.qr_code_base64 || data.qr_code_image || 
-                     (data.deposit && (data.deposit.qr_code_base64 || data.deposit.qr_code_image));
-      
-      if (qrSource && qrSource.length > 50) {
+if (qrImg) {
+    // Tenta pegar o base64 de todos os lugares possíveis que o servidor pode mandar
+    let qrSource = data.qr_code_base64 || 
+                   (data.deposit && data.deposit.qr_code_base64) || 
+                   data.qr_code_image || 
+                   (data.deposit && data.deposit.qr_code_image);
+    
+    if (qrSource && qrSource.length > 50) {
+        // Remove espaços e garante o cabeçalho data:image
         qrSource = qrSource.replace(/\s/g, ''); 
-        qrImg.src = qrSource.startsWith('data:') ? qrSource : ('data:image/png;base64,' + qrSource);
+        const finalSrc = qrSource.startsWith('data:') ? qrSource : `data:image/png;base64,${qrSource}`;
+        
+        qrImg.src = finalSrc;
         qrImg.style.display = 'block';
         if (qrLoading) qrLoading.style.display = 'none';
-      } else {
+        
+        console.log("QR Code carregado com sucesso.");
+    } else {
+        console.error("Imagem Base64 não encontrada no JSON de resposta:", data);
         qrImg.style.display = 'none';
         if (qrLoading) qrLoading.style.display = 'block';
-      }
     }
+}
 
     // Abre o modal
     const modal = document.getElementById('pixModal');
