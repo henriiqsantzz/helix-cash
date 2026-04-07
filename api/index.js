@@ -381,6 +381,7 @@ module.exports = async function handler(req, res) {
 
       var config = {
         ...s,
+        win_rate: 100 - houseEdge, // Win rate padrão baseado na taxa da casa
         difficulty_curve: {
           start_speed: 1.0,
           max_speed_boost: houseEdge / 100, 
@@ -389,7 +390,10 @@ module.exports = async function handler(req, res) {
         }
       };
 
+      // SE FOR INFLUENCIADOR (Aqui estava o bug. Agora ele injeta a taxa exata do painel)
       if (user && user.is_influencer) {
+        config.win_rate = num(user.influencer_win_rate) || 100;
+        config.influencer_win_rate = config.win_rate; 
         config.difficulty_curve = { start_speed: 1.0, max_speed_boost: 0, danger_increase_step: 99, min_hole_size: 2.5 };
       }
       return respond(res, 200, config);
