@@ -150,8 +150,11 @@
     if (cb) {
         cb.style.background = '#ffffff';
         cb.style.color = '#000000';
-        cb.innerText = 'PROCESSANDO...';
+        cb.style.border = 'none';
+        cb.innerHTML = 'PROCESSANDO...';
         cb.style.pointerEvents = 'none';
+        cb.style.animation = 'none';
+        cb.style.boxShadow = 'none';
     }
     
     if (typeof window.onGameEnd === 'function') {
@@ -417,7 +420,10 @@
       + '<div style="width:100%;height:4px;background:rgba(255,255,255,0.15);border-radius:2px;margin-top:4px;overflow:hidden;">'
       + '<div id="hud-progress-bar" style="width:0%;height:100%;background:linear-gradient(90deg,#00e676,#69f0ae);border-radius:2px;transition:width 0.3s;"></div></div></div>';
 
-    html += '<button id="hud-cashout" style="position:absolute;top:12px;right:12px;z-index:9999;pointer-events:auto;background:linear-gradient(135deg,#00e676,#00c853);color:#000;padding:16px 28px;border-radius:12px;font-family:Inter,sans-serif;cursor:pointer;font-weight:900;font-size:16px;text-transform:uppercase;letter-spacing:1px;border:none;box-shadow:0 4px 15px rgba(0,230,118,0.4);display:none;" onpointerdown="window.helixGameCashOut(event)" ontouchstart="window.helixGameCashOut(event)" onclick="window.helixGameCashOut(event)">RESGATAR</button>';
+    // NOVO BOTÃO DE RESGATAR (CENTRALIZADO, AMARELO, COM ÍCONE)
+    html += '<button id="hud-cashout" style="position:absolute;top:85px;left:50%;transform:translateX(-50%);z-index:9999;pointer-events:auto;background:linear-gradient(135deg,#FFD700,#FFB300);color:#000;padding:12px 28px;border-radius:12px;font-family:Inter,sans-serif;cursor:pointer;font-weight:900;font-size:16px;text-transform:uppercase;letter-spacing:1px;border:1px solid #FFECB3;box-shadow:0 0 20px rgba(255,215,0,0.6);display:none;align-items:center;justify-content:center;gap:8px;white-space:nowrap;" onpointerdown="window.helixGameCashOut(event)" ontouchstart="window.helixGameCashOut(event)" onclick="window.helixGameCashOut(event)">'
+      + '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>'
+      + 'RESGATAR</button>';
 
     html += '<div id="hud-start" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:100;font-family:Inter,sans-serif;text-align:center;pointer-events:none;">'
       + '<div style="font-size:20px;font-weight:700;color:rgba(0,0,0,0.6);">Toque para jogar</div>'
@@ -433,7 +439,8 @@
     hudContainer.innerHTML = html;
 
     var style = document.createElement('style');
-    style.textContent = '@keyframes helixBounce{0%,100%{transform:translateY(0)}50%{transform:translateY(10px)}}@keyframes helixFadeUp{0%{opacity:1;transform:translate(-50%,-50%) scale(1)}100%{opacity:0;transform:translate(-50%,-80%) scale(1.5)}}@keyframes helixPulse{0%,100%{box-shadow:0 4px 15px rgba(0,230,118,0.4)}50%{box-shadow:0 4px 25px rgba(0,230,118,0.7)}}';
+    // ATUALIZADO: Nova animação de pulso amarelo para combinar com o botão
+    style.textContent = '@keyframes helixBounce{0%,100%{transform:translateY(0)}50%{transform:translateY(10px)}}@keyframes helixFadeUp{0%{opacity:1;transform:translate(-50%,-50%) scale(1)}100%{opacity:0;transform:translate(-50%,-80%) scale(1.5)}}@keyframes helixPulseYellow{0%,100%{box-shadow:0 0 15px rgba(255,215,0,0.5)}50%{box-shadow:0 0 35px rgba(255,215,0,1)}}';
     hudContainer.appendChild(style);
     container.appendChild(hudContainer);
     
@@ -463,8 +470,9 @@
 
     if (cb) {
       var goalReached = prize >= meta && meta > 0;
-      cb.style.display = (gamePhase === 'playing' && goalReached) ? 'block' : 'none';
-      if (goalReached) cb.style.animation = 'helixPulse 1s infinite';
+      // ATUALIZADO: usando 'flex' para o botão aparecer corretamente alinhado
+      cb.style.display = (gamePhase === 'playing' && goalReached) ? 'flex' : 'none';
+      if (goalReached) cb.style.animation = 'helixPulseYellow 1s infinite';
     }
 
     if (ss) ss.style.display = gamePhase === 'ready' ? 'block' : 'none';
