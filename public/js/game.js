@@ -236,8 +236,10 @@
 
     var dangerSlicesCount = 0;
     if (index >= CONFIG.dangerStartLevel) {
-      var andaresDeRisco = index - CONFIG.dangerStartLevel;
-      var minRed = Math.floor(andaresDeRisco / CONFIG.dangerProgression);
+      var andaresDeRisco = index - CONFIG.dangerStartLevel + 1;
+      // DIFICULDADE EXTREMA: A progressão agora atua como um multiplicador veloz.
+      // Quanto maior a progressão no painel, mais rápido a plataforma enche de fatias vermelhas.
+      var minRed = Math.floor(andaresDeRisco * (CONFIG.dangerProgression / 4));
       dangerSlicesCount = Math.min(CONFIG.dangerMaxSlices, minRed + Math.floor(Math.random() * 3));
     }
 
@@ -568,6 +570,12 @@
   function checkCollisions() {
     if (ballVelY <= 0) return;
     var ballAngle = normAngle((3 * Math.PI / 2) - helixRotation);
+    
+    // HITBOX RIGOROSO: Calcula exatamente o arco (ângulo) que a bola ocupa na tela
+    var ballRadiusAngle = Math.asin(CONFIG.ballRadius / ((CONFIG.platformInnerRadius + CONFIG.platformOuterRadius) / 2));
+    // Margem extra implacável (1.2x) pra garantir que se triscar, perdeu.
+    var killMargin = ballRadiusAngle * 1.2; 
+
     for (var i = 0; i < platforms.length; i++) {
       var p = platforms[i];
       if (p.passed) continue;
@@ -587,7 +595,9 @@
           createSplash(p.y);
           if (typeof onPlatformPassed === 'function') onPlatformPassed(platformsPassed);
         } else {
-          var hitDanger = p.segments.some(seg => seg.isKiller && isAngleInRange(ballAngle, seg.startAngle, seg.endAngle));
+          // CHECAGEM FATAL: Verifica se o centro da bola MAIS a margem (largura dela) encostam no vermelho
+          var hitDanger = p.segments.some(seg => seg.isKiller && isAngleInRange(ballAngle, seg.startAngle - killMargin, seg.endAngle + killMargin));
+          
           if (hitDanger) { 
             triggerGameOver(); 
             return; 
