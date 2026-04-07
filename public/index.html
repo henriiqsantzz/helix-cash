@@ -110,46 +110,43 @@
       text-align: center;
     }
 
-    /* --- CORREÇÕES MOBILE PROFISSIONAIS --- */
+    /* --- CORREÇÕES MOBILE --- */
     @media (max-width: 768px) {
-      /* 1. Tela Inicial: Valores (Stats Grid) */
+      /* 1. Tela Inicial: Valores (Stats Grid) - Mantido Perfeito */
       .stats-grid {
         display: grid !important;
-        grid-template-columns: 1fr 1fr !important; /* Quebra para duas colunas organizadas */
+        grid-template-columns: 1fr 1fr !important;
         gap: 12px !important;
       }
       .stat-item:first-child {
-        grid-column: span 2 !important; /* O 1º bloco (Jogadores) ganha a linha toda */
+        grid-column: span 2 !important; 
       }
       .stat-value {
-        font-size: clamp(1.3rem, 5vw, 1.8rem) !important; /* Ajusta a fonte dinamicamente sem quebrar a tela */
+        font-size: clamp(1.3rem, 5vw, 1.8rem) !important; 
         white-space: normal !important;
         word-wrap: break-word !important;
       }
 
-      /* 2. Cartões (Login, Cadastro e Painel) - Largos e sem achatamento */
-      .auth-page, .panel-page {
-        padding: 15px !important; /* Margem externa segura */
+      /* 2. Cartões de Autenticação (Login, Cadastro) - Mantidos Largos */
+      .auth-page {
+        padding: 15px !important;
         box-sizing: border-box !important;
       }
-      .auth-card, .panel-sub {
+      .auth-card {
         width: 100% !important;
-        max-width: 100% !important; /* Remove travas de largura do CSS antigo */
+        max-width: 100% !important;
         margin: 0 auto !important;
-        padding: 25px 20px !important; /* Respiro interno perfeito */
+        padding: 25px 20px !important;
         box-sizing: border-box !important;
         border-radius: 16px !important;
       }
-      .panel-sub {
-        padding-bottom: 90px !important; /* Espaço para o menu de navegação inferior não sobrepor o conteúdo */
-      }
 
-      /* 3. Inputs de Digitação (Grandes e fáceis de tocar) */
+      /* 3. Inputs de Digitação - Mantidos Grandes */
       .form-input {
         width: 100% !important;
-        height: 50px !important; /* Altura padrão de botão mobile nativo */
+        height: 50px !important;
         padding: 0 15px !important;
-        font-size: 16px !important; /* OBRIGATÓRIO: 16px evita o zoom automático no iPhone na hora de digitar */
+        font-size: 16px !important; 
         box-sizing: border-box !important;
         border-radius: 10px !important;
       }
@@ -163,6 +160,34 @@
         display: flex !important;
         align-items: center !important;
         justify-content: center !important;
+      }
+
+      /* 4. CORREÇÃO NOVA: Ajuste Exclusivo do Painel (Fim do achatamento e arrumando header) */
+      .panel-page {
+        padding: 0 !important; /* Remove o padding externo extra que estava achatando os cartões */
+        width: 100% !important;
+        box-sizing: border-box !important;
+      }
+      .panel-header {
+        padding: 15px 15px 5px 15px !important; /* Respiro perfeito pro topo e pro header */
+      }
+      .panel-sub {
+        width: 100% !important;
+        max-width: 100% !important;
+        padding: 15px 15px 90px 15px !important; /* Apenas 15px de borda (igual ao design original), sem achatar */
+        box-sizing: border-box !important;
+      }
+      .header-right {
+        padding: 4px 4px 4px 12px !important; /* Ajuste fino pra cápsula do saldo não ficar gordinha e feia */
+        gap: 8px !important;
+      }
+      .balance-display strong {
+        font-size: 14px !important; /* Tamanho proporcional pro número não quebrar */
+      }
+      .user-avatar {
+        width: 36px !important;
+        height: 36px !important;
+        font-size: 16px !important;
       }
     }
   </style>
