@@ -110,7 +110,7 @@
       text-align: center;
     }
 
-    /* --- 100% RESPONSIVIDADE MOBILE (ADICIONADO E REFORÇADO) --- */
+    /* --- 100% RESPONSIVIDADE MOBILE E CORREÇÃO DE VALORES (ATUALIZADO) --- */
     @media (max-width: 768px) {
       .stats-grid, .steps, .testimonials {
         display: flex !important;
@@ -164,8 +164,27 @@
         justify-content: center !important; 
         gap: 10px !important; 
       }
-      .auth-card { padding: 20px !important; margin: 15px !important; width: auto !important; }
-      .panel-sub { padding: 15px !important; padding-bottom: 90px !important; }
+      
+      /* --- CORREÇÃO DE LARGURA (PÁGINAS DE AUTENTICAÇÃO E PAINEL MOBILE) --- */
+      .auth-card { 
+        padding: 20px 10px !important; /* Reduz padding lateral interno para dar mais espaço */
+        margin: 15px 5px !important; /* Margens mínimas nas laterais */
+        width: auto !important; 
+        max-width: min(100% - 10px, 480px) !important; /* Permite que o cartão use mais largura */
+      }
+      .panel-sub { 
+        padding: 15px 5px !important; /* Reduz padding lateral no painel geral para remover o visual 'achatado' */
+        padding-bottom: 90px !important; 
+        width: 100% !important;
+        box-sizing: border-box !important;
+      }
+      .panel-banner {
+        padding: 20px 15px !important; /* Ajuste leve no banner interno */
+      }
+      .panel-page {
+          width: 100% !important;
+          padding: 0 !important;
+      }
       
       /* Ajuste Menu Lateral Mobile */
       .side-menu { width: 85vw !important; max-width: 300px !important; right: -85vw !important; }
@@ -185,7 +204,7 @@
       }
       .nav-item svg { width: 20px !important; height: 20px !important; margin-bottom: 3px !important; }
       
-      /* Header e Painel Mobile */
+      /* Header Mobile */
       .header-right { padding: 5px 5px 5px 12px !important; }
       .balance-display strong { font-size: 13px !important; }
       .logo img { height: 35px !important; }
