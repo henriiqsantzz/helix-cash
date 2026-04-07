@@ -109,6 +109,74 @@
       font-family: monospace;
       text-align: center;
     }
+
+    /* --- 100% RESPONSIVIDADE MOBILE (ADICIONADO) --- */
+    @media (max-width: 768px) {
+      .stats-grid, .steps, .testimonials {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 15px !important;
+      }
+      .amount-grid {
+        display: grid !important;
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 10px !important;
+      }
+      .bet-options {
+        display: flex !important;
+        flex-wrap: wrap !important;
+        justify-content: center !important;
+        gap: 8px !important;
+      }
+      .bet-option {
+        flex: 1 1 calc(33.333% - 8px) !important;
+      }
+      .game-stats {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 10px !important;
+      }
+      .hero h1 { font-size: 2.2rem !important; line-height: 1.1 !important; }
+      .hero-content { padding: 30px 15px !important; }
+      .hero-tags { 
+        display: flex !important; 
+        flex-wrap: wrap !important; 
+        justify-content: center !important; 
+        gap: 10px !important; 
+      }
+      .auth-card { padding: 20px !important; margin: 15px !important; width: auto !important; }
+      .panel-sub { padding: 15px !important; padding-bottom: 90px !important; }
+      
+      /* Ajuste Menu Lateral Mobile */
+      .side-menu { width: 85vw !important; max-width: 300px !important; right: -85vw !important; }
+      .side-menu.active { right: 0 !important; }
+      
+      /* Ajuste Navbar Inferior Mobile */
+      .bottom-nav { 
+        padding: 8px 5px !important; 
+        flex-wrap: nowrap !important; 
+        overflow-x: auto !important; 
+        justify-content: space-between !important;
+      }
+      .nav-item { 
+        padding: 5px !important; 
+        min-width: 60px !important; 
+        font-size: 10px !important; 
+      }
+      .nav-item svg { width: 20px !important; height: 20px !important; margin-bottom: 3px !important; }
+      
+      /* Header e Painel Mobile */
+      .header-right { padding: 5px 5px 5px 12px !important; }
+      .balance-display strong { font-size: 13px !important; }
+      .logo img { height: 35px !important; }
+    }
+    
+    @media (max-width: 380px) {
+      .hero h1 { font-size: 1.8rem !important; }
+      .amount-grid { grid-template-columns: 1fr !important; }
+      .bet-option { flex: 1 1 calc(50% - 8px) !important; }
+      .game-stats > div { padding: 10px !important; }
+    }
   </style>
 </head>
 <body>
