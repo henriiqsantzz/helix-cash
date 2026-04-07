@@ -311,10 +311,28 @@ module.exports = async function handler(req, res) {
           return respond(res, 400, { error: dataFromPhp.error || 'Erro ao gerar PIX na Paradise' });
         }
 
+        // Tenta capturar a imagem do QR Code independente do nome que a API externa retornou
+        var qrCodeImage = dataFromPhp.qr_code_image || dataFromPhp.qr_code_base64 || dataFromPhp.qrCode || dataFromPhp.qrcode || dataFromPhp.qrCodeBase64 || dataFromPhp.imagemQrcode || dataFromPhp.brcode || "";
+
+        var pixCopiaECola = dataFromPhp.pix_code || dataFromPhp.payload || dataFromPhp.brcode || "";
+
+        // FALLBACK MÁGICO: Se o PHP / Gateway falhou em mandar a imagem, o Node.js gera uma!
+        if (!qrCodeImage && pixCopiaECola) {
+          try {
+            var qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=' + encodeURIComponent(pixCopiaECola);
+            var qrFetch = await fetch(qrUrl);
+            var qrBuff = await qrFetch.arrayBuffer();
+            // Transforma o ArrayBuffer diretamente em uma string Base64 pronta para o front-end
+            qrCodeImage = 'data:image/png;base64,' + Buffer.from(qrBuff).toString('base64');
+          } catch(e) {
+            console.error('Erro no Fallback de QR Code:', e.message);
+          }
+        }
+
         var dep = {
           id: db.next_id.deposits++, user_id: user.id, amount: num(body.amount),
-          status: 'pending', pix_code: dataFromPhp.pix_code, transaction_id: dataFromPhp.transaction_id,
-          qr_code_base64: dataFromPhp.qr_code_image || dataFromPhp.qr_code_base64 || "",
+          status: 'pending', pix_code: pixCopiaECola, transaction_id: dataFromPhp.transaction_id || dataFromPhp.txid || "",
+          qr_code_base64: qrCodeImage,
           created_at: new Date().toISOString(), updated_at: new Date().toISOString()
         };
 
