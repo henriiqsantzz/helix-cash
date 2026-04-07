@@ -366,6 +366,51 @@ module.exports = async function handler(req, res) {
       });
     }
 
+    // ==================== WEBHOOK (PARADISE POSTBACK) ====================
+    // Esta é a rota que a Paradise vai chamar quando o PIX for pago.
+    if (url === '/api/webhook/paradise' && method === 'POST') {
+      var body = await parseBody(req);
+      
+      // Salva log do webhook por segurança
+      db.webhooks.push({
+        id: db.next_id.webhooks++,
+        data: body,
+        created_at: new Date().toISOString()
+      });
+      await saveDB(db);
+
+      // Pega os dados enviados pelo Gateway
+      var txId = body.transaction_id;
+      var status = body.status; // "approved" quando foi pago
+
+      if (txId && (status === 'approved' || status === 'paid')) {
+        // Encontra o depósito no nosso banco de dados
+        var dep = db.deposits.find(function(d) { 
+          // Compara os IDs garantindo que são strings e que está pendente
+          return String(d.transaction_id) === String(txId) && d.status === 'pending'; 
+        });
+
+        if (dep) {
+          // Muda o status para aprovado
+          dep.status = 'approved';
+          dep.updated_at = new Date().toISOString();
+
+          // Encontra o usuário dono do depósito
+          var user = db.users.find(function(u) { return u.id === dep.user_id; });
+          
+          if (user) {
+            // ADICIONA O SALDO AUTOMATICAMENTE
+            user.balance = num(user.balance) + num(dep.amount);
+            user.total_deposited = num(user.total_deposited) + num(dep.amount);
+          }
+          await saveDB(db);
+        }
+      }
+
+      // O Gateway exige um HTTP 200 OK de volta, senão ele acha que falhou e tenta enviar de novo
+      return respond(res, 200, { success: true, message: 'Webhook recebido com sucesso' });
+    }
+
     // ==================== WITHDRAW (CLIENTE SOLICITA) ====================
     if (url === '/api/withdraw' && method === 'POST') {
       var user = getUser(db, req);
