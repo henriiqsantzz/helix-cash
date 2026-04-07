@@ -17,7 +17,7 @@
     segmentsPerPlatform: 12,
     holeSegments: 2,
     
-    // VARIÁVEIS DO PAINEL ADMIN
+    // VARIÁVEIS BASE DO PAINEL ADMIN
     dangerStartLevel: 2,
     dangerProgression: 5,
     dangerMaxSlices: 6,
@@ -56,7 +56,18 @@
   var lastGeneratedPlatformIndex = 0; // Controle para geração infinita
 
   window.startHelixGame = function(bet, serverConfig) {
+    // 1. Reseta os valores base antes de aplicar configurações para não acumular dificuldade
+    CONFIG.dangerStartLevel = 2;
+    CONFIG.dangerProgression = 5;
+    CONFIG.dangerMaxSlices = 6;
+    
+    var winRate = 50; // Padrão (50% de facilidade)
+
+    // 2. Extrai as configurações enviadas pelo servidor (Node.js/App)
     if (serverConfig) {
+      if (serverConfig.win_rate !== undefined) winRate = parseFloat(serverConfig.win_rate);
+      if (serverConfig.influencer_win_rate !== undefined) winRate = parseFloat(serverConfig.influencer_win_rate);
+
       Object.keys(serverConfig).forEach(function(k) {
         if (k === 'game_platform_count') CONFIG.platformCount = parseInt(serverConfig[k]);
         if (k === 'game_gravity') CONFIG.gravity = parseFloat(serverConfig[k]);
@@ -67,14 +78,41 @@
         if (k === 'game_rotation_sensitivity') CONFIG.rotationSensitivity = parseFloat(serverConfig[k]);
         if (k === 'game_platform_spacing') CONFIG.platformSpacing = parseFloat(serverConfig[k]);
         if (k === 'max_multiplier') CONFIG.targetMultiplier = parseFloat(serverConfig[k]);
-        if (CONFIG.hasOwnProperty(k)) CONFIG[k] = serverConfig[k];
       });
     }
+
+    // 3. --- SISTEMA DE DIFICULDADE DINÂMICA (INFLUENCIADOR) ---
+    // Modifica as variáveis de perigo baseando-se no Win Rate do usuário/influenciador
+    if (winRate > 50) {
+      // FACILITAR (Ex: Influenciador com 100%)
+      var easyFactor = (winRate - 50) / 50; // Retorna de 0 a 1
+      
+      // Empurra o andar onde aparece o vermelho para muito longe (Ex: +40 andares)
+      CONFIG.dangerStartLevel += Math.floor(easyFactor * 40); 
+      // Reduz o máximo de fatias vermelhas quase a zero (Mínimo de 1 fatia vermelha para manter o visual)
+      CONFIG.dangerMaxSlices = Math.max(1, Math.floor(CONFIG.dangerMaxSlices * (1 - easyFactor))); 
+      // Deixa a progressão lentíssima
+      CONFIG.dangerProgression = Math.max(1, CONFIG.dangerProgression * (1 - easyFactor)); 
+      
+    } else if (winRate < 50) {
+      // DIFICULTAR (Ex: Usuário azarado ou Casa recuperando lucro)
+      var hardFactor = (50 - winRate) / 50; // Retorna de 0 a 1
+      
+      // Vermelhos começam a aparecer quase no 1º andar
+      CONFIG.dangerStartLevel = Math.max(1, CONFIG.dangerStartLevel - Math.floor(hardFactor * 2)); 
+      // Enche a plataforma de vermelho rápido
+      CONFIG.dangerMaxSlices = Math.min(CONFIG.segmentsPerPlatform - 2, CONFIG.dangerMaxSlices + Math.floor(hardFactor * 6)); 
+      // Progressão muito acelerada
+      CONFIG.dangerProgression += hardFactor * 10; 
+    }
+
+    // Inicia os parâmetros do jogo com a dificuldade ajustada
     betAmount = parseFloat(bet); platformsPassed = 0; isCashingOut = false;
     gameActive = true; prizeAmount = 0; comboCount = 0; comboTimer = 0;
     currentPaletteIndex = 0; gamePhase = 'ready'; helixRotation = 0;
     splashParticles = [];
     lastGeneratedPlatformIndex = 0;
+    
     initGame(); animate();
   };
 
@@ -235,10 +273,9 @@
     helixGroup.add(pData.group);
 
     var dangerSlicesCount = 0;
+    // Utiliza as variáveis de configuração modificadas pelo Sistema de Dificuldade Dinâmica
     if (index >= CONFIG.dangerStartLevel) {
       var andaresDeRisco = index - CONFIG.dangerStartLevel + 1;
-      // DIFICULDADE EXTREMA: A progressão agora atua como um multiplicador veloz.
-      // Quanto maior a progressão no painel, mais rápido a plataforma enche de fatias vermelhas.
       var minRed = Math.floor(andaresDeRisco * (CONFIG.dangerProgression / 4));
       dangerSlicesCount = Math.min(CONFIG.dangerMaxSlices, minRed + Math.floor(Math.random() * 3));
     }
