@@ -422,7 +422,7 @@ document.getElementById('btnWithdraw').addEventListener('click', async () => {
   const amount = parseFloat(document.getElementById('withdrawAmount').value);
   const pixKey = document.getElementById('pixKey').value;
   const pixType = document.getElementById('pixType').value;
-  if (!amount || amount < 20) return showToast('Saque mínimo: R$20,00', 'error');
+  if (!amount || amount < 20) return showToast('Saque mínimo: R$30,00', 'error');
   if (!pixKey) return showToast('Informe a chave PIX', 'error');
 
   const btn = document.getElementById('btnWithdraw');
