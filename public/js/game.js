@@ -420,7 +420,6 @@
       + '<div style="width:100%;height:4px;background:rgba(255,255,255,0.15);border-radius:2px;margin-top:4px;overflow:hidden;">'
       + '<div id="hud-progress-bar" style="width:0%;height:100%;background:linear-gradient(90deg,#00e676,#69f0ae);border-radius:2px;transition:width 0.3s;"></div></div></div>';
 
-    // NOVO BOTÃO DE RESGATAR (CENTRALIZADO, AMARELO, COM ÍCONE)
     html += '<button id="hud-cashout" style="position:absolute;top:755px;left:50%;transform:translateX(-50%);z-index:9999;pointer-events:auto;background:linear-gradient(135deg,#FFD700,#FFB300);color:#000;padding:12px 28px;border-radius:12px;font-family:Inter,sans-serif;cursor:pointer;font-weight:900;font-size:16px;text-transform:uppercase;letter-spacing:1px;border:1px solid #FFECB3;box-shadow:0 0 20px rgba(255,215,0,0.6);display:none;align-items:center;justify-content:center;gap:8px;white-space:nowrap;" onpointerdown="window.helixGameCashOut(event)" ontouchstart="window.helixGameCashOut(event)" onclick="window.helixGameCashOut(event)">'
       + '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>'
       + 'RESGATAR</button>';
@@ -439,7 +438,6 @@
     hudContainer.innerHTML = html;
 
     var style = document.createElement('style');
-    // ATUALIZADO: Nova animação de pulso amarelo para combinar com o botão
     style.textContent = '@keyframes helixBounce{0%,100%{transform:translateY(0)}50%{transform:translateY(10px)}}@keyframes helixFadeUp{0%{opacity:1;transform:translate(-50%,-50%) scale(1)}100%{opacity:0;transform:translate(-50%,-80%) scale(1.5)}}@keyframes helixPulseYellow{0%,100%{box-shadow:0 0 15px rgba(255,215,0,0.5)}50%{box-shadow:0 0 35px rgba(255,215,0,1)}}';
     hudContainer.appendChild(style);
     container.appendChild(hudContainer);
@@ -470,7 +468,6 @@
 
     if (cb) {
       var goalReached = prize >= meta && meta > 0;
-      // ATUALIZADO: usando 'flex' para o botão aparecer corretamente alinhado
       cb.style.display = (gamePhase === 'playing' && goalReached) ? 'flex' : 'none';
       if (goalReached) cb.style.animation = 'helixPulseYellow 1s infinite';
     }
@@ -618,8 +615,9 @@
     
     // HITBOX RIGOROSO: Calcula exatamente o arco (ângulo) que a bola ocupa na tela
     var ballRadiusAngle = Math.asin(CONFIG.ballRadius / ((CONFIG.platformInnerRadius + CONFIG.platformOuterRadius) / 2));
-    // Margem extra implacável (1.2x) pra garantir que se triscar, perdeu.
-    var killMargin = ballRadiusAngle * 1.2; 
+    
+    // MAIS JUSTO: Apenas 60% do raio conta como hitbox letal (Hitbox Perdoável)
+    var killMargin = ballRadiusAngle * 0.6; 
 
     for (var i = 0; i < platforms.length; i++) {
       var p = platforms[i];
@@ -640,7 +638,7 @@
           createSplash(p.y);
           if (typeof onPlatformPassed === 'function') onPlatformPassed(platformsPassed);
         } else {
-          // CHECAGEM FATAL: Verifica se o centro da bola MAIS a margem (largura dela) encostam no vermelho
+          // CHECAGEM FATAL com a nova Hitbox Perdoável
           var hitDanger = p.segments.some(seg => seg.isKiller && isAngleInRange(ballAngle, seg.startAngle - killMargin, seg.endAngle + killMargin));
           
           if (hitDanger) { 
