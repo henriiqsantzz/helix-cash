@@ -420,8 +420,8 @@
       + '<div style="width:100%;height:4px;background:rgba(255,255,255,0.15);border-radius:2px;margin-top:4px;overflow:hidden;">'
       + '<div id="hud-progress-bar" style="width:0%;height:100%;background:linear-gradient(90deg,#00e676,#69f0ae);border-radius:2px;transition:width 0.3s;"></div></div></div>';
 
-    // CORRIGIDO: Retornando para "top:85px" ao invés de 755px para que ele fique sempre responsivo e visível em qualquer celular logo abaixo da barra.
-    html += '<button id="hud-cashout" style="position:absolute;top:85px;left:50%;transform:translateX(-50%);z-index:9999;pointer-events:auto;background:linear-gradient(135deg,#FFD700,#FFB300);color:#000;padding:12px 28px;border-radius:12px;font-family:Inter,sans-serif;cursor:pointer;font-weight:900;font-size:16px;text-transform:uppercase;letter-spacing:1px;border:1px solid #FFECB3;box-shadow:0 0 20px rgba(255,215,0,0.6);display:none;align-items:center;justify-content:center;gap:8px;white-space:nowrap;" onpointerdown="window.helixGameCashOut(event)" ontouchstart="window.helixGameCashOut(event)" onclick="window.helixGameCashOut(event)">'
+    // ATUALIZADO: Agora usa "bottom: 85px" para ficar ancorado embaixo, logo acima do contador de plataformas
+    html += '<button id="hud-cashout" style="position:absolute;bottom:85px;left:50%;transform:translateX(-50%);z-index:9999;pointer-events:auto;background:linear-gradient(135deg,#FFD700,#FFB300);color:#000;padding:12px 28px;border-radius:12px;font-family:Inter,sans-serif;cursor:pointer;font-weight:900;font-size:16px;text-transform:uppercase;letter-spacing:1px;border:1px solid #FFECB3;box-shadow:0 0 20px rgba(255,215,0,0.6);display:none;align-items:center;justify-content:center;gap:8px;white-space:nowrap;" onpointerdown="window.helixGameCashOut(event)" ontouchstart="window.helixGameCashOut(event)" onclick="window.helixGameCashOut(event)">'
       + '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>'
       + 'RESGATAR</button>';
 
@@ -429,7 +429,8 @@
       + '<div style="font-size:20px;font-weight:700;color:rgba(0,0,0,0.6);">Toque para jogar</div>'
       + '<div style="font-size:28px;margin-top:8px;color:rgba(0,0,0,0.4);animation:helixBounce 1s infinite;">&#8595;</div></div>';
 
-    html += '<div id="hud-combo" style="position:absolute;bottom:100px;left:50%;transform:translateX(-50%);z-index:100;pointer-events:none;font-family:Inter,sans-serif;font-size:24px;font-weight:800;color:#ffab00;text-shadow:0 2px 8px rgba(255,171,0,0.5);opacity:0;transition:all 0.3s;"></div>';
+    // ATUALIZADO: O texto do combo também foi puxado um pouco mais pra cima (bottom: 150px) para não se sobrepor ao novo botão
+    html += '<div id="hud-combo" style="position:absolute;bottom:150px;left:50%;transform:translateX(-50%);z-index:100;pointer-events:none;font-family:Inter,sans-serif;font-size:24px;font-weight:800;color:#ffab00;text-shadow:0 2px 8px rgba(255,171,0,0.5);opacity:0;transition:all 0.3s;"></div>';
 
     html += '<div id="hud-score-popup" style="position:absolute;top:45%;left:50%;transform:translate(-50%,-50%);z-index:100;pointer-events:none;font-family:Inter,sans-serif;font-size:36px;font-weight:900;color:#fff;text-shadow:0 2px 10px rgba(0,0,0,0.3);opacity:0;"></div>';
 
@@ -468,7 +469,6 @@
     if (pb) pb.style.width = Math.min(100, (prize / (meta || 1)) * 100) + '%';
 
     if (cb) {
-      // O botão será exibido se a meta for maior que 0 e o jogador alcançá-la.
       var goalReached = prize >= meta && meta > 0;
       cb.style.display = (gamePhase === 'playing' && goalReached) ? 'flex' : 'none';
       if (goalReached) cb.style.animation = 'helixPulseYellow 1s infinite';
