@@ -110,12 +110,17 @@
       text-align: center;
     }
 
-    /* CORREÇÃO PARA OS NÚMEROS GRANDES NÃO CORTAREM NO MOBILE */
+    /* CORREÇÕES MOBILE */
     @media (max-width: 768px) {
+      /* Impede os números grandes de cortarem */
       .stat-value {
         font-size: clamp(1.4rem, 6vw, 2.5rem) !important;
         white-space: nowrap !important;
       }
+      
+      /* Restaura o tamanho dos cartões como estava no seu código original */
+      .auth-card { padding: 20px !important; margin: 15px !important; width: auto !important; }
+      .panel-sub { padding: 15px !important; padding-bottom: 90px !important; }
     }
   </style>
 </head>
