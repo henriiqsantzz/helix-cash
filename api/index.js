@@ -418,7 +418,7 @@ module.exports = async function handler(req, res) {
       var body = await parseBody(req);
       var amount = num(body.amount);
       var pixKey = (body.pix_key || '').trim();
-      var minWd = num(db.settings.min_withdrawal) || 20;
+      var minWd = num(db.settings.min_withdrawal) || 30;
 
       if (!pixKey) return respond(res, 400, { error: 'Chave PIX obrigatoria' });
       if (!amount || amount < minWd) return respond(res, 400, { error: 'Saque minimo: R$' + minWd });
