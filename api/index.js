@@ -51,7 +51,7 @@ function createDefaultDB() {
     referral_earnings: [],
     webhooks: [],
     settings: {
-      min_deposit: '10', min_withdrawal: '20', max_multiplier: '7',
+      min_deposit: '1', min_withdrawal: '20', max_multiplier: '7',
       referral_bonus: '5', house_edge: '15', influencer_house_edge: '5',
       site_name: 'Helix Cash',
       game_platform_count: '25', game_danger_start_level: '2', game_danger_progression: '5',
