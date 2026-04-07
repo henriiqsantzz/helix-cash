@@ -110,12 +110,32 @@
       text-align: center;
     }
 
-    /* --- 100% RESPONSIVIDADE MOBILE (ADICIONADO) --- */
+    /* --- 100% RESPONSIVIDADE MOBILE (ADICIONADO E REFORÇADO) --- */
     @media (max-width: 768px) {
       .stats-grid, .steps, .testimonials {
         display: flex !important;
         flex-direction: column !important;
-        gap: 15px !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 20px !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+        overflow: hidden !important;
+      }
+      .stat-item {
+        width: 100% !important;
+        max-width: 100% !important;
+        text-align: center !important;
+        padding: 0 10px !important;
+        box-sizing: border-box !important;
+      }
+      .stat-value {
+        font-size: clamp(1.8rem, 8vw, 2.5rem) !important; /* Ajuste dinâmico que impede transbordamento */
+        word-wrap: break-word !important;
+        overflow-wrap: break-word !important;
+        white-space: normal !important;
+        line-height: 1.2 !important;
+        width: 100% !important;
       }
       .amount-grid {
         display: grid !important;
@@ -176,6 +196,7 @@
       .amount-grid { grid-template-columns: 1fr !important; }
       .bet-option { flex: 1 1 calc(50% - 8px) !important; }
       .game-stats > div { padding: 10px !important; }
+      .stat-value { font-size: clamp(1.5rem, 7vw, 2.2rem) !important; } /* Proteção extra para telas muito pequenas */
     }
   </style>
 </head>
