@@ -158,7 +158,7 @@
 
   <section class="hero">
     <div class="hero-content">
-      <div class="hero-badge"><span class="dot"></span> <span id="stat-online">2.847</span> jogadores online agora</div>
+      <div class="hero-badge"><span class="dot"></span> <span id="stat-online">12.847</span> jogadores online agora</div>
       <h1>GIRE E<br><span class="gradient-text">GANHE</span></h1>
       <p>Jogue Helix Jump e transforme suas habilidades em dinheiro real. Passe plataformas para ganhar prêmios incríveis!</p>
       <div class="hero-cta">
@@ -178,9 +178,9 @@
 
   <section class="stats-section">
     <div class="stats-grid">
-      <div class="stat-item"><div class="stat-value" id="stat-users">2.847</div><div class="stat-label">Jogadores online</div></div>
-      <div class="stat-item"><div class="stat-value" id="stat-paid">R$ 8.420</div><div class="stat-label">Total pago hoje</div></div>
-      <div class="stat-item"><div class="stat-value" id="stat-maxwin">R$ 700</div><div class="stat-label">Maior ganho do dia</div></div>
+      <div class="stat-item"><div class="stat-value" id="stat-users">12.847</div><div class="stat-label">Jogadores online</div></div>
+      <div class="stat-item"><div class="stat-value" id="stat-paid">R$ 248.420,00</div><div class="stat-label">Total pago hoje</div></div>
+      <div class="stat-item"><div class="stat-value" id="stat-maxwin">R$ 9.700,00</div><div class="stat-label">Maior ganho do dia</div></div>
     </div>
   </section>
 
@@ -349,7 +349,7 @@
             <h2>INICIAR PARTIDA</h2>
             <p style="font-size:13px;color:var(--text-secondary)">Passe plataformas, acumule dinheiro e escolha quando resgatar!</p>
           </div>
-          <div class="online-badge"><span class="dot"></span> <span id="panelOnline">100</span> online</div>
+          <div class="online-badge"><span class="dot"></span> <span id="panelOnline">12.847</span> online</div>
         </div>
 
         <div class="meta-tabs">
@@ -590,6 +590,52 @@
   
   window.addEventListener('load', checkAdmin);
   window.addEventListener('storage', checkAdmin);
+
+  // --- NOVAS ALTERAÇÕES SOLICITADAS ---
+
+  // 1. Corrigir o botão "Sair" para deslogar instantaneamente e ir para a tela de Login
+  window.logout = function() {
+    localStorage.removeItem('hc_token');
+    localStorage.removeItem('hc_user');
+    
+    // Fecha o menu lateral caso tenha sido clicado por lá
+    document.getElementById('sideMenu').classList.remove('active');
+    document.getElementById('menuOverlay').classList.remove('active');
+    
+    // Muda a hash para a tela de login e recarrega para limpar todo o estado da memória
+    window.location.hash = '#login';
+    window.location.reload();
+  };
+
+  // 2. Controlar os Status Falsos Altos (Sobrescrevendo funções do app.js para injetar na interface)
+  function updateFakeStats() {
+    // Oscila entre 10.000 e 100.000
+    const online = Math.floor(Math.random() * (100000 - 10000 + 1)) + 10000;
+    
+    // Geração de números altos fictícios para Total Pago e Maior Ganho
+    const paid = Math.floor(Math.random() * (850000 - 350000 + 1)) + 350000; // Entre 350k e 850k
+    const maxwin = Math.floor(Math.random() * (15000 - 8000 + 1)) + 8000; // Entre 8k e 15k
+
+    // Atualiza os contadores de online
+    if(document.getElementById('stat-online')) document.getElementById('stat-online').textContent = online.toLocaleString('pt-BR');
+    if(document.getElementById('stat-users')) document.getElementById('stat-users').textContent = online.toLocaleString('pt-BR');
+    if(document.getElementById('panelOnline')) document.getElementById('panelOnline').textContent = online.toLocaleString('pt-BR');
+    
+    // Atualiza os contadores em dinheiro
+    if(document.getElementById('stat-paid')) document.getElementById('stat-paid').textContent = 'R$ ' + paid.toLocaleString('pt-BR') + ',00';
+    if(document.getElementById('stat-maxwin')) document.getElementById('stat-maxwin').textContent = 'R$ ' + maxwin.toLocaleString('pt-BR') + ',00';
+  }
+
+  // Sobrescreve as chamadas de API nativas para que apenas as fakes grandes prevaleçam
+  window.loadPublicStats = updateFakeStats;
+  window.loadStats = updateFakeStats;
+
+  // Inicia a primeira vez
+  setTimeout(updateFakeStats, 500);
+  
+  // Cria o intervalo para oscilar o número a cada 5 segundos
+  setInterval(updateFakeStats, 5000);
+
 </script>
 </body>
 </html>
