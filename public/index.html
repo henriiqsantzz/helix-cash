@@ -162,27 +162,27 @@
         justify-content: center !important;
       }
 
-      /* 4. CORREÇÃO NOVA: Ajuste Exclusivo do Painel (Fim do achatamento e arrumando header) */
+      /* 4. CORREÇÃO NOVA: Ajuste Exclusivo do Painel */
       .panel-page {
-        padding: 0 !important; /* Remove o padding externo extra que estava achatando os cartões */
+        padding: 0 !important;
         width: 100% !important;
         box-sizing: border-box !important;
       }
       .panel-header {
-        padding: 15px 15px 5px 15px !important; /* Respiro perfeito pro topo e pro header */
+        padding: 15px 15px 5px 15px !important;
       }
       .panel-sub {
         width: 100% !important;
         max-width: 100% !important;
-        padding: 15px 15px 90px 15px !important; /* Apenas 15px de borda (igual ao design original), sem achatar */
+        padding: 15px 15px 90px 15px !important;
         box-sizing: border-box !important;
       }
       .header-right {
-        padding: 4px 4px 4px 12px !important; /* Ajuste fino pra cápsula do saldo não ficar gordinha e feia */
+        padding: 4px 4px 4px 12px !important;
         gap: 8px !important;
       }
       .balance-display strong {
-        font-size: 14px !important; /* Tamanho proporcional pro número não quebrar */
+        font-size: 14px !important;
       }
       .user-avatar {
         width: 36px !important;
@@ -422,16 +422,28 @@
 
       <div class="game-card">
         <div class="game-card-header" style="display: flex; align-items: center; justify-content: space-between; gap: 10px;">
-          <div style="flex: 1; overflow: hidden;">
+          <div style="flex: 1;">
             <h2 style="margin: 0; white-space: nowrap; font-size: clamp(16px, 4.5vw, 22px);">INICIAR PARTIDA</h2>
-            <p style="font-size:12px; color:var(--text-secondary); margin: 4px 0 0 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Passe plataformas, acumule dinheiro e resgate!</p>
+            <p style="font-size:12px; color:var(--text-secondary); margin: 4px 0 0 0; line-height: 1.3;">Passe plataformas, acumule dinheiro e escolha quando resgatar!</p>
           </div>
-          <div class="online-badge" style="flex-shrink: 0; white-space: nowrap;"><span class="dot"></span> <span id="panelOnline">12.847</span> online</div>
+          <div class="online-badge" style="flex-shrink: 0; white-space: nowrap; align-self: flex-start;"><span class="dot"></span> <span id="panelOnline">12.847</span> online</div>
         </div>
 
-        <div class="meta-tabs">
-          <div class="meta-tab">🎯 Meta = 1x</div>
-          <div class="meta-tab">♾️ Plataformas</div>
+        <div class="meta-tabs" style="display: flex; justify-content: center; gap: 12px; margin: 15px 0;">
+          <div class="meta-tab" style="display: flex; align-items: center; gap: 6px;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <circle cx="12" cy="12" r="6"></circle>
+              <circle cx="12" cy="12" r="2"></circle>
+            </svg>
+            Meta = 1x
+          </div>
+          <div class="meta-tab" style="display: flex; align-items: center; gap: 6px;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 12c-2-2.67-4-4-6-4a4 4 0 1 0 0 8c2 0 4-1.33 6-4Zm0 0c2 2.67 4 4 6 4a4 4 0 1 0 0-8c-2 0-4 1.33-6 4Z"/>
+            </svg>
+            Plataformas
+          </div>
         </div>
 
         <div class="bet-label">VALOR DE ENTRADA</div>
