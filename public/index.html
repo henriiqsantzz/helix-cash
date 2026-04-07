@@ -110,17 +110,60 @@
       text-align: center;
     }
 
-    /* CORREÇÕES MOBILE */
+    /* --- CORREÇÕES MOBILE PROFISSIONAIS --- */
     @media (max-width: 768px) {
-      /* Impede os números grandes de cortarem */
-      .stat-value {
-        font-size: clamp(1.4rem, 6vw, 2.5rem) !important;
-        white-space: nowrap !important;
+      /* 1. Tela Inicial: Valores (Stats Grid) */
+      .stats-grid {
+        display: grid !important;
+        grid-template-columns: 1fr 1fr !important; /* Quebra para duas colunas organizadas */
+        gap: 12px !important;
       }
-      
-      /* Restaura o tamanho dos cartões como estava no seu código original */
-      .auth-card { padding: 20px !important; margin: 15px !important; width: auto !important; }
-      .panel-sub { padding: 15px !important; padding-bottom: 90px !important; }
+      .stat-item:first-child {
+        grid-column: span 2 !important; /* O 1º bloco (Jogadores) ganha a linha toda */
+      }
+      .stat-value {
+        font-size: clamp(1.3rem, 5vw, 1.8rem) !important; /* Ajusta a fonte dinamicamente sem quebrar a tela */
+        white-space: normal !important;
+        word-wrap: break-word !important;
+      }
+
+      /* 2. Cartões (Login, Cadastro e Painel) - Largos e sem achatamento */
+      .auth-page, .panel-page {
+        padding: 15px !important; /* Margem externa segura */
+        box-sizing: border-box !important;
+      }
+      .auth-card, .panel-sub {
+        width: 100% !important;
+        max-width: 100% !important; /* Remove travas de largura do CSS antigo */
+        margin: 0 auto !important;
+        padding: 25px 20px !important; /* Respiro interno perfeito */
+        box-sizing: border-box !important;
+        border-radius: 16px !important;
+      }
+      .panel-sub {
+        padding-bottom: 90px !important; /* Espaço para o menu de navegação inferior não sobrepor o conteúdo */
+      }
+
+      /* 3. Inputs de Digitação (Grandes e fáceis de tocar) */
+      .form-input {
+        width: 100% !important;
+        height: 50px !important; /* Altura padrão de botão mobile nativo */
+        padding: 0 15px !important;
+        font-size: 16px !important; /* OBRIGATÓRIO: 16px evita o zoom automático no iPhone na hora de digitar */
+        box-sizing: border-box !important;
+        border-radius: 10px !important;
+      }
+      .form-group label {
+        font-size: 14px !important;
+        margin-bottom: 8px !important;
+      }
+      .btn-block {
+        height: 50px !important;
+        font-size: 16px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+      }
     }
   </style>
 </head>
