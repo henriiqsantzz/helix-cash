@@ -111,8 +111,18 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
 
 function logout() {
   token = null; user = null;
-  localStorage.removeItem('hc_token'); localStorage.removeItem('hc_user');
-  location.hash = '#';
+  localStorage.removeItem('hc_token'); 
+  localStorage.removeItem('hc_user');
+  
+  // Fecha o menu se estiver aberto
+  const menu = document.getElementById('sideMenu');
+  const overlay = document.getElementById('menuOverlay');
+  if (menu) menu.classList.remove('active');
+  if (overlay) overlay.classList.remove('active');
+
+  // Direciona para o login e força atualização para zerar o estado
+  window.location.hash = '#login';
+  window.location.reload();
 }
 
 // ===================== USER DATA =====================
@@ -168,22 +178,38 @@ function toggleMenu() {
 }
 
 // ===================== STATS =====================
+function updateFakeStats() {
+  // Oscila entre 10.000 e 100.000 online
+  const online = Math.floor(Math.random() * (100000 - 10000 + 1)) + 10000;
+  // Valores altos para o ganho
+  const paid = Math.floor(Math.random() * (850000 - 350000 + 1)) + 350000; 
+  const maxwin = Math.floor(Math.random() * (15000 - 8000 + 1)) + 8000; 
+
+  const statOnline = document.getElementById('stat-online');
+  if (statOnline) statOnline.textContent = online.toLocaleString('pt-BR');
+  
+  const statUsers = document.getElementById('stat-users');
+  if (statUsers) statUsers.textContent = online.toLocaleString('pt-BR');
+  
+  const panelOnline = document.getElementById('panelOnline');
+  if (panelOnline) panelOnline.textContent = online.toLocaleString('pt-BR');
+  
+  const statPaid = document.getElementById('stat-paid');
+  if (statPaid) statPaid.textContent = 'R$ ' + paid.toLocaleString('pt-BR') + ',00';
+  
+  const statMaxwin = document.getElementById('stat-maxwin');
+  if (statMaxwin) statMaxwin.textContent = 'R$ ' + maxwin.toLocaleString('pt-BR') + ',00';
+}
+
 async function loadPublicStats() {
-  try {
-    const stats = await api('/api/stats');
-    document.getElementById('stat-online').textContent = stats.online.toLocaleString('pt-BR');
-    document.getElementById('stat-users').textContent = stats.online.toLocaleString('pt-BR');
-    document.getElementById('stat-paid').textContent = 'R$ ' + stats.today_paid.toLocaleString('pt-BR');
-    document.getElementById('stat-maxwin').textContent = 'R$ ' + stats.max_win_today.toLocaleString('pt-BR');
-  } catch (e) { /* silent */ }
+  updateFakeStats();
+  if (!window.fakeStatsInterval) {
+    window.fakeStatsInterval = setInterval(updateFakeStats, 5000);
+  }
 }
 
 async function loadStats() {
-  try {
-    const stats = await api('/api/stats');
-    const el = document.getElementById('panelOnline');
-    if (el) el.textContent = stats.online;
-  } catch (e) { /* silent */ }
+  updateFakeStats();
 }
 
 // ===================== BET SELECTION =====================
