@@ -110,112 +110,12 @@
       text-align: center;
     }
 
-    /* --- 100% RESPONSIVIDADE MOBILE E CORREÇÃO DE VALORES (ATUALIZADO) --- */
+    /* CORREÇÃO PARA OS NÚMEROS GRANDES NÃO CORTAREM NO MOBILE */
     @media (max-width: 768px) {
-      .stats-grid, .steps, .testimonials {
-        display: flex !important;
-        flex-direction: column !important;
-        align-items: center !important;
-        justify-content: center !important;
-        gap: 20px !important;
-        width: 100% !important;
-        box-sizing: border-box !important;
-        overflow: hidden !important;
-      }
-      .stat-item {
-        width: 100% !important;
-        max-width: 100% !important;
-        text-align: center !important;
-        padding: 0 10px !important;
-        box-sizing: border-box !important;
-      }
       .stat-value {
-        font-size: clamp(1.8rem, 8vw, 2.5rem) !important; /* Ajuste dinâmico que impede transbordamento */
-        word-wrap: break-word !important;
-        overflow-wrap: break-word !important;
-        white-space: normal !important;
-        line-height: 1.2 !important;
-        width: 100% !important;
+        font-size: clamp(1.4rem, 6vw, 2.5rem) !important;
+        white-space: nowrap !important;
       }
-      .amount-grid {
-        display: grid !important;
-        grid-template-columns: repeat(2, 1fr) !important;
-        gap: 10px !important;
-      }
-      .bet-options {
-        display: flex !important;
-        flex-wrap: wrap !important;
-        justify-content: center !important;
-        gap: 8px !important;
-      }
-      .bet-option {
-        flex: 1 1 calc(33.333% - 8px) !important;
-      }
-      .game-stats {
-        display: flex !important;
-        flex-direction: column !important;
-        gap: 10px !important;
-      }
-      .hero h1 { font-size: 2.2rem !important; line-height: 1.1 !important; }
-      .hero-content { padding: 30px 15px !important; }
-      .hero-tags { 
-        display: flex !important; 
-        flex-wrap: wrap !important; 
-        justify-content: center !important; 
-        gap: 10px !important; 
-      }
-      
-      /* --- CORREÇÃO DE LARGURA (PÁGINAS DE AUTENTICAÇÃO E PAINEL MOBILE) --- */
-      .auth-card { 
-        padding: 50px 50px !important; /* Reduz padding lateral interno para dar mais espaço */
-        margin: 15px 15px !important; /* Margens mínimas nas laterais */
-        width: auto !important; 
-        max-width: min(100% - 10px, 500px) !important; /* Permite que o cartão use mais largura */
-      }
-      .panel-sub { 
-        padding: 15px 5px !important; /* Reduz padding lateral no painel geral para remover o visual 'achatado' */
-        padding-bottom: 90px !important; 
-        width: 100% !important;
-        box-sizing: border-box !important;
-      }
-      .panel-banner {
-        padding: 20px 15px !important; /* Ajuste leve no banner interno */
-      }
-      .panel-page {
-          width: 100% !important;
-          padding: 0 !important;
-      }
-      
-      /* Ajuste Menu Lateral Mobile */
-      .side-menu { width: 85vw !important; max-width: 300px !important; right: -85vw !important; }
-      .side-menu.active { right: 0 !important; }
-      
-      /* Ajuste Navbar Inferior Mobile */
-      .bottom-nav { 
-        padding: 8px 5px !important; 
-        flex-wrap: nowrap !important; 
-        overflow-x: auto !important; 
-        justify-content: space-between !important;
-      }
-      .nav-item { 
-        padding: 5px !important; 
-        min-width: 60px !important; 
-        font-size: 10px !important; 
-      }
-      .nav-item svg { width: 20px !important; height: 20px !important; margin-bottom: 3px !important; }
-      
-      /* Header Mobile */
-      .header-right { padding: 5px 5px 5px 12px !important; }
-      .balance-display strong { font-size: 13px !important; }
-      .logo img { height: 35px !important; }
-    }
-    
-    @media (max-width: 380px) {
-      .hero h1 { font-size: 1.8rem !important; }
-      .amount-grid { grid-template-columns: 1fr !important; }
-      .bet-option { flex: 1 1 calc(50% - 8px) !important; }
-      .game-stats > div { padding: 10px !important; }
-      .stat-value { font-size: clamp(1.5rem, 7vw, 2.2rem) !important; } /* Proteção extra para telas muito pequenas */
     }
   </style>
 </head>
