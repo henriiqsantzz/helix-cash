@@ -172,6 +172,9 @@ module.exports = async function handler(req, res) {
   var url = req.url.split('?')[0];
   var method = req.method;
 
+  // Header de Autenticação SafePix (Basic Auth)
+  const safePixAuth = "Basic " + Buffer.from(`${SAFEPIX_PUBLIC_KEY}:${SAFEPIX_SECRET_KEY}`).toString("base64");
+
   try {
     // ==================== PUBLIC STATS ====================
     if (url === '/api/stats' && method === 'GET') {
@@ -184,7 +187,7 @@ module.exports = async function handler(req, res) {
       var maxWin = todayGames.filter(function (g) { return g.result === 'win'; })
         .reduce(function (max, g) { return Math.max(max, num(g.prize)); }, 0);
       return respond(res, 200, {
-        online: Math.max(nonAdmin.length, Math.floor(Math.random() * 50) + 10000),
+        online: Math.max(nonAdmin.length, Math.floor(Math.random() * 50) + 20),
         today_paid: todayPaid,
         max_win_today: maxWin
       });
@@ -199,42 +202,82 @@ module.exports = async function handler(req, res) {
       var password = body.password || '';
       var referralCode = (body.referral_code || '').trim();
 
-      if (!name || !email || !password) return respond(res, 400, { error: 'Campos obrigatorios faltando' });
-      var existing = db.users.find(u => u.email === email);
+      if (!name || !email || !password) return respond(res, 400, { error: 'Nome, email e senha sao obrigatorios' });
+      if (password.length < 4) return respond(res, 400, { error: 'Senha deve ter pelo menos 4 caracteres' });
+
+      var existing = db.users.find(function (u) { return u.email === email; });
       if (existing) return respond(res, 400, { error: 'Email ja cadastrado' });
 
       var code = 'HC' + crypto.randomBytes(3).toString('hex').toUpperCase();
       var newUser = {
-        id: db.next_id.users++, name, email, phone: phone || null,
+        id: db.next_id.users++, name: name, email: email, phone: phone || null,
         password: hashPassword(password), balance: 0, bonus_balance: 0,
         referral_code: code, referred_by: referralCode || null,
         is_admin: false, is_blocked: false, is_influencer: false,
-        total_deposited: 0, total_withdrawn: 0, total_games: 0,
-        created_at: new Date().toISOString(), last_login: null
+        influencer_win_rate: 0, total_deposited: 0, total_withdrawn: 0, total_games: 0,
+        created_at: new Date().toISOString(), last_login: new Date().toISOString()
       };
       db.users.push(newUser);
       await saveDB(db);
-      return respond(res, 200, { token: createToken(newUser.id), user: newUser });
+      var token = createToken(newUser.id);
+      return respond(res, 200, {
+        token: token,
+        user: { id: newUser.id, name: newUser.name, email: newUser.email, balance: 0, bonus_balance: 0, referral_code: code, is_admin: newUser.is_admin }
+      });
     }
 
     // ==================== AUTH: LOGIN ====================
     if (url === '/api/auth/login' && method === 'POST') {
       var body = await parseBody(req);
-      var user = db.users.find(u => u.email === (body.email || '').toLowerCase());
-      if (!user || !verifyPassword(body.password, user.password)) return respond(res, 401, { error: 'Credenciais invalidas' });
+      var email = (body.email || '').trim().toLowerCase();
+      var password = body.password || '';
+
+      if (!email || !password) return respond(res, 400, { error: 'Email e senha sao obrigatorios' });
+
+      var user = db.users.find(function (u) { return u.email === email; });
+      if (!user) return respond(res, 401, { error: 'Email ou senha incorretos' });
+      if (!verifyPassword(password, user.password)) return respond(res, 401, { error: 'Email ou senha incorretos' });
+      if (user.is_blocked) return respond(res, 403, { error: 'Conta bloqueada' });
+
       user.last_login = new Date().toISOString();
       await saveDB(db);
-      return respond(res, 200, { token: createToken(user.id), user });
+
+      var token = createToken(user.id);
+      return respond(res, 200, {
+        token: token,
+        user: {
+          id: user.id, name: user.name, email: user.email,
+          balance: num(user.balance), bonus_balance: num(user.bonus_balance),
+          referral_code: user.referral_code, is_admin: user.is_admin
+        }
+      });
     }
 
     // ==================== AUTH: ME ====================
     if ((url === '/api/auth/me' || url === '/api/user/me') && method === 'GET') {
       var user = getUser(db, req);
       if (!user) return respond(res, 401, { error: 'Nao autorizado' });
-      return respond(res, 200, { ...user, referrals: db.users.filter(u => u.referred_by === user.referral_code).length });
+      return respond(res, 200, {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        balance: num(user.balance),
+        bonus_balance: num(user.bonus_balance),
+        referral_code: user.referral_code,
+        is_admin: user.is_admin,
+        is_influencer: user.is_influencer,
+        referrals: db.users.filter(function (u) { return u.referred_by === user.referral_code; }).length
+      });
     }
 
-    // ==================== DEPOSIT (SAFEPIX - PAYLOAD RIGIDO) ====================
+    // ==================== USER: BALANCE ====================
+    if (url === '/api/user/balance' && method === 'GET') {
+      var user = getUser(db, req);
+      if (!user) return respond(res, 401, { error: 'Nao autorizado' });
+      return respond(res, 200, { balance: num(user.balance), bonus_balance: num(user.bonus_balance) });
+    }
+
+    // ==================== DEPOSIT (SAFEPIX - ATUALIZADO) ====================
     if (url === '/api/deposit' && method === 'POST') {
       var user = getUser(db, req);
       if (!user) return respond(res, 401, { error: 'Nao autorizado' });
@@ -245,10 +288,9 @@ module.exports = async function handler(req, res) {
         const host = req.headers.host;
         const postbackUrl = `${protocol}://${host}/api/webhook/safepix`;
 
+        // SafePix exige AMOUNT em centavos (integer)
         const amountCents = Math.round(num(body.amount) * 100);
-        const cleanCpf = (body.cpf || "").replace(/\D/g, '');
-
-        if (cleanCpf.length < 11) return respond(res, 400, { error: 'CPF invalido para SafePix' });
+        const cleanCpf = body.cpf ? body.cpf.replace(/\D/g, '') : '';
 
         const payload = {
           amount: amountCents,
@@ -257,14 +299,21 @@ module.exports = async function handler(req, res) {
           customer: {
             name: user.name,
             email: user.email,
-            document: { type: "cpf", number: cleanCpf }
+            document: {
+              type: "cpf",
+              number: cleanCpf
+            },
+            phone: user.phone || "11999999999"
           },
-          items: [{
-            title: "Deposito HelixCash",
-            unit_price: amountCents,
-            quantity: 1
-          }],
-          metadata: { user_id: String(user.id) }
+          items: [
+            {
+              title: "Créditos Helix Cash",
+              unit_price: amountCents,
+              quantity: 1,
+              tangible: false
+            }
+          ],
+          metadata: JSON.stringify({ user_id: String(user.id) })
         };
 
         const safeRes = await fetch('https://api.safepix.pro/v1/payment-transaction/create', {
@@ -272,7 +321,7 @@ module.exports = async function handler(req, res) {
           headers: {
             'accept': 'application/json',
             'content-type': 'application/json',
-            'authorization': 'Basic ' + Buffer.from(`${SAFEPIX_PUBLIC_KEY}:${SAFEPIX_SECRET_KEY}`).toString('base64')
+            'authorization': safePixAuth
           },
           body: JSON.stringify(payload)
         });
@@ -280,22 +329,28 @@ module.exports = async function handler(req, res) {
         const data = await safeRes.json();
 
         if (!safeRes.ok) {
-          console.error('ERRO DETALHADO SAFEPIX:', JSON.stringify(data));
+          console.error('Erro SafePix Detalhes:', data);
           return respond(res, 400, { error: data.message || 'Erro ao gerar pagamento SafePix' });
         }
 
+        // De acordo com doc, o Pix está dentro de data.pix
         var dep = {
           id: db.next_id.deposits++, user_id: user.id, amount: num(body.amount),
-          status: 'pending', pix_code: data.PixCopyPaste || data.PixPayload || data.Id, 
-          transaction_id: data.Id, qr_code_base64: data.PixQrCodeBase64 || "",
+          status: 'pending', 
+          pix_code: data.pix && data.pix.length > 0 ? data.pix[0].qr_code : (data.PixCopyPaste || data.Id), 
+          transaction_id: data.id,
+          qr_code_base64: data.pix && data.pix.length > 0 ? data.pix[0].url : "",
           created_at: new Date().toISOString(), updated_at: new Date().toISOString()
         };
 
         db.deposits.push(dep);
         await saveDB(db);
+
         return respond(res, 200, { success: true, deposit: dep, pix_code: dep.pix_code, qr_code_base64: dep.qr_code_base64, deposit_id: dep.id });
+
       } catch (e) {
-        return respond(res, 500, { error: 'Falha na conexão com SafePix' });
+        console.error('SafePix Exception:', e.message);
+        return respond(res, 500, { error: 'Erro de conexao SafePix' });
       }
     }
 
@@ -304,12 +359,18 @@ module.exports = async function handler(req, res) {
       var user = getUser(db, req);
       if (!user) return respond(res, 401, { error: 'Nao autorizado' });
       var body = await parseBody(req);
-      var dep = db.deposits.find(d => d.id === body.deposit_id && d.user_id === user.id);
+      var depId = body.deposit_id;
+
+      var dep = db.deposits.find(function(d) { return d.id === depId && d.user_id === user.id; });
       if (!dep) return respond(res, 404, { error: 'Deposito nao encontrado' });
-      return respond(res, 200, { status: dep.status, new_balance: user.balance });
+
+      return respond(res, 200, {
+        status: dep.status, amount: num(dep.amount), new_balance: num(user.balance),
+        pix_code: dep.pix_code, qr_code_base64: dep.qr_code_base64
+      });
     }
 
-    // ==================== WEBHOOK SAFEPIX ====================
+    // ==================== WEBHOOK SAFEPIX (ATUALIZADO) ====================
     if (url === '/api/webhook/safepix' && method === 'POST') {
       var body = await parseBody(req);
       db.webhooks.push({ id: db.next_id.webhooks++, data: body, created_at: new Date().toISOString() });
@@ -318,19 +379,22 @@ module.exports = async function handler(req, res) {
       const txId = body.Id || body.ExternalId;
       const status = body.Status;
 
-      if (txId && (status === 'PAID' || status === 'approved')) {
+      if (txId && (status === 'PAID')) {
         var dep = db.deposits.find(d => String(d.transaction_id) === String(txId) && d.status === 'pending');
         if (dep) {
           dep.status = 'approved';
+          dep.updated_at = new Date().toISOString();
           var user = db.users.find(u => u.id === dep.user_id);
           if (user) {
             user.balance = num(user.balance) + num(dep.amount);
             if (num(user.total_deposited) === 0 && num(dep.amount) >= 50 && user.referred_by) {
-               var ref = db.users.find(u => u.referral_code === user.referred_by);
-               if (ref) {
-                 ref.balance = num(ref.balance) + 20;
-                 db.referral_earnings.push({ id: db.next_id.referral_earnings++, user_id: ref.id, from_user_id: user.id, amount: 20, created_at: new Date().toISOString() });
-               }
+              var referrer = db.users.find(u => u.referral_code === user.referred_by);
+              if (referrer) {
+                referrer.balance = num(referrer.balance) + 20;
+                db.referral_earnings.push({
+                  id: db.next_id.referral_earnings++, user_id: referrer.id, from_user_id: user.id, amount: 20, created_at: new Date().toISOString()
+                });
+              }
             }
             user.total_deposited = (user.total_deposited || 0) + num(dep.amount);
           }
@@ -340,63 +404,88 @@ module.exports = async function handler(req, res) {
       return respond(res, 200, { success: true });
     }
 
-    // ==================== WITHDRAW (SAFEPIX PAYOUT) ====================
+    // ==================== REFERRALS: LISTA E CONTADORES ====================
+    if (url === '/api/referrals' && method === 'GET') {
+      var user = getUser(db, req);
+      if (!user) return respond(res, 401, { error: 'Nao autorizado' });
+
+      var referredUsers = db.users.filter(u => u.referred_by === user.referral_code);
+      var earnings = db.referral_earnings.filter(e => e.user_id === user.id);
+      var totalEarned = earnings.reduce((s, e) => s + num(e.amount), 0);
+
+      var list = referredUsers.map(u => {
+        var hasContributed = earnings.some(e => e.from_user_id === u.id);
+        return {
+          name: u.name,
+          created_at: u.created_at,
+          status: hasContributed ? 'Confirmado' : 'Pendente (Aguardando R$ 50)',
+          amount: hasContributed ? 20.00 : 0
+        };
+      });
+
+      return respond(res, 200, {
+        total_earned: totalEarned,
+        count_total: referredUsers.length,
+        referrals: list
+      });
+    }
+
+    // ==================== WITHDRAW (SAFEPIX PAYOUT - ATUALIZADO) ====================
     if (url === '/api/withdraw' && method === 'POST') {
       var user = getUser(db, req);
       if (!user) return respond(res, 401, { error: 'Nao autorizado' });
       var body = await parseBody(req);
       var amount = num(body.amount);
-      if (num(user.balance) < amount || amount < 20) return respond(res, 400, { error: 'Saldo insuficiente' });
+      var pixKey = (body.pix_key || '').trim();
+      var minWd = num(db.settings.min_withdrawal) || 20;
+
+      if (!pixKey) return respond(res, 400, { error: 'Chave PIX obrigatoria' });
+      if (num(user.balance) < amount) return respond(res, 400, { error: 'Saldo insuficiente' });
+      if (amount < minWd) return respond(res, 400, { error: 'Saque minimo: R$' + minWd });
 
       try {
+        const protocol = req.headers['x-forwarded-proto'] || 'https';
+        const host = req.headers.host;
+        const postbackUrl = `${protocol}://${host}/api/webhook/safepix_withdrawal`;
+
         const payoutRes = await fetch('https://api.safepix.pro/v1/wallet-transaction/create/withdrawal', {
           method: 'POST',
           headers: {
             'accept': 'application/json',
             'content-type': 'application/json',
-            'authorization': 'Basic ' + Buffer.from(`${SAFEPIX_PUBLIC_KEY}:${SAFEPIX_SECRET_KEY}`).toString('base64')
+            'authorization': safePixAuth
           },
           body: JSON.stringify({
-            pix_key: body.pix_key,
+            pix_key: pixKey,
             pix_type: body.pix_type || 'cpf',
-            amount: amount,
-            postback_url: `${req.headers['x-forwarded-proto'] || 'https'}://${req.headers.host}/api/webhook/withdraw`
+            amount: amount, // SafePix exige valor em reais (number) para saques
+            postback_url: postbackUrl
           })
         });
 
-        const data = await payoutRes.json();
-        if (!payoutRes.ok) return respond(res, 400, { error: data.message || 'Erro no Saque SafePix' });
+        const payoutData = await payoutRes.json();
+        if (!payoutRes.ok) return respond(res, 400, { error: payoutData.message || 'Erro Saque SafePix' });
 
         user.balance = num(user.balance) - amount;
-        db.withdrawals.push({ id: db.next_id.withdrawals++, user_id: user.id, amount, status: 'processing', transaction_id: data.Id, created_at: new Date().toISOString() });
+        db.withdrawals.push({
+          id: db.next_id.withdrawals++, user_id: user.id, amount,
+          pix_key: pixKey, status: 'processing', transaction_id: payoutData.data ? payoutData.data.id : payoutData.Id,
+          created_at: new Date().toISOString(), updated_at: new Date().toISOString()
+        });
         await saveDB(db);
-        return respond(res, 200, { success: true, message: 'Saque solicitado com sucesso' });
-      } catch (e) { return respond(res, 500, { error: 'Falha no processamento do saque' }); }
+        return respond(res, 200, { success: true, message: 'Saque enviado para processamento!' });
+
+      } catch (e) {
+        return respond(res, 500, { error: 'Erro ao processar saque: ' + e.message });
+      }
     }
 
-    // ==================== REFERRALS LIST ====================
-    if (url === '/api/referrals' && method === 'GET') {
-      var user = getUser(db, req);
-      if (!user) return respond(res, 401, { error: 'Nao autorizado' });
-      var referred = db.users.filter(u => u.referred_by === user.referral_code);
-      var earnings = db.referral_earnings.filter(e => e.user_id === user.id);
-      return respond(res, 200, { 
-        total_earned: earnings.reduce((s, e) => s + e.amount, 0), 
-        count_total: referred.length, 
-        referrals: referred.map(u => ({ 
-          name: u.name, 
-          status: earnings.some(e => e.from_user_id === u.id) ? 'Confirmado' : 'Pendente', 
-          amount: earnings.some(e => e.from_user_id === u.id) ? 20 : 0, 
-          created_at: u.created_at 
-        })) 
-      });
-    }
-
-    // ==================== GAME LOGIC ====================
+    // ==================== GAME CONFIG: DIFICULDADE PROGRESSIVA ====================
     if (url === '/api/game/config' && method === 'GET') {
       var user = getUser(db, req);
       var s = db.settings;
       var houseEdge = num(s.house_edge);
+
       var config = {
         ...s,
         win_rate: 100 - houseEdge,
@@ -407,8 +496,10 @@ module.exports = async function handler(req, res) {
           min_hole_size: Math.max(1.1, 2.5 - (houseEdge / 40))
         }
       };
+
       if (user && user.is_influencer) {
         config.win_rate = num(user.influencer_win_rate) || 100;
+        config.influencer_win_rate = config.win_rate; 
         config.difficulty_curve = { start_speed: 1.0, max_speed_boost: 0, danger_increase_step: 99, min_hole_size: 2.5 };
       }
       return respond(res, 200, config);
@@ -418,12 +509,19 @@ module.exports = async function handler(req, res) {
       var user = getUser(db, req);
       if (!user) return respond(res, 401, { error: 'Nao autorizado' });
       var body = await parseBody(req);
-      var bet = num(body.bet_amount);
-      if (num(user.balance) < bet) return respond(res, 400, { error: 'Saldo insuficiente' });
-      user.balance = num(user.balance) - bet;
-      var pg = { id: db.next_id.pending_games++, user_id: user.id, bet_amount: bet, created_at: new Date().toISOString() };
+      var betAmount = num(body.bet_amount);
+
+      if (!betAmount || betAmount <= 0) return respond(res, 400, { error: 'Valor invalido' });
+      if (betAmount > num(user.balance)) return respond(res, 400, { error: 'Saldo insuficiente' });
+
+      user.balance = num(user.balance) - betAmount;
+      var pg = {
+        id: db.next_id.pending_games++, user_id: user.id,
+        bet_amount: betAmount, created_at: new Date().toISOString()
+      };
       db.pending_games.push(pg);
       await saveDB(db);
+
       return respond(res, 200, { game_id: pg.id, new_balance: user.balance });
     }
 
@@ -431,72 +529,142 @@ module.exports = async function handler(req, res) {
       var user = getUser(db, req);
       if (!user) return respond(res, 401, { error: 'Nao autorizado' });
       var body = await parseBody(req);
-      var pgIdx = db.pending_games.findIndex(p => p.id === body.game_id && p.user_id === user.id);
-      if (pgIdx === -1) return respond(res, 400, { error: 'Jogo invalido' });
-      var pg = db.pending_games.splice(pgIdx, 1)[0];
-      var prize = num(body.prize);
+
+      var gameId = body.game_id;
+      var platformsReached = num(body.platforms_reached) || 0;
+      var pgIndex = db.pending_games.findIndex(p => p.id === gameId && p.user_id === user.id);
+      var pg = pgIndex >= 0 ? db.pending_games[pgIndex] : null;
+      var betAmount = pg ? num(pg.bet_amount) : num(body.bet_amount);
+      if (!betAmount || betAmount <= 0) return respond(res, 400, { error: 'Jogo nao encontrado' });
+
+      if (pgIndex >= 0) db.pending_games.splice(pgIndex, 1);
+
+      var cashedOut = !!body.cashed_out;
+      var prize = num(body.prize); 
+      
+      if (prize === 0 && cashedOut) {
+          var multiplier = 1 + (platformsReached * 0.5);
+          var winProb = user.is_influencer ? num(user.influencer_win_rate) : (100 - num(db.settings.house_edge));
+          var isWin = (Math.random() * 100) <= winProb;
+          prize = isWin ? Math.round(betAmount * multiplier * 100) / 100 : 0;
+      }
+
+      var result = prize > 0 ? 'win' : 'loss';
       user.balance = num(user.balance) + prize;
-      db.games.push({ id: db.next_id.games++, user_id: user.id, bet_amount: pg.bet_amount, prize, created_at: new Date().toISOString() });
+      user.total_games = (user.total_games || 0) + 1;
+
+      var game = {
+        id: db.next_id.games++, user_id: user.id, bet_amount: betAmount, 
+        multiplier: prize > 0 ? (prize / betAmount).toFixed(2) : 0,
+        platforms_reached: platformsReached, prize: prize, result: result, created_at: new Date().toISOString()
+      };
+      db.games.push(game);
       await saveDB(db);
-      return respond(res, 200, { new_balance: user.balance, prize });
+
+      return respond(res, 200, { result: result, prize: prize, new_balance: num(user.balance) });
     }
+
+    // ==================== ADMIN HELPERS ====================
+    var isAdminUser = (req) => { var u = getUser(db, req); return u && u.is_admin ? u : null; };
 
     // ==================== ADMIN ROUTES ====================
     if (url === '/api/admin/dashboard' && method === 'GET') {
-      if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao admin' });
-      return respond(res, 200, { 
+      if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
+      const params = new URLSearchParams(req.url.split('?')[1]);
+      const range = params.get('range') || 'today';
+      let start = new Date(0);
+      if (range === 'today') start = new Date(new Date().setHours(0,0,0,0));
+      else if (range === 'yesterday') { start = new Date(new Date().setDate(new Date().getDate() - 1)); start.setHours(0,0,0,0); }
+      else if (range === '7days') start = new Date(new Date().setDate(new Date().getDate() - 7));
+      else if (range === 'thisMonth') start = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+
+      const fDeps = db.deposits.filter(d => d.status === 'approved' && new Date(d.created_at) >= start);
+      const fWds = db.withdrawals.filter(w => w.status === 'approved' && new Date(w.created_at) >= start);
+      const fGames = db.games.filter(g => new Date(g.created_at) >= start);
+
+      return respond(res, 200, {
         summary: { 
-          deposits: db.deposits.filter(d => d.status === 'approved').reduce((s, d) => s + num(d.amount), 0), 
-          withdrawals: db.withdrawals.filter(w => w.status === 'approved').reduce((s, w) => s + num(w.amount), 0), 
-          users: db.users.length 
-        } 
+          deposits: fDeps.reduce((s, d) => s + num(d.amount), 0), 
+          withdrawals: fWds.reduce((s, w) => s + num(w.amount), 0), 
+          profit: fDeps.reduce((s, d) => s + num(d.amount), 0) - fWds.reduce((s, w) => s + num(w.amount), 0), 
+          users: db.users.length, 
+          games_count: fGames.length 
+        },
+        chart: fGames.slice(-50).map(g => ({ t: g.created_at, b: g.bet_amount, p: g.prize }))
       });
     }
 
     if (url === '/api/admin/users' && method === 'GET') {
-      if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao admin' });
+      if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
       return respond(res, 200, db.users.filter(u => !u.is_admin || u.id !== 1));
     }
 
     if (url === '/api/admin/user/update' && method === 'POST') {
-      if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao admin' });
+      if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
       var body = await parseBody(req);
-      var u = db.users.find(x => x.id === parseInt(body.id));
-      if (u) { 
-        if (body.balance !== undefined) u.balance = num(body.balance);
-        if (body.is_influencer !== undefined) u.is_influencer = body.is_influencer;
-        if (body.influencer_win_rate !== undefined) u.influencer_win_rate = num(body.influencer_win_rate);
-        if (body.is_blocked !== undefined) u.is_blocked = body.is_blocked;
-        await saveDB(db); 
-      }
+      var target = db.users.find(u => u.id === parseInt(body.id));
+      if (!target) return respond(res, 404, { error: 'Usuario nao encontrado' });
+      if (body.balance !== undefined) target.balance = num(body.balance);
+      if (body.is_influencer !== undefined) target.is_influencer = body.is_influencer === true || body.is_influencer === 'true';
+      if (body.influencer_win_rate !== undefined) target.influencer_win_rate = num(body.influencer_win_rate);
+      if (body.is_blocked !== undefined) target.is_blocked = body.is_blocked === true || body.is_blocked === 'true';
+      await saveDB(db);
       return respond(res, 200, { success: true });
     }
 
     if (url === '/api/admin/affiliates' && method === 'GET') {
-      if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao admin' });
-      return respond(res, 200, db.users.filter(u => u.is_influencer || u.id === 1).map(i => {
-        const refs = db.users.filter(u => u.referred_by === i.referral_code);
+      if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
+      const host = req.headers.host;
+      const protocol = req.headers['x-forwarded-proto'] || 'https';
+      
+      const affs = db.users.filter(u => u.is_influencer === true || u.id === 1).map(i => {
+        const referredUsers = db.users.filter(u => u.referred_by === i.referral_code);
+        const activeDepositors = referredUsers.filter(u => 
+            db.deposits.some(d => d.user_id === u.id && d.status === 'approved')
+        );
         return { 
           name: i.name, code: i.referral_code, 
-          count_total: refs.length, 
-          count_depositors: refs.filter(u => db.deposits.some(d => d.user_id === u.id && d.status === 'approved')).length 
+          link: `${protocol}://${host}/#cadastro?ref=${i.referral_code}`,
+          count_total: referredUsers.length,
+          count_depositors: activeDepositors.length,
+          total_deposited: referredUsers.reduce((total, u) => total + db.deposits.filter(d => d.user_id === u.id && d.status === 'approved').reduce((sum, d) => sum + num(d.amount), 0), 0)
         };
-      }));
+      });
+      return respond(res, 200, affs);
+    }
+
+    if (url === '/api/admin/deposits' && method === 'GET') {
+      if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
+      return respond(res, 200, db.deposits.slice().reverse().map(d => ({ ...d, user_name: (db.users.find(u => u.id === d.user_id) || {}).name })));
+    }
+
+    if (url === '/api/admin/withdrawals' && method === 'GET') {
+      if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
+      return respond(res, 200, db.withdrawals.slice().reverse().map(w => ({ ...w, user_name: (db.users.find(u => u.id === w.user_id) || {}).name })));
+    }
+
+    if (url === '/api/admin/games' && method === 'GET') {
+      if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
+      return respond(res, 200, db.games.slice().reverse().map(g => ({ ...g, user_name: (db.users.find(u => u.id === g.user_id) || {}).name })));
+    }
+
+    if (url === '/api/admin/settings' && method === 'GET') {
+      if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
+      return respond(res, 200, db.settings || {});
     }
 
     if (url === '/api/admin/settings' && method === 'POST') {
-      if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao admin' });
+      if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
       var body = await parseBody(req);
       db.settings = { ...db.settings, ...body };
       await saveDB(db);
       return respond(res, 200, { success: true });
     }
 
-    function isAdminUser(req) { var u = getUser(db, req); return u && u.is_admin; }
-
     return respond(res, 404, { error: 'Rota nao encontrada' });
-  } catch (err) { 
-    console.error('API GLOBAL ERROR:', err);
-    return respond(res, 500, { error: err.message }); 
+
+  } catch (err) {
+    console.error('API Error:', err);
+    return respond(res, 500, { error: 'Erro interno no servidor: ' + err.message });
   }
 };
