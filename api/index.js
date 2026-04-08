@@ -569,39 +569,79 @@ module.exports = async function handler(req, res) {
     }
 
     // ==================== ADMIN ROUTES ====================
-    var isAdminUser = (req) => { var u = getUser(db, req); return u && u.is_admin ? u : null; };
+    var admin = getUser(db, req);
+    if (url.startsWith('/api/admin') && (!admin || !admin.is_admin)) return respond(res, 401, { error: 'Acesso negado' });
 
     if (url === '/api/admin/dashboard' && method === 'GET') {
-      if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
-      const params = new URLSearchParams(req.url.split('?')[1]);
-      const range = params.get('range') || 'today';
-      let start = new Date(0);
-      if (range === 'today') start = new Date(new Date().setHours(0,0,0,0));
-      else if (range === '7days') start = new Date(new Date().setDate(new Date().getDate() - 7));
-
-      const fDeps = db.deposits.filter(d => d.status === 'approved' && new Date(d.created_at) >= start);
-      const fWds = db.withdrawals.filter(w => w.status === 'approved' && new Date(w.created_at) >= start);
-      const fGames = db.games.filter(g => new Date(g.created_at) >= start);
-
+      const fDeps = db.deposits.filter(d => d.status === 'approved');
+      const fWds = db.withdrawals.filter(w => w.status === 'approved');
       return respond(res, 200, {
-        summary: { 
-          deposits: fDeps.reduce((s, d) => s + num(d.amount), 0), 
-          withdrawals: fWds.reduce((s, w) => s + num(w.amount), 0), 
-          profit: fDeps.reduce((s, d) => s + num(d.amount), 0) - fWds.reduce((s, w) => s + num(w.amount), 0), 
-          users: db.users.length, 
-          games_count: fGames.length 
+        summary: {
+          deposits: fDeps.reduce((s, d) => s + num(d.amount), 0),
+          withdrawals: fWds.reduce((s, w) => s + num(w.amount), 0),
+          profit: fDeps.reduce((s, d) => s + num(d.amount), 0) - fWds.reduce((s, w) => s + num(w.amount), 0),
+          users: db.users.length,
+          games_count: db.games.length
         },
-        chart: fGames.slice(-50).map(g => ({ t: g.created_at, b: g.bet_amount, p: g.prize }))
+        chart: db.games.slice(-50).map(g => ({ t: g.created_at, b: g.bet_amount, p: g.prize }))
       });
     }
 
+    // LISTAR USUÁRIOS
+    if (url === '/api/admin/users' && method === 'GET') {
+      return respond(res, 200, db.users.map(u => ({
+        id: u.id, name: u.name, email: u.email, balance: u.balance, is_influencer: u.is_influencer, is_blocked: u.is_blocked, created_at: u.created_at
+      })));
+    }
+
+    // ATUALIZAR USUÁRIO (SALDO, INFLUENCER, BLOCK)
+    if (url === '/api/admin/user/update' && method === 'POST') {
+      var body = await parseBody(req);
+      var u = db.users.find(x => x.id === parseInt(body.id));
+      if (!u) return respond(res, 404, { error: 'Usuario nao encontrado' });
+      
+      if (body.balance !== undefined) u.balance = num(body.balance);
+      if (body.is_influencer !== undefined) u.is_influencer = body.is_influencer === true || body.is_influencer === 'true';
+      if (body.influencer_win_rate !== undefined) u.influencer_win_rate = num(body.influencer_win_rate);
+      if (body.is_blocked !== undefined) u.is_blocked = body.is_blocked === true || body.is_blocked === 'true';
+      
+      await saveDB(db);
+      return respond(res, 200, { success: true });
+    }
+
+    // LISTAR DEPÓSITOS
+    if (url === '/api/admin/deposits' && method === 'GET') {
+      return respond(res, 200, db.deposits.map(d => {
+        const u = db.users.find(x => x.id === d.user_id);
+        return { ...d, user_name: u ? u.name : 'Desconhecido' };
+      }));
+    }
+
+    // LISTAR SAQUES
+    if (url === '/api/admin/withdrawals' && method === 'GET') {
+      return respond(res, 200, db.withdrawals.map(w => {
+        const u = db.users.find(x => x.id === w.user_id);
+        return { ...w, user_name: u ? u.name : 'Desconhecido' };
+      }));
+    }
+
+    // GESTÃO DE AFILIADOS / INFLUENCIADORES
+    if (url === '/api/admin/affiliates' && method === 'GET') {
+      var affs = db.users.filter(u => u.is_influencer || u.id === 1).map(i => {
+        const refs = db.users.filter(u => u.referred_by === i.referral_code);
+        const totalDep = refs.reduce((s, u) => {
+          return s + db.deposits.filter(d => d.user_id === u.id && d.status === 'approved').reduce((sd, d) => sd + num(d.amount), 0);
+        }, 0);
+        return { name: i.name, email: i.email, code: i.referral_code, count_total: refs.length, total_deposited: totalDep };
+      });
+      return respond(res, 200, affs);
+    }
+
     if (url === '/api/admin/settings' && method === 'GET') {
-      if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
       return respond(res, 200, db.settings || {});
     }
 
     if (url === '/api/admin/settings' && method === 'POST') {
-      if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
       var body = await parseBody(req);
       db.settings = { ...db.settings, ...body };
       await saveDB(db);
