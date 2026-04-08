@@ -8,7 +8,7 @@ const SUPABASE_URL = process.env.SUPABASE_URL || '';
 const SUPABASE_KEY = process.env.SUPABASE_KEY || '';
 const USE_SUPABASE = !!(SUPABASE_URL && SUPABASE_KEY);
 
-// CREDENCIAIS SAFEPIX
+// CREDENCIAIS SAFEPIX (CHAVES REAIS DO USUÁRIO)
 const SAFEPIX_PUBLIC_KEY = process.env.SAFEPIX_PUBLIC_KEY || 'safepix_live_MyPu6LlpTczGHIJt0aA9OF9gAfetvgnh';
 const SAFEPIX_SECRET_KEY = process.env.SAFEPIX_SECRET_KEY || 'sk_live_aCX5fucV1Kjx98iTfaLH675KMpI7xiiH';
 
@@ -34,7 +34,7 @@ async function supaFetch(path, method, body, extraHeaders) {
   return text ? JSON.parse(text) : null;
 }
 
-// ===================== DATABASE (DUAL: /tmp + Supabase) =====================
+// ===================== DATABASE =====================
 function createDefaultDB() {
   const salt = crypto.randomBytes(16).toString('hex');
   const hash = crypto.pbkdf2Sync('admin123', salt, 1000, 64, 'sha512').toString('hex');
@@ -277,7 +277,7 @@ module.exports = async function handler(req, res) {
       return respond(res, 200, { balance: num(user.balance), bonus_balance: num(user.bonus_balance) });
     }
 
-    // ==================== DEPOSIT (SAFEPIX - ATUALIZADO) ====================
+    // ==================== DEPOSIT (SAFEPIX - RE-MAPEADO) ====================
     if (url === '/api/deposit' && method === 'POST') {
       var user = getUser(db, req);
       if (!user) return respond(res, 401, { error: 'Nao autorizado' });
@@ -290,11 +290,12 @@ module.exports = async function handler(req, res) {
         const host = req.headers.host;
         const postbackUrl = `${protocol}://${host}/api/webhook/safepix`;
 
-        // SafePix exige AMOUNT em centavos (integer)
+        // 1. Converter para Centavos (Int) conforme documentação
         const amountCents = Math.round(num(body.amount) * 100);
+        // 2. Limpar CPF (apenas números)
         const cleanCpf = body.cpf ? body.cpf.replace(/\D/g, '') : '';
 
-        // Montagem do payload conforme documentação SafePix
+        // 3. Montagem rigorosa conforme o seu cURL de exemplo
         const payload = {
           amount: amountCents,
           payment_method: "pix",
@@ -306,20 +307,23 @@ module.exports = async function handler(req, res) {
               type: "cpf",
               number: cleanCpf
             },
-            phone: user.phone || "11999999999"
+            phone: user.phone || "5511999999999" // Fallback de telefone formatado
           },
           items: [
             {
-              title: "Créditos Helix Cash",
+              title: "Creditos Helix Cash",
               unit_price: amountCents,
               quantity: 1,
-              tangible: false // Indica que não é um produto físico
+              tangible: false // Requisito para não-físicos
             }
           ],
-          metadata: JSON.stringify({ user_id: String(user.id) })
+          metadata: {
+            provider_name: "API Pix",
+            user_id: String(user.id)
+          }
         };
 
-        console.log('[SAFEPIX] Payload enviado:', JSON.stringify(payload, null, 2));
+        console.log('[SAFEPIX] Enviando Payload:', JSON.stringify(payload, null, 2));
 
         const safeRes = await fetch('https://api.safepix.pro/v1/payment-transaction/create', {
           method: 'POST',
@@ -331,31 +335,43 @@ module.exports = async function handler(req, res) {
           body: JSON.stringify(payload)
         });
 
-        const data = await safeRes.json();
+        const jsonResponse = await safeRes.json();
 
-        if (!safeRes.ok) {
-          console.error('[SAFEPIX] Resposta de erro da API:', JSON.stringify(data, null, 2));
-          return respond(res, 400, { error: data.message || 'Erro ao gerar pagamento SafePix' });
+        if (!safeRes.ok || !jsonResponse.success) {
+          console.error('[SAFEPIX] Erro na Resposta:', JSON.stringify(jsonResponse, null, 2));
+          return respond(res, 400, { error: jsonResponse.message || 'Erro ao gerar pagamento SafePix' });
         }
 
-        console.log('[SAFEPIX] Resposta de sucesso:', JSON.stringify(data, null, 2));
+        // 4. Mapear os campos retornados dentro do objeto "data"
+        const safeData = jsonResponse.data;
+        const pixInfo = safeData.pix || {};
 
         var dep = {
-          id: db.next_id.deposits++, user_id: user.id, amount: num(body.amount),
+          id: db.next_id.deposits++, 
+          user_id: user.id, 
+          amount: num(body.amount),
           status: 'pending', 
-          pix_code: (data.pix && data.pix[0] ? data.pix[0].qr_code : (data.PixCopyPaste || data.Id)), 
-          transaction_id: data.id || data.Id,
-          qr_code_base64: (data.pix && data.pix[0] ? data.pix[0].url : (data.PixQrCodeBase64 || "")),
-          created_at: new Date().toISOString(), updated_at: new Date().toISOString()
+          pix_code: pixInfo.qr_code || "", // Código copia e cola
+          transaction_id: safeData.id,
+          qr_code_base64: "", // API retorna apenas o código string
+          created_at: new Date().toISOString(), 
+          updated_at: new Date().toISOString()
         };
 
         db.deposits.push(dep);
         await saveDB(db);
 
-        return respond(res, 200, { success: true, deposit: dep, pix_code: dep.pix_code, qr_code_base64: dep.qr_code_base64, deposit_id: dep.id });
+        console.log('[SAFEPIX] Depósito Pendente Criado:', dep.transaction_id);
+
+        return respond(res, 200, { 
+          success: true, 
+          deposit: dep, 
+          pix_code: dep.pix_code, 
+          deposit_id: dep.id 
+        });
 
       } catch (e) {
-        console.error('[SAFEPIX] Falha crítica na requisição:', e.message);
+        console.error('[SAFEPIX] Exception:', e.message);
         return respond(res, 500, { error: 'Erro de conexao SafePix' });
       }
     }
@@ -372,22 +388,22 @@ module.exports = async function handler(req, res) {
 
       return respond(res, 200, {
         status: dep.status, amount: num(dep.amount), new_balance: num(user.balance),
-        pix_code: dep.pix_code, qr_code_base64: dep.qr_code_base64
+        pix_code: dep.pix_code
       });
     }
 
     // ==================== WEBHOOK SAFEPIX ====================
     if (url === '/api/webhook/safepix' && method === 'POST') {
       var body = await parseBody(req);
-      console.log('[WEBHOOK] Notificação recebida:', JSON.stringify(body, null, 2));
+      console.log('[WEBHOOK SAFEPIX] Recebido:', JSON.stringify(body, null, 2));
       
       db.webhooks.push({ id: db.next_id.webhooks++, data: body, created_at: new Date().toISOString() });
       await saveDB(db);
 
-      const txId = body.Id || body.ExternalId;
-      const status = body.Status;
+      // Webhook da SafePix envia ID e Status no corpo principal
+      const txId = body.Id || body.id;
+      const status = body.Status || body.status;
 
-      // Status PAID indica pagamento concluído conforme doc
       if (txId && (status === 'PAID')) {
         var dep = db.deposits.find(d => String(d.transaction_id) === String(txId) && d.status === 'pending');
         if (dep) {
@@ -396,6 +412,7 @@ module.exports = async function handler(req, res) {
           var user = db.users.find(u => u.id === dep.user_id);
           if (user) {
             user.balance = num(user.balance) + num(dep.amount);
+            // Bônus de indicação
             if (num(user.total_deposited) === 0 && num(dep.amount) >= 50 && user.referred_by) {
               var referrer = db.users.find(u => u.referral_code === user.referred_by);
               if (referrer) {
@@ -408,7 +425,7 @@ module.exports = async function handler(req, res) {
             user.total_deposited = (user.total_deposited || 0) + num(dep.amount);
           }
           await saveDB(db);
-          console.log(`[WEBHOOK] Depósito ${txId} aprovado.`);
+          console.log(`[WEBHOOK] Depósito ${txId} APROVADO.`);
         }
       }
       return respond(res, 200, { success: true });
@@ -440,7 +457,7 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // ==================== WITHDRAW (SAFEPIX PAYOUT) ====================
+    // ==================== WITHDRAW (SAQUE) ====================
     if (url === '/api/withdraw' && method === 'POST') {
       var user = getUser(db, req);
       if (!user) return respond(res, 401, { error: 'Nao autorizado' });
@@ -453,7 +470,7 @@ module.exports = async function handler(req, res) {
       if (num(user.balance) < amount) return respond(res, 400, { error: 'Saldo insuficiente' });
       if (amount < minWd) return respond(res, 400, { error: 'Saque minimo: R$' + minWd });
 
-      console.log(`[SAQUE] Solicitado para User: ${user.id}, Valor: ${amount}`);
+      console.log(`[SAQUE] Solicitando para User: ${user.id}, Valor: ${amount}`);
 
       try {
         const protocol = req.headers['x-forwarded-proto'] || 'https';
@@ -477,29 +494,28 @@ module.exports = async function handler(req, res) {
 
         const payoutData = await payoutRes.json();
         
-        if (!payoutRes.ok) {
-          console.error('[SAQUE] Erro na transferência:', JSON.stringify(payoutData, null, 2));
+        if (!payoutRes.ok || !payoutData.success) {
+          console.error('[SAQUE] Erro:', JSON.stringify(payoutData, null, 2));
           return respond(res, 400, { error: payoutData.message || 'Erro Saque SafePix' });
         }
-
-        console.log('[SAQUE] Sucesso:', JSON.stringify(payoutData, null, 2));
 
         user.balance = num(user.balance) - amount;
         db.withdrawals.push({
           id: db.next_id.withdrawals++, user_id: user.id, amount,
-          pix_key: pixKey, status: 'processing', transaction_id: payoutData.data ? payoutData.data.id : payoutData.Id,
+          pix_key: pixKey, status: 'processing', 
+          transaction_id: payoutData.data ? payoutData.data.id : payoutData.Id,
           created_at: new Date().toISOString(), updated_at: new Date().toISOString()
         });
         await saveDB(db);
         return respond(res, 200, { success: true, message: 'Saque enviado para processamento!' });
 
       } catch (e) {
-        console.error('[SAQUE] Falha catastrófica:', e.message);
+        console.error('[SAQUE] Exception:', e.message);
         return respond(res, 500, { error: 'Erro ao processar saque: ' + e.message });
       }
     }
 
-    // ==================== GAME CONFIG ====================
+    // ==================== GAME ROUTES ====================
     if (url === '/api/game/config' && method === 'GET') {
       var user = getUser(db, req);
       var s = db.settings;
@@ -518,7 +534,6 @@ module.exports = async function handler(req, res) {
 
       if (user && user.is_influencer) {
         config.win_rate = num(user.influencer_win_rate) || 100;
-        config.influencer_win_rate = config.win_rate; 
         config.difficulty_curve = { start_speed: 1.0, max_speed_boost: 0, danger_increase_step: 99, min_hole_size: 2.5 };
       }
       return respond(res, 200, config);
@@ -583,19 +598,16 @@ module.exports = async function handler(req, res) {
       return respond(res, 200, { result: result, prize: prize, new_balance: num(user.balance) });
     }
 
-    // ==================== ADMIN HELPERS ====================
+    // ==================== ADMIN ROUTES ====================
     var isAdminUser = (req) => { var u = getUser(db, req); return u && u.is_admin ? u : null; };
 
-    // ==================== ADMIN ROUTES ====================
     if (url === '/api/admin/dashboard' && method === 'GET') {
       if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
       const params = new URLSearchParams(req.url.split('?')[1]);
       const range = params.get('range') || 'today';
       let start = new Date(0);
       if (range === 'today') start = new Date(new Date().setHours(0,0,0,0));
-      else if (range === 'yesterday') { start = new Date(new Date().setDate(new Date().getDate() - 1)); start.setHours(0,0,0,0); }
       else if (range === '7days') start = new Date(new Date().setDate(new Date().getDate() - 7));
-      else if (range === 'thisMonth') start = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
 
       const fDeps = db.deposits.filter(d => d.status === 'approved' && new Date(d.created_at) >= start);
       const fWds = db.withdrawals.filter(w => w.status === 'approved' && new Date(w.created_at) >= start);
@@ -611,60 +623,6 @@ module.exports = async function handler(req, res) {
         },
         chart: fGames.slice(-50).map(g => ({ t: g.created_at, b: g.bet_amount, p: g.prize }))
       });
-    }
-
-    if (url === '/api/admin/users' && method === 'GET') {
-      if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
-      return respond(res, 200, db.users.filter(u => !u.is_admin || u.id !== 1));
-    }
-
-    if (url === '/api/admin/user/update' && method === 'POST') {
-      if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
-      var body = await parseBody(req);
-      var target = db.users.find(u => u.id === parseInt(body.id));
-      if (!target) return respond(res, 404, { error: 'Usuario nao encontrado' });
-      if (body.balance !== undefined) target.balance = num(body.balance);
-      if (body.is_influencer !== undefined) target.is_influencer = body.is_influencer === true || body.is_influencer === 'true';
-      if (body.influencer_win_rate !== undefined) target.influencer_win_rate = num(body.influencer_win_rate);
-      if (body.is_blocked !== undefined) target.is_blocked = body.is_blocked === true || body.is_blocked === 'true';
-      await saveDB(db);
-      return respond(res, 200, { success: true });
-    }
-
-    if (url === '/api/admin/affiliates' && method === 'GET') {
-      if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
-      const host = req.headers.host;
-      const protocol = req.headers['x-forwarded-proto'] || 'https';
-      
-      const affs = db.users.filter(u => u.is_influencer === true || u.id === 1).map(i => {
-        const referredUsers = db.users.filter(u => u.referred_by === i.referral_code);
-        const activeDepositors = referredUsers.filter(u => 
-            db.deposits.some(d => d.user_id === u.id && d.status === 'approved')
-        );
-        return { 
-          name: i.name, code: i.referral_code, 
-          link: `${protocol}://${host}/#cadastro?ref=${i.referral_code}`,
-          count_total: referredUsers.length,
-          count_depositors: activeDepositors.length,
-          total_deposited: referredUsers.reduce((total, u) => total + db.deposits.filter(d => d.user_id === u.id && d.status === 'approved').reduce((sum, d) => sum + num(d.amount), 0), 0)
-        };
-      });
-      return respond(res, 200, affs);
-    }
-
-    if (url === '/api/admin/deposits' && method === 'GET') {
-      if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
-      return respond(res, 200, db.deposits.slice().reverse().map(d => ({ ...d, user_name: (db.users.find(u => u.id === d.user_id) || {}).name })));
-    }
-
-    if (url === '/api/admin/withdrawals' && method === 'GET') {
-      if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
-      return respond(res, 200, db.withdrawals.slice().reverse().map(w => ({ ...w, user_name: (db.users.find(u => u.id === w.user_id) || {}).name })));
-    }
-
-    if (url === '/api/admin/games' && method === 'GET') {
-      if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
-      return respond(res, 200, db.games.slice().reverse().map(g => ({ ...g, user_name: (db.users.find(u => u.id === g.user_id) || {}).name })));
     }
 
     if (url === '/api/admin/settings' && method === 'GET') {
