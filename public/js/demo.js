@@ -489,59 +489,61 @@
 
       var modal = document.createElement('div');
       modal.id = 'demoConversionModal';
-      modal.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);z-index:10000;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(8px);padding:20px; font-family: "Inter", sans-serif;';
+      modal.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);z-index:10000;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(8px);padding:15px; box-sizing:border-box; font-family: "Inter", sans-serif;';
 
       var iconHtml = isWin ? 
-        '<div style="width:60px;height:60px;border-radius:50%;background:linear-gradient(135deg, #00e676, #1de9b6);display:flex;align-items:center;justify-content:center;font-size:30px;color:#fff;font-weight:900;margin:0 auto 15px;box-shadow:0 0 20px rgba(0,230,118,0.4);">🎉</div>' : 
-        '<div style="width:60px;height:60px;border-radius:50%;background:linear-gradient(135deg, #ff5722, #ff9800);display:flex;align-items:center;justify-content:center;font-size:30px;color:#fff;font-weight:900;margin:0 auto 15px;box-shadow:0 0 20px rgba(255,87,34,0.4);">!</div>';
+        '<div style="width:50px;height:50px;border-radius:50%;background:linear-gradient(135deg, #00e676, #1de9b6);display:flex;align-items:center;justify-content:center;font-size:24px;color:#fff;font-weight:900;margin:0 auto 12px;box-shadow:0 0 20px rgba(0,230,118,0.4);flex-shrink:0;">🎉</div>' : 
+        '<div style="width:50px;height:50px;border-radius:50%;background:linear-gradient(135deg, #ff5722, #ff9800);display:flex;align-items:center;justify-content:center;font-size:24px;color:#fff;font-weight:900;margin:0 auto 12px;box-shadow:0 0 20px rgba(255,87,34,0.4);flex-shrink:0;">!</div>';
 
       var titleText = isWin ? 
-        '<h2 style="color:#00e676;font-size:24px;font-weight:900;margin-bottom:8px;text-transform:uppercase;">PARABÉNS!</h2>' : 
-        '<h2 style="color:#fff;font-size:24px;font-weight:900;margin-bottom:8px;text-transform:uppercase;">😔 QUE PENA!</h2>';
+        '<h2 style="color:#00e676;font-size:clamp(20px, 5vw, 24px);font-weight:900;margin-bottom:6px;text-transform:uppercase;">PARABÉNS!</h2>' : 
+        '<h2 style="color:#fff;font-size:clamp(20px, 5vw, 24px);font-weight:900;margin-bottom:6px;text-transform:uppercase;">😔 QUE PENA!</h2>';
 
       var descText = isWin ? 
-        '<p style="color:#a0a0c0;font-size:14px;margin-bottom:20px;line-height:1.4;">Você bateu a meta e acumulou <b>R$ ' + fmtBRL(prize) + '</b>!<br>Crie sua conta para resgatar dinheiro de verdade.</p>' : 
-        '<p style="color:#a0a0c0;font-size:14px;margin-bottom:20px;line-height:1.4;">Você acumulou <b>R$ ' + fmtBRL(prize) + '</b> mas não resgatou a tempo.<br>Na próxima você consegue!</p>';
+        '<p style="color:#a0a0c0;font-size:clamp(12px, 3.5vw, 14px);margin-bottom:15px;line-height:1.4;">Você bateu a meta e acumulou <b>R$ ' + fmtBRL(prize) + '</b>!<br>Crie sua conta para resgatar dinheiro de verdade.</p>' : 
+        '<p style="color:#a0a0c0;font-size:clamp(12px, 3.5vw, 14px);margin-bottom:15px;line-height:1.4;">Você acumulou <b>R$ ' + fmtBRL(prize) + '</b> mas não resgatou a tempo.<br>Na próxima você consegue!</p>';
 
       var boxBorder = isWin ? 'rgba(0,230,118,0.2)' : 'rgba(255,100,100,0.2)';
       var prizeColor = isWin ? '#00e676' : '#ff7575';
       var boxLabel = isWin ? 'VOCÊ ACUMULOU' : 'VOCÊ PODERIA TER RESGATADO';
 
-      modal.innerHTML = `
-        <div style="background:#0f071a; border:1px solid rgba(255,255,255,0.05); border-radius:24px; padding:30px 20px; width:100%; max-width:400px; text-align:center; box-shadow:0 20px 50px rgba(0,0,0,0.5);">
+      var scrollStyle = '<style>#demoConversionModalInner::-webkit-scrollbar { display: none; } #demoConversionModalInner { -ms-overflow-style: none; scrollbar-width: none; }</style>';
+
+      modal.innerHTML = scrollStyle + `
+        <div id="demoConversionModalInner" style="background:#0f071a; border:1px solid rgba(255,255,255,0.05); border-radius:24px; padding:20px 15px; width:100%; max-width:400px; max-height:90vh; overflow-y:auto; text-align:center; box-shadow:0 20px 50px rgba(0,0,0,0.5); box-sizing:border-box;">
           ${iconHtml}
           ${titleText}
           ${descText}
 
-          <div style="background:rgba(255,255,255,0.03);border:1px solid ${boxBorder};border-radius:16px;padding:20px;margin-bottom:15px;">
+          <div style="background:rgba(255,255,255,0.03);border:1px solid ${boxBorder};border-radius:16px;padding:15px;margin-bottom:15px;">
             <div style="font-size:10px;text-transform:uppercase;color:#a0a0c0;letter-spacing:1px;font-weight:700;margin-bottom:5px;">${boxLabel}</div>
-            <div style="font-size:42px;font-weight:900;color:${prizeColor};line-height:1;">R$ ${fmtBRL(prize)}</div>
+            <div style="font-size:clamp(30px, 8vw, 42px);font-weight:900;color:${prizeColor};line-height:1;">R$ ${fmtBRL(prize)}</div>
             <div style="font-size:12px;color:#a0a0c0;margin-top:5px;">${score} plataformas passadas</div>
           </div>
 
-          <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.05);border-radius:12px;padding:12px;margin-bottom:10px;display:flex;align-items:center;gap:10px;font-size:13px;color:#d0d0e0;text-align:left;">
-            <div style="color:#00e676;font-size:16px;">✅</div>
+          <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.05);border-radius:12px;padding:10px;margin-bottom:10px;display:flex;align-items:center;gap:8px;font-size:clamp(11px, 3.5vw, 13px);color:#d0d0e0;text-align:left;">
+            <div style="color:#00e676;font-size:16px;flex-shrink:0;">✅</div>
             <div>Mais de <strong style="color:#00e676;">12.000 jogadores</strong> já resgataram prêmios esta semana</div>
           </div>
 
-          <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.05);border-radius:12px;padding:12px;margin-bottom:20px;display:flex;align-items:center;gap:10px;font-size:13px;color:#d0d0e0;text-align:left;">
-            <div style="font-size:16px;">🎁</div>
+          <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.05);border-radius:12px;padding:10px;margin-bottom:15px;display:flex;align-items:center;gap:8px;font-size:clamp(11px, 3.5vw, 13px);color:#d0d0e0;text-align:left;">
+            <div style="font-size:16px;flex-shrink:0;">🎁</div>
             <div><strong style="color:#ff4081;">Ganhe 50% de bônus</strong> no primeiro depósito — oferta por tempo limitado!</div>
           </div>
 
-          <p style="font-size:12px;color:#a0a0c0;margin-bottom:20px;">Com uma conta real você pode resgatar de verdade. Não perca mais oportunidades!</p>
+          <p style="font-size:clamp(10px, 3vw, 12px);color:#a0a0c0;margin-bottom:15px;line-height:1.3;">Com uma conta real você pode resgatar de verdade. Não perca mais oportunidades!</p>
 
-          <button onclick="window.sairDoDemo('#cadastro')" style="width:100%;background:linear-gradient(135deg, #ff4081, #d500f9);color:#fff;border:none;padding:16px;border-radius:50px;font-size:15px;font-weight:900;text-transform:uppercase;margin-bottom:12px;cursor:pointer;box-shadow:0 10px 20px rgba(213,0,249,0.3);display:flex;align-items:center;justify-content:center;gap:8px;">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+          <button onclick="window.sairDoDemo('#cadastro')" style="width:100%;background:linear-gradient(135deg, #ff4081, #d500f9);color:#fff;border:none;padding:clamp(12px, 3.5vw, 16px);border-radius:50px;font-size:clamp(12px, 3.5vw, 15px);font-weight:900;text-transform:uppercase;margin-bottom:10px;cursor:pointer;box-shadow:0 10px 20px rgba(213,0,249,0.3);display:flex;align-items:center;justify-content:center;gap:8px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
             CRIAR CONTA E GANHAR DE VERDADE
           </button>
 
-          <button onclick="window.sairDoDemo('#login')" style="width:100%;background:rgba(255,255,255,0.05);color:#fff;border:1px solid rgba(255,255,255,0.1);padding:16px;border-radius:50px;font-size:14px;font-weight:700;text-transform:uppercase;margin-bottom:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path><polyline points="10 17 15 12 10 7"></polyline><line x1="15" y1="12" x2="3" y2="12"></line></svg>
+          <button onclick="window.sairDoDemo('#login')" style="width:100%;background:rgba(255,255,255,0.05);color:#fff;border:1px solid rgba(255,255,255,0.1);padding:clamp(12px, 3.5vw, 16px);border-radius:50px;font-size:clamp(12px, 3.5vw, 14px);font-weight:700;text-transform:uppercase;margin-bottom:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path><polyline points="10 17 15 12 10 7"></polyline><line x1="15" y1="12" x2="3" y2="12"></line></svg>
             JÁ TENHO CONTA — ENTRAR
           </button>
 
-          <div style="margin-top:10px;font-size:9px;color:rgba(255,255,255,0.2);line-height:1.4;">Estes valores são fictícios e servem apenas para demonstração.<br>Nenhum valor foi debitado ou creditado em conta real.</div>
+          <div style="font-size:9px;color:rgba(255,255,255,0.2);line-height:1.4;">Estes valores são fictícios e servem apenas para demonstração.<br>Nenhum valor foi debitado ou creditado em conta real.</div>
         </div>
       `;
 
