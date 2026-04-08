@@ -96,19 +96,34 @@
       font-weight: 700; cursor: pointer;
     }
 
-    /* Estilos específicos para o link de indicação */
+    /* Estilos específicos para o link de indicação e botões sociais */
     .referral-link-box {
       background: var(--bg-dark);
       border: 1px solid rgba(255,255,255,0.1);
-      padding: 12px;
+      padding: 12px 15px;
       border-radius: 10px;
-      font-size: 12px;
-      word-break: break-all;
+      font-size: 13px;
       color: var(--primary);
-      margin-bottom: 15px;
       font-family: monospace;
-      text-align: center;
     }
+    .share-btn {
+      flex: 1;
+      height: 45px;
+      border: none;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      color: white;
+      transition: transform 0.2s;
+    }
+    .share-btn:active { transform: scale(0.95); }
+    .share-btn.whatsapp { background: #25D366; }
+    .share-btn.facebook { background: #1877F2; }
+    .share-btn.telegram { background: #0088cc; }
+    .share-btn.twitter { background: #1DA1F2; }
+    .share-btn svg { width: 22px; height: 22px; fill: currentColor; }
 
     /* --- CORREÇÕES MOBILE --- */
     @media (max-width: 768px) {
@@ -557,31 +572,80 @@
 
     <div id="panel-referral" class="panel-sub hidden">
       <div class="panel-content">
-        <h2>Indicar Amigos</h2>
-        <p style="color:var(--text-secondary);margin-bottom:20px">Ganhe bônus por cada amigo que jogar</p>
+        <h2 style="font-size: 22px; margin-bottom: 8px;">Convide um amigo e ganhe R$ 20,00</h2>
+        <p style="color:var(--text-secondary);margin-bottom:24px;font-size:14px;line-height:1.5;">Compartilhe seu código com seus amigos e você e eles ganharão R$ 20,00 de bônus.</p>
 
-        <div class="referral-card">
-          <p style="font-size:13px;color:var(--text-secondary);text-align:center">Seu link de indicação</p>
-          <div class="referral-link-box" id="referralLinkDisplay">Gerando link...</div>
-          <button class="btn btn-accent btn-block btn-sm" onclick="copyReferralLink()">Copiar link de convite</button>
+        <div class="referral-card" style="margin-bottom: 20px;">
+          <p style="font-size:13px; font-weight:700; color:var(--text-secondary); margin-bottom:10px;">Seu link de indicação</p>
+          
+          <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+            <div class="referral-link-box" id="referralLinkDisplay" style="margin-bottom: 0; flex: 1; display: flex; align-items: center; font-size: 13px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; background: rgba(0,0,0,0.2);">Gerando link...</div>
+            <button class="btn btn-primary" onclick="copyReferralLink()" style="padding: 0 16px; border-radius: 10px; flex-shrink: 0;">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+            </button>
+          </div>
 
-          <div class="referral-stats">
-            <div class="ref-stat"><div class="value" id="refCount">0</div><div class="label">Indicados</div></div>
-            <div class="ref-stat"><div class="value" id="refEarned">R$ 0</div><div class="label">Ganhos</div></div>
+          <div class="social-share-buttons" style="display: flex; gap: 10px; margin-bottom: 24px;">
+            <button class="share-btn whatsapp" onclick="shareSocial('whatsapp')">
+              <svg viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+            </button>
+            <button class="share-btn facebook" onclick="shareSocial('facebook')">
+              <svg viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.469h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.469h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+            </button>
+            <button class="share-btn telegram" onclick="shareSocial('telegram')">
+              <svg viewBox="0 0 24 24"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
+            </button>
+            <button class="share-btn twitter" onclick="shareSocial('twitter')">
+              <svg viewBox="0 0 24 24"><path d="M23.953 4.57a10 10 0 01-2.825.775 4.958 4.958 0 002.163-2.723c-.951.555-2.005.959-3.127 1.184a4.92 4.92 0 00-8.384 4.482C7.69 8.095 4.067 6.13 1.64 3.162a4.822 4.822 0 00-.666 2.475c0 1.71.87 3.213 2.188 4.096a4.904 4.904 0 01-2.228-.616v.06a4.923 4.923 0 003.946 4.827 4.996 4.996 0 01-2.212.085 4.936 4.936 0 004.604 3.417 9.867 9.867 0 01-6.102 2.105c-.39 0-.779-.023-1.17-.067a13.995 13.995 0 007.557 2.209c9.053 0 13.998-7.496 13.998-13.985 0-.21 0-.42-.015-.63A9.935 9.935 0 0024 4.59z"/></svg>
+            </button>
+          </div>
+
+          <p style="font-size:14px; font-weight:700; margin-bottom:12px;">Suas Estatísticas</p>
+          <div class="referral-stats" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <div class="ref-stat" style="background: rgba(255,255,255,0.03); padding: 16px; border-radius: 12px; text-align: center; border: 1px solid rgba(255,255,255,0.05);">
+              <div class="value" id="refCount" style="font-size: 24px; font-weight: 900; color: #fff; margin-bottom: 4px;">0</div>
+              <div class="label" style="font-size: 12px; color: var(--text-secondary); text-transform: uppercase; font-weight: 700;">Indicações</div>
+            </div>
+            <div class="ref-stat" style="background: rgba(255,255,255,0.03); padding: 16px; border-radius: 12px; text-align: center; border: 1px solid rgba(255,255,255,0.05);">
+              <div class="value" id="refEarned" style="font-size: 24px; font-weight: 900; color: #00e676; margin-bottom: 4px;">R$ 0,00</div>
+              <div class="label" style="font-size: 12px; color: var(--text-secondary); text-transform: uppercase; font-weight: 700;">Ganhos</div>
+            </div>
           </div>
         </div>
 
         <div class="referral-card">
-          <p style="font-weight:700;margin-bottom:12px">Como funciona?</p>
-          <p style="font-size:14px;color:var(--text-secondary);line-height:1.6">
-            Compartilhe seu link exclusivo. Quando seus amigos se cadastrarem e jogarem, você ganha 5% do valor da primeira aposta deles como bônus direto no seu saldo!
-          </p>
+          <p style="font-weight:700; margin-bottom:20px; font-size: 16px;">Como Funciona?</p>
+          
+          <div class="how-it-works-steps" style="display: flex; flex-direction: column; gap: 20px;">
+            <div class="step-item" style="display: flex; align-items: flex-start; gap: 15px;">
+              <div class="step-icon-small" style="width: 32px; height: 32px; border-radius: 50%; background: var(--primary); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 14px; flex-shrink: 0; box-shadow: 0 4px 10px rgba(124, 77, 255, 0.4);">1</div>
+              <div>
+                <h4 style="margin: 0 0 4px 0; font-size: 15px; color: #fff; font-weight: 700;">Compartilhe seu link</h4>
+                <p style="margin: 0; font-size: 13px; color: var(--text-secondary); line-height: 1.4;">Copie seu link de indicação ou use os botões para enviar direto aos seus amigos.</p>
+              </div>
+            </div>
+            
+            <div class="step-item" style="display: flex; align-items: flex-start; gap: 15px;">
+              <div class="step-icon-small" style="width: 32px; height: 32px; border-radius: 50%; background: var(--primary); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 14px; flex-shrink: 0; box-shadow: 0 4px 10px rgba(124, 77, 255, 0.4);">2</div>
+              <div>
+                <h4 style="margin: 0 0 4px 0; font-size: 15px; color: #fff; font-weight: 700;">Seu amigo se cadastra</h4>
+                <p style="margin: 0; font-size: 13px; color: var(--text-secondary); line-height: 1.4;">Ele cria uma conta através do seu link e faz o primeiro depósito na plataforma.</p>
+              </div>
+            </div>
+            
+            <div class="step-item" style="display: flex; align-items: flex-start; gap: 15px;">
+              <div class="step-icon-small" style="width: 32px; height: 32px; border-radius: 50%; background: var(--primary); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 14px; flex-shrink: 0; box-shadow: 0 4px 10px rgba(124, 77, 255, 0.4);">3</div>
+              <div>
+                <h4 style="margin: 0 0 4px 0; font-size: 15px; color: #fff; font-weight: 700;">Vocês ganham o bônus</h4>
+                <p style="margin: 0; font-size: 13px; color: var(--text-secondary); line-height: 1.4;">O bônus de R$ 20,00 cai automaticamente no saldo de vocês para jogar ou sacar!</p>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div id="referralList" style="margin-top:16px"></div>
       </div>
     </div>
-
     <nav class="bottom-nav">
       <button class="nav-item active" data-panel="game">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8l4 4-4 4M8 12h8"/></svg>
@@ -665,6 +729,25 @@
     }
   }
 
+  // Função para compartilhar nas redes sociais
+  function shareSocial(platform) {
+    const link = document.getElementById('referralLinkDisplay').textContent;
+    const text = "Vem jogar no Helix Cash e ganhe R$ 20,00 de bônus! " + link;
+    
+    let url = '';
+    if(platform === 'whatsapp') {
+        url = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
+    } else if(platform === 'facebook') {
+        url = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(link)}`;
+    } else if(platform === 'telegram') {
+        url = `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent("Vem jogar no Helix Cash e ganhe R$ 20 de bônus!")}`;
+    } else if(platform === 'twitter') {
+        url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`;
+    }
+    
+    if(url) window.open(url, '_blank');
+  }
+
   // Função para abrir/fechar o menu lateral
   function toggleMenu() {
     const menu = document.getElementById('sideMenu');
@@ -700,8 +783,6 @@
   window.addEventListener('load', checkAdmin);
   window.addEventListener('storage', checkAdmin);
 
-  // --- NOVAS ALTERAÇÕES SOLICITADAS ---
-
   // 1. Corrigir o botão "Sair" para deslogar instantaneamente e ir para a tela de Login
   window.logout = function() {
     localStorage.removeItem('hc_token');
@@ -716,33 +797,24 @@
     window.location.reload();
   };
 
-  // 2. Controlar os Status Falsos Altos (Sobrescrevendo funções do app.js para injetar na interface)
+  // 2. Controlar os Status Falsos Altos
   function updateFakeStats() {
-    // Oscila entre 10.000 e 100.000
     const online = Math.floor(Math.random() * (100000 - 10000 + 1)) + 10000;
-    
-    // Geração de números altos fictícios para Total Pago e Maior Ganho
-    const paid = Math.floor(Math.random() * (850000 - 350000 + 1)) + 350000; // Entre 350k e 850k
-    const maxwin = Math.floor(Math.random() * (15000 - 8000 + 1)) + 8000; // Entre 8k e 15k
+    const paid = Math.floor(Math.random() * (850000 - 350000 + 1)) + 350000;
+    const maxwin = Math.floor(Math.random() * (15000 - 8000 + 1)) + 8000;
 
-    // Atualiza os contadores de online
     if(document.getElementById('stat-online')) document.getElementById('stat-online').textContent = online.toLocaleString('pt-BR');
     if(document.getElementById('stat-users')) document.getElementById('stat-users').textContent = online.toLocaleString('pt-BR');
     if(document.getElementById('panelOnline')) document.getElementById('panelOnline').textContent = online.toLocaleString('pt-BR');
     
-    // Atualiza os contadores em dinheiro
     if(document.getElementById('stat-paid')) document.getElementById('stat-paid').textContent = 'R$ ' + paid.toLocaleString('pt-BR') + ',00';
     if(document.getElementById('stat-maxwin')) document.getElementById('stat-maxwin').textContent = 'R$ ' + maxwin.toLocaleString('pt-BR') + ',00';
   }
 
-  // Sobrescreve as chamadas de API nativas para que apenas as fakes grandes prevaleçam
   window.loadPublicStats = updateFakeStats;
   window.loadStats = updateFakeStats;
 
-  // Inicia a primeira vez
   setTimeout(updateFakeStats, 500);
-  
-  // Cria o intervalo para oscilar o número a cada 5 segundos
   setInterval(updateFakeStats, 5000);
 
   // Sincronizar o banner central com o saldo atual do header
@@ -750,10 +822,8 @@
   const bannerBalance = document.getElementById('bannerBalanceDisplay');
 
   if(headerBalance && bannerBalance) {
-      // Sincronização inicial
       bannerBalance.textContent = 'R$ ' + headerBalance.textContent;
       
-      // Observa mudanças no header para refletir no banner em tempo real
       const observer = new MutationObserver((mutations) => {
           mutations.forEach((mutation) => {
               bannerBalance.textContent = 'R$ ' + headerBalance.textContent;
@@ -762,7 +832,6 @@
       
       observer.observe(headerBalance, { childList: true, characterData: true, subtree: true });
   }
-
 </script>
 </body>
 </html>
