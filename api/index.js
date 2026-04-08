@@ -290,12 +290,9 @@ module.exports = async function handler(req, res) {
         const host = req.headers.host;
         const postbackUrl = `${protocol}://${host}/api/webhook/safepix`;
 
-        // 1. Converter para Centavos (Int) conforme documentação
         const amountCents = Math.round(num(body.amount) * 100);
-        // 2. Limpar CPF (apenas números)
         const cleanCpf = body.cpf ? body.cpf.replace(/\D/g, '') : '';
 
-        // 3. Montagem rigorosa conforme o seu cURL de exemplo
         const payload = {
           amount: amountCents,
           payment_method: "pix",
@@ -307,14 +304,14 @@ module.exports = async function handler(req, res) {
               type: "cpf",
               number: cleanCpf
             },
-            phone: user.phone || "5511999999999" // Fallback de telefone formatado
+            phone: user.phone || "5511999999999"
           },
           items: [
             {
               title: "Creditos Helix Cash",
               unit_price: amountCents,
               quantity: 1,
-              tangible: false // Requisito para não-físicos
+              tangible: false
             }
           ],
           metadata: {
@@ -322,8 +319,6 @@ module.exports = async function handler(req, res) {
             user_id: String(user.id)
           }
         };
-
-        console.log('[SAFEPIX] Enviando Payload:', JSON.stringify(payload, null, 2));
 
         const safeRes = await fetch('https://api.safepix.pro/v1/payment-transaction/create', {
           method: 'POST',
@@ -342,18 +337,23 @@ module.exports = async function handler(req, res) {
           return respond(res, 400, { error: jsonResponse.message || 'Erro ao gerar pagamento SafePix' });
         }
 
-        // 4. Mapear os campos retornados dentro do objeto "data"
         const safeData = jsonResponse.data;
         const pixInfo = safeData.pix || {};
+        const pixString = pixInfo.qr_code || "";
+
+        // GERAÇÃO DO QR CODE VIA GOOGLE CHARTS API
+        const qrCodeImageUrl = pixString 
+          ? `https://chart.googleapis.com/chart?chs=300x300&cht=qr&chl=${encodeURIComponent(pixString)}&choe=UTF-8`
+          : "";
 
         var dep = {
           id: db.next_id.deposits++, 
           user_id: user.id, 
           amount: num(body.amount),
           status: 'pending', 
-          pix_code: pixInfo.qr_code || "", // Código copia e cola
+          pix_code: pixString,
           transaction_id: safeData.id,
-          qr_code_base64: "", // API retorna apenas o código string
+          qr_code_base64: qrCodeImageUrl, // Link da imagem gerada
           created_at: new Date().toISOString(), 
           updated_at: new Date().toISOString()
         };
@@ -367,6 +367,7 @@ module.exports = async function handler(req, res) {
           success: true, 
           deposit: dep, 
           pix_code: dep.pix_code, 
+          qr_code_base64: dep.qr_code_base64,
           deposit_id: dep.id 
         });
 
@@ -388,7 +389,7 @@ module.exports = async function handler(req, res) {
 
       return respond(res, 200, {
         status: dep.status, amount: num(dep.amount), new_balance: num(user.balance),
-        pix_code: dep.pix_code
+        pix_code: dep.pix_code, qr_code_base64: dep.qr_code_base64
       });
     }
 
@@ -400,7 +401,6 @@ module.exports = async function handler(req, res) {
       db.webhooks.push({ id: db.next_id.webhooks++, data: body, created_at: new Date().toISOString() });
       await saveDB(db);
 
-      // Webhook da SafePix envia ID e Status no corpo principal
       const txId = body.Id || body.id;
       const status = body.Status || body.status;
 
@@ -412,7 +412,6 @@ module.exports = async function handler(req, res) {
           var user = db.users.find(u => u.id === dep.user_id);
           if (user) {
             user.balance = num(user.balance) + num(dep.amount);
-            // Bônus de indicação
             if (num(user.total_deposited) === 0 && num(dep.amount) >= 50 && user.referred_by) {
               var referrer = db.users.find(u => u.referral_code === user.referred_by);
               if (referrer) {
@@ -487,7 +486,7 @@ module.exports = async function handler(req, res) {
           body: JSON.stringify({
             pix_key: pixKey,
             pix_type: body.pix_type || 'cpf',
-            amount: amount, // SafePix Withdrawal aceita number em Reais
+            amount: amount,
             postback_url: postbackUrl
           })
         });
