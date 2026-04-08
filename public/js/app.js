@@ -79,13 +79,19 @@ document.getElementById('registerForm').addEventListener('submit', async (e) => 
   errEl.classList.add('hidden');
   const btn = form.querySelector('button[type="submit"]');
   btn.disabled = true; btn.innerHTML = '<span class="loader"></span>';
+  
+  // Pega o código de indicação salvo no localStorage
+  const pendingRef = localStorage.getItem('hc_pending_ref') || '';
+
   try {
     const data = await api('/api/auth/register', {
       method: 'POST',
       body: JSON.stringify({
-        name: form.name.value, email: form.email.value,
-        phone: form.phone.value, password: form.password.value,
-        referral_code: form.referral_code.value
+        name: form.name.value, 
+        email: form.email.value,
+        phone: form.phone.value, 
+        password: form.password.value,
+        referral_code: pendingRef
       })
     });
     token = data.token; user = data.user;
