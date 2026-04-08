@@ -39,7 +39,7 @@
     }
     .admin-badge-btn:active { transform: scale(0.95); }
 
-    /* --- NOVOS ESTILOS HEADER E MENU LATERAL --- */
+    /* --- NOVOS ESTILOS HEADER --- */
     .header-right {
       display: flex;
       align-items: center;
@@ -54,46 +54,90 @@
     .balance-display small { display: block; font-size: 9px; color: #a0a0c0; text-transform: uppercase; font-weight: 700; }
     .balance-display strong { color: #00e676; font-size: 14px; font-weight: 900; }
 
-    .side-menu {
-      position: fixed; top: 0; right: -300px; width: 300px; height: 100%;
-      background: #12122a; z-index: 10000; transition: 0.3s;
-      box-shadow: -5px 0 20px rgba(0,0,0,0.5); padding: 25px;
-      display: flex; flex-direction: column;
+    /* --- NOVO MENU INFERIOR (BOTTOM SHEET) --- */
+    .bottom-menu {
+      position: fixed;
+      bottom: -100%;
+      left: 0;
+      width: 100%;
+      background: #1e1e2e; /* Fundo escuro matching the theme */
+      z-index: 10000;
+      transition: bottom 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+      border-radius: 24px 24px 0 0;
+      padding: 24px 20px 40px 20px;
+      box-shadow: 0 -5px 25px rgba(0,0,0,0.5);
+      box-sizing: border-box;
+      max-height: 90vh;
+      overflow-y: auto;
     }
-    .side-menu.active { right: 0; }
+    .bottom-menu.active {
+      bottom: 0;
+    }
     .menu-overlay {
       position: fixed; top: 0; left: 0; width: 100%; height: 100%;
       background: rgba(0,0,0,0.7); z-index: 9999; display: none; backdrop-filter: blur(4px);
     }
     .menu-overlay.active { display: block; }
 
-    .side-menu-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
-    .close-btn { background: none; border: none; color: #fff; font-size: 30px; cursor: pointer; }
-    
-    .user-info-large { text-align: center; margin-bottom: 30px; }
-    .avatar-big { 
-        width: 80px; height: 80px; background: var(--primary); border-radius: 50%; 
-        margin: 0 auto 15px; display: flex; align-items: center; justify-content: center;
-        font-size: 32px; font-weight: 900; color: #fff; border: 4px solid rgba(255,255,255,0.1);
+    .bottom-menu-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding-bottom: 15px;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
     }
-    .user-info-large h4 { font-size: 18px; margin-bottom: 5px; }
-    .user-info-large p { font-size: 13px; color: #a0a0c0; }
-
-    .menu-items { background: rgba(255,255,255,0.03); border-radius: 16px; padding: 10px; margin-bottom: 20px; }
-    .menu-item { display: flex; justify-content: space-between; padding: 12px; border-bottom: 1px solid rgba(255,255,255,0.05); }
-    .menu-item:last-child { border: none; }
-    .menu-item span { font-size: 13px; color: #a0a0c0; }
-    
-    .btn-admin-link {
-      display: flex; align-items: center; justify-content: center; gap: 10px;
-      background: linear-gradient(135deg, #7c4dff, #b388ff);
-      color: white; padding: 16px; border-radius: 12px; font-weight: 800; text-decoration: none;
-      font-size: 14px; text-transform: uppercase; margin-bottom: 10px;
+    .bottom-menu-header h3 {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 700;
+      color: #fff;
     }
-    .btn-logout-menu {
-      width: 100%; margin-top: auto; background: rgba(255, 23, 68, 0.1);
-      color: #ff1744; border: 1px solid rgba(255, 23, 68, 0.2); padding: 14px; border-radius: 12px;
-      font-weight: 700; cursor: pointer;
+    .close-btn { background: none; border: none; color: #fff; font-size: 30px; cursor: pointer; line-height: 1; padding: 0;}
+    
+    .bottom-menu-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .bottom-menu-item {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      padding: 14px 16px;
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 12px;
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .bottom-menu-item:active {
+      background: rgba(255, 255, 255, 0.08);
+    }
+    .bottom-menu-item svg {
+      width: 20px;
+      height: 20px;
+      color: #a0a0c0;
+    }
+    .bottom-menu-item.logout {
+      color: #ff4757;
+      background: rgba(255, 71, 87, 0.1);
+      margin-top: 10px;
+    }
+    .bottom-menu-item.logout svg {
+      color: #ff4757;
+    }
+    .menu-badge {
+      margin-left: auto;
+      background: #00e676;
+      color: #000;
+      font-size: 10px;
+      font-weight: 800;
+      padding: 4px 8px;
+      border-radius: 50px;
+      text-transform: uppercase;
     }
 
     /* Estilos específicos para o link de indicação */
@@ -112,7 +156,6 @@
 
     /* --- CORREÇÕES MOBILE --- */
     @media (max-width: 768px) {
-      /* 1. Tela Inicial: Valores (Stats Grid) - Mantido Perfeito */
       .stats-grid {
         display: grid !important;
         grid-template-columns: 1fr 1fr !important;
@@ -127,7 +170,6 @@
         word-wrap: break-word !important;
       }
 
-      /* 2. Cartões de Autenticação (Login, Cadastro) - Mantidos Largos */
       .auth-page {
         padding: 15px !important;
         box-sizing: border-box !important;
@@ -141,7 +183,6 @@
         border-radius: 16px !important;
       }
 
-      /* 3. Inputs de Digitação - Mantidos Grandes */
       .form-input {
         width: 100% !important;
         height: 50px !important;
@@ -162,7 +203,6 @@
         justify-content: center !important;
       }
 
-      /* 4. CORREÇÃO NOVA: Ajuste Exclusivo do Painel */
       .panel-page {
         padding: 0 !important;
         width: 100% !important;
@@ -194,34 +234,52 @@
 </head>
 <body>
 
-<div id="sideMenu" class="side-menu">
-  <div class="side-menu-header">
-    <h3 style="font-weight: 900; color: var(--primary);">MINHA CONTA</h3>
+<div id="bottomMenu" class="bottom-menu">
+  <div class="bottom-menu-header">
+    <h3>MENU</h3>
     <button onclick="toggleMenu()" class="close-btn">&times;</button>
   </div>
-  <div class="side-menu-content" style="flex: 1; display: flex; flex-direction: column;">
-    <div class="user-info-large">
-      <div class="avatar-big" id="menuAvatar">U</div>
-      <h4 id="menuUserName">Carregando...</h4>
-      <p id="menuUserEmail">...</p>
+  
+  <div class="bottom-menu-list">
+    <div class="bottom-menu-item" onclick="toggleMenu()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+        <circle cx="12" cy="7" r="4"></circle>
+      </svg>
+      Minha conta
     </div>
     
-    <div class="menu-items">
-      <div class="menu-item">
-        <span>Saldo Real</span>
-        <strong style="color: #00e676;">R$ <span id="menuBalance">0,00</span></strong>
-      </div>
-      <div class="menu-item">
-        <span>Bônus</span>
-        <strong style="color: #b388ff;">R$ <span id="menuBonus">0,00</span></strong>
-      </div>
+    <div class="bottom-menu-item" onclick="toggleMenu()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="2" y="6" width="20" height="12" rx="2"></rect>
+        <circle cx="16" cy="12" r="2"></circle>
+        <circle cx="8" cy="12" r="2"></circle>
+      </svg>
+      Histórico de jogadas
+    </div>
+    
+    <div class="bottom-menu-item" onclick="document.querySelector('[data-panel=\'withdraw\']').click(); toggleMenu();">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="12" y1="1" x2="12" y2="23"></line>
+        <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+      </svg>
+      Meus saques
+    </div>
+    
+    <div class="bottom-menu-item" onclick="document.querySelector('[data-panel=\'referral\']').click(); toggleMenu();">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+      </svg>
+      Indique e Ganhe
+      <span class="menu-badge">Bônus</span>
     </div>
 
-    <div id="adminMenuArea" style="display:none;">
-      <a href="/admin.html" class="btn btn-admin-link">⚙️ Painel Admin</a>
+    <div class="bottom-menu-item logout" onclick="logout()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+      </svg>
+      Sair
     </div>
-
-    <button onclick="logout()" class="btn btn-logout-menu">SAIR DA CONTA</button>
   </div>
 </div>
 <div id="menuOverlay" class="menu-overlay" onclick="toggleMenu()"></div>
@@ -616,7 +674,8 @@
         Perfil
       </button>
     </nav>
-    </div>
+
+  </div>
 </div>
 
 <div id="page-game" class="game-screen hidden" style="position:fixed;top:0;left:0;width:100%;height:100%;z-index:9999;background:#FFE4EE;overflow:hidden;">
@@ -677,27 +736,14 @@
     }
   }
 
-  // Função para abrir/fechar o menu lateral
+  // Função para abrir/fechar o novo menu inferior
   function toggleMenu() {
-    const menu = document.getElementById('sideMenu');
+    const menu = document.getElementById('bottomMenu');
     const overlay = document.getElementById('menuOverlay');
     if(!menu || !overlay) return;
     
-    const isActive = menu.classList.toggle('active');
+    menu.classList.toggle('active');
     overlay.classList.toggle('active');
-    
-    if(isActive) {
-      const user = JSON.parse(localStorage.getItem('hc_user') || '{}');
-      document.getElementById('menuUserName').textContent = user.name || 'Usuário';
-      document.getElementById('menuUserEmail').textContent = user.email || '';
-      document.getElementById('menuBalance').textContent = parseFloat(user.balance || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
-      document.getElementById('menuBonus').textContent = parseFloat(user.bonus_balance || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
-      document.getElementById('menuAvatar').textContent = (user.name || 'U').charAt(0).toUpperCase();
-      
-      if(user.is_admin) {
-        document.getElementById('adminMenuArea').style.display = 'block';
-      }
-    }
   }
 
   // Script para mostrar o botão Admin apenas para administradores
@@ -719,9 +765,11 @@
     localStorage.removeItem('hc_token');
     localStorage.removeItem('hc_user');
     
-    // Fecha o menu lateral caso tenha sido clicado por lá
-    document.getElementById('sideMenu').classList.remove('active');
-    document.getElementById('menuOverlay').classList.remove('active');
+    // Fecha o menu inferior caso tenha sido clicado por lá
+    const menu = document.getElementById('bottomMenu');
+    const overlay = document.getElementById('menuOverlay');
+    if(menu) menu.classList.remove('active');
+    if(overlay) overlay.classList.remove('active');
     
     // Muda a hash para a tela de login e recarrega para limpar todo o estado da memória
     window.location.hash = '#login';
