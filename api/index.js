@@ -9,8 +9,8 @@ const SUPABASE_KEY = process.env.SUPABASE_KEY || '';
 const USE_SUPABASE = !!(SUPABASE_URL && SUPABASE_KEY);
 
 // CREDENCIAIS SAFEPIX (Configure no seu ambiente ou substitua aqui)
-const SAFEPIX_PUBLIC_KEY = process.env.SAFEPIX_PUBLIC_KEY || 'SUA_PUBLIC_KEY';
-const SAFEPIX_SECRET_KEY = process.env.SAFEPIX_SECRET_KEY || 'SUA_SECRET_KEY';
+const SAFEPIX_PUBLIC_KEY = process.env.SAFEPIX_PUBLIC_KEY || 'safepix_live_MyPu6LlpTczGHIJt0aA9OF9gAfetvgnh';
+const SAFEPIX_SECRET_KEY = process.env.SAFEPIX_SECRET_KEY || 'sk_live_aCX5fucV1Kjx98iTfaLH675KMpI7xiiH';
 
 // ===================== SUPABASE HELPER =====================
 async function supaFetch(path, method, body, extraHeaders) {
