@@ -54,7 +54,10 @@
   var isDragging = false, lastDragX = 0, helixRotation = 0;
   var cameraTargetY = 0, hudContainer = null;
   var lastGeneratedPlatformIndex = 0; // Controle para geração infinita
-  var audioCtx = null; // Controle de áudio
+  
+  // Variáveis de controle de Áudio para compatibilidade iOS/Android
+  var audioCtx = null; 
+  var audioUnlocked = false;
 
   window.startHelixGame = function(bet, serverConfig) {
     // 1. Reseta os valores base antes de aplicar configurações para não acumular dificuldade
@@ -478,19 +481,43 @@
 
   function fmtBRL(v) { return v.toFixed(2).replace('.', ','); }
 
-  // FUNÇÃO DE ÁUDIO NATIVO (Efeito de Moeda)
-  function playMoneySound() {
+  // FUNÇÃO DE ÁUDIO NATIVO DESBLOQUEADO (Compatível com iOS/Android)
+  function unlockAudio() {
+    if (audioUnlocked) return;
     try {
-      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (!audioCtx) {
+        window.AudioContext = window.AudioContext || window.webkitAudioContext;
+        audioCtx = new window.AudioContext();
+      }
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+      // Toca um som vazio super rápido apenas para o iOS registrar que o áudio foi liberado pelo usuário
+      var osc = audioCtx.createOscillator();
+      var gainNode = audioCtx.createGain();
+      gainNode.gain.value = 0;
+      osc.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+      osc.start(0);
+      osc.stop(audioCtx.currentTime + 0.001);
+      
+      audioUnlocked = true;
+    } catch(e) {
+      console.warn("Áudio não pôde ser desbloqueado", e);
+    }
+  }
+
+  function playMoneySound() {
+    if (!audioUnlocked || !audioCtx) return;
+    try {
       if (audioCtx.state === 'suspended') audioCtx.resume();
 
       var osc = audioCtx.createOscillator();
       var gainNode = audioCtx.createGain();
 
       osc.type = 'sine';
-      // Frequências para o clássico som de "plim" de moeda
-      osc.frequency.setValueAtTime(987.77, audioCtx.currentTime); // Nota inicial (Si)
-      osc.frequency.setValueAtTime(1318.51, audioCtx.currentTime + 0.08); // Pula para nota mais alta (Mi)
+      osc.frequency.setValueAtTime(987.77, audioCtx.currentTime); // Si
+      osc.frequency.setValueAtTime(1318.51, audioCtx.currentTime + 0.08); // Mi
 
       gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
       gainNode.gain.setTargetAtTime(0, audioCtx.currentTime + 0.1, 0.1);
@@ -501,7 +528,7 @@
       osc.start();
       osc.stop(audioCtx.currentTime + 0.4);
     } catch(e) { 
-      // Ignora silenciosamente se o navegador bloquear o áudio temporariamente
+      // Silencioso em caso de falha de hardware
     }
   }
 
@@ -517,6 +544,11 @@
 
   function attachEvents() {
     var c = document.getElementById('gameCanvas');
+    // Adiciona o desbloqueio de áudio em TODOS os eventos de interação inicial
+    ['mousedown', 'touchstart', 'click'].forEach(function(evt) {
+        document.body.addEventListener(evt, unlockAudio, { once: true, capture: true });
+    });
+
     c.addEventListener('mousedown', onDown);
     c.addEventListener('mousemove', onMove);
     c.addEventListener('mouseup', onUp);
@@ -543,6 +575,7 @@
   }
 
   function onDown(e) { 
+    unlockAudio(); // Força desbloqueio caso o listener global falhe
     if (e.target && (e.target.id === 'hud-cashout' || e.target.closest('#hud-cashout'))) return;
     if (gamePhase === 'gameover') return; 
     if (gamePhase === 'ready') startPlaying(); 
@@ -562,6 +595,7 @@
   function onUp() { isDragging = false; }
   
   function onTouchDown(e) { 
+    unlockAudio(); // Força desbloqueio no touch também
     if (e.target && (e.target.id === 'hud-cashout' || e.target.closest('#hud-cashout'))) return;
     if (e.cancelable) e.preventDefault(); 
     if (gamePhase === 'gameover') return; 
@@ -595,9 +629,6 @@
   
   function startPlaying() { 
     gamePhase='playing'; ballVelY=0; updateHUD(); 
-    // Inicia o contexto de áudio em um toque do usuário (necessário pelos navegadores)
-    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    if (audioCtx.state === 'suspended') audioCtx.resume();
   }
 
   function animate() {
@@ -670,7 +701,7 @@
           var oldP = prizeAmount;
           var newP = calcPrize();
           
-          // TOCA O SOM DE DINHEIRO AQUI!
+          // Som de moeda garantido
           playMoneySound();
           
           showScorePopup('+R$ ' + fmtBRL(newP - oldP));
