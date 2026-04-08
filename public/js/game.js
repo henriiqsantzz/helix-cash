@@ -492,7 +492,7 @@
       if (audioCtx.state === 'suspended') {
         audioCtx.resume();
       }
-      // Toca um som vazio super rápido apenas para o iOS registrar que o áudio foi liberado pelo usuário
+      // Toca um som vazio super rápido apenas para o iOS registrar que o áudio foi liberado
       var osc = audioCtx.createOscillator();
       var gainNode = audioCtx.createGain();
       gainNode.gain.value = 0;
@@ -507,26 +507,52 @@
     }
   }
 
+  // ====================================================================
+  // NOVO SOM DE MOEDA (Estilo Clássico / Arcade - Quadrada + Senoidal)
+  // ====================================================================
   function playMoneySound() {
     if (!audioUnlocked || !audioCtx) return;
     try {
       if (audioCtx.state === 'suspended') audioCtx.resume();
+      var now = audioCtx.currentTime;
 
-      var osc = audioCtx.createOscillator();
+      // Usamos dois osciladores para criar o som de "Moeda" 
+      var osc1 = audioCtx.createOscillator();
+      var osc2 = audioCtx.createOscillator();
       var gainNode = audioCtx.createGain();
 
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(987.77, audioCtx.currentTime); // Si
-      osc.frequency.setValueAtTime(1318.51, audioCtx.currentTime + 0.08); // Mi
+      // Onda quadrada: responsável pelo tom metálico clássico 8-bit (estilo Mario)
+      osc1.type = 'square';
+      // Onda senoidal: encorpa o som
+      osc2.type = 'sine';
 
-      gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
-      gainNode.gain.setTargetAtTime(0, audioCtx.currentTime + 0.1, 0.1);
+      // Frequências clássicas de moeda: Começa em B5 e pula rapidamente para E6
+      var note1 = 987.77; // Si
+      var note2 = 1318.51; // Mi
 
-      osc.connect(gainNode);
+      osc1.frequency.setValueAtTime(note1, now);
+      osc1.frequency.setValueAtTime(note2, now + 0.08); // Pulo da nota
+      
+      osc2.frequency.setValueAtTime(note1, now);
+      osc2.frequency.setValueAtTime(note2, now + 0.08);
+
+      // Desafina levemente a senoidal para dar brilho de "ouro" batendo
+      osc2.detune.value = 8; 
+
+      // Configuração de volume: Ataque imediato, sustentação curta e eco suave (fade out)
+      gainNode.gain.setValueAtTime(0, now);
+      gainNode.gain.linearRampToValueAtTime(0.15, now + 0.02); // Sobe o volume rápido
+      gainNode.gain.setValueAtTime(0.15, now + 0.08);
+      gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.4); // Desaparece aos poucos
+
+      osc1.connect(gainNode);
+      osc2.connect(gainNode);
       gainNode.connect(audioCtx.destination);
 
-      osc.start();
-      osc.stop(audioCtx.currentTime + 0.4);
+      osc1.start(now);
+      osc2.start(now);
+      osc1.stop(now + 0.4);
+      osc2.stop(now + 0.4);
     } catch(e) { 
       // Silencioso em caso de falha de hardware
     }
@@ -701,7 +727,7 @@
           var oldP = prizeAmount;
           var newP = calcPrize();
           
-          // Som de moeda garantido
+          // Som de moeda garantido e melhorado
           playMoneySound();
           
           showScorePopup('+R$ ' + fmtBRL(newP - oldP));
