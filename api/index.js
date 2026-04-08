@@ -300,24 +300,16 @@ module.exports = async function handler(req, res) {
           customer: {
             name: user.name,
             email: user.email,
-            document: {
-              type: "cpf",
-              number: cleanCpf
-            },
+            document: { type: "cpf", number: cleanCpf },
             phone: user.phone || "5511999999999"
           },
-          items: [
-            {
-              title: "Creditos Helix Cash",
-              unit_price: amountCents,
-              quantity: 1,
-              tangible: false
-            }
-          ],
-          metadata: {
-            provider_name: "API Pix",
-            user_id: String(user.id)
-          }
+          items: [{
+            title: "Creditos Helix Cash",
+            unit_price: amountCents,
+            quantity: 1,
+            tangible: false
+          }],
+          metadata: { provider_name: "API Pix", user_id: String(user.id) }
         };
 
         const safeRes = await fetch('https://api.safepix.pro/v1/payment-transaction/create', {
@@ -333,27 +325,23 @@ module.exports = async function handler(req, res) {
         const jsonResponse = await safeRes.json();
 
         if (!safeRes.ok || !jsonResponse.success) {
-          console.error('[SAFEPIX] Erro na Resposta:', JSON.stringify(jsonResponse, null, 2));
           return respond(res, 400, { error: jsonResponse.message || 'Erro ao gerar pagamento SafePix' });
         }
 
         const safeData = jsonResponse.data;
-        const pixInfo = safeData.pix || {};
-        const pixString = pixInfo.qr_code || "";
+        const pixString = safeData.pix ? safeData.pix.qr_code : "";
 
-        // GERAÇÃO DO QR CODE VIA GOOGLE CHARTS API
-        const qrCodeImageUrl = pixString 
-          ? `https://chart.googleapis.com/chart?chs=300x300&cht=qr&chl=${encodeURIComponent(pixString)}&choe=UTF-8`
-          : "";
+        // URL do QR Code via Google Charts (Garantindo que o pixString vá codificado)
+        const qrCodeImageUrl = `https://chart.googleapis.com/chart?chs=300x300&cht=qr&chl=${encodeURIComponent(pixString)}`;
 
         var dep = {
           id: db.next_id.deposits++, 
           user_id: user.id, 
           amount: num(body.amount),
           status: 'pending', 
-          pix_code: pixString,
+          pix_code: pixString, 
           transaction_id: safeData.id,
-          qr_code_base64: qrCodeImageUrl, // Link da imagem gerada
+          qr_code_base64: qrCodeImageUrl, // Agora enviando a URL preenchida
           created_at: new Date().toISOString(), 
           updated_at: new Date().toISOString()
         };
@@ -361,21 +349,17 @@ module.exports = async function handler(req, res) {
         db.deposits.push(dep);
         await saveDB(db);
 
-        console.log('[SAFEPIX] Depósito Pendente Criado:', dep.transaction_id);
-
         return respond(res, 200, { 
           success: true, 
           deposit: dep, 
           pix_code: dep.pix_code, 
-          qr_code_base64: dep.qr_code_base64,
+          qr_code_base64: qrCodeImageUrl, // Enviando também na raiz para o app.js pegar fácil
           deposit_id: dep.id 
         });
 
       } catch (e) {
-        console.error('[SAFEPIX] Exception:', e.message);
         return respond(res, 500, { error: 'Erro de conexao SafePix' });
       }
-    }
 
     // ==================== CHECK DEPOSIT STATUS ====================
     if (url === '/api/deposit/status' && method === 'POST') {
