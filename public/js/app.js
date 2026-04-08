@@ -7,7 +7,10 @@ let currentDepositId = null;
 let depositCheckInterval = null;
 
 // ===================== ROUTER =====================
-function navigate(hash) {
+function navigate(rawHash) {
+  // Limpa o hash para remover parâmetros da URL (Ex: transforma "#cadastro?ref=123" em "#cadastro")
+  let hash = rawHash.split('?')[0];
+
   const routes = {
     '': 'page-landing',
     '#': 'page-landing',
@@ -31,20 +34,28 @@ function navigate(hash) {
 }
 
 window.addEventListener('hashchange', () => navigate(location.hash));
+
 window.addEventListener('load', () => { 
-  // Captura código de indicação da URL se existir
-  const urlParams = new URLSearchParams(window.location.search);
-  const refCode = urlParams.get('ref');
+  // Captura o código de indicação da query normal (?ref=) ou de dentro do Hash (#cadastro?ref=)
+  let refCode = new URLSearchParams(window.location.search).get('ref');
+  if (!refCode && window.location.hash.includes('?')) {
+      refCode = new URLSearchParams(window.location.hash.split('?')[1]).get('ref');
+  }
+
   if (refCode) {
     localStorage.setItem('hc_pending_ref', refCode);
+    
+    // Tenta preencher no input se ele já existir na tela
     const refInput = document.getElementById('registerReferralInput');
     if (refInput) refInput.value = refCode;
-    // Se estiver na landing, pula para o cadastro
-    if (!location.hash || location.hash === '#' || location.hash === 'page-landing') {
-        location.hash = '#cadastro';
+    
+    // Se a pessoa acessou com link de indicação e não está logada, força o redirecionamento pro cadastro
+    if (!token) {
+        window.location.hash = '#cadastro';
     }
   }
-  navigate(location.hash); 
+  
+  navigate(window.location.hash); 
   loadPublicStats(); 
 });
 
