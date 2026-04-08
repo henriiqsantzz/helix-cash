@@ -543,7 +543,6 @@ module.exports = async function handler(req, res) {
 
       if (pgIndex >= 0) db.pending_games.splice(pgIndex, 1);
 
-      var cashedOut = !!body.cashed_out;
       var prize = num(body.prize); 
       
       var winProb = user.is_influencer ? num(user.influencer_win_rate) : (100 - num(db.settings.house_edge));
@@ -572,12 +571,15 @@ module.exports = async function handler(req, res) {
       return respond(res, 401, { error: 'Acesso negado' });
     }
 
-    // DASHBOARD ADMIN
+    // DASHBOARD ADMIN (RESET DIÁRIO ÀS 00H E PADRÃO HOJE)
     if (url === '/api/admin/dashboard' && method === 'GET') {
-      const fDeps = db.deposits.filter(d => d.status === 'approved');
-      const fWds = db.withdrawals.filter(w => w.status === 'approved');
-      const totalBet = db.games.reduce((s, g) => s + num(g.bet_amount), 0);
-      const totalPrize = db.games.reduce((s, g) => s + num(g.prize), 0);
+      const today = new Date().toISOString().split('T')[0];
+      const fDeps = db.deposits.filter(d => d.status === 'approved' && d.created_at.startsWith(today));
+      const fWds = db.withdrawals.filter(w => w.status === 'approved' && w.created_at.startsWith(today));
+      const todayGames = db.games.filter(g => g.created_at.startsWith(today));
+      
+      const totalBet = todayGames.reduce((s, g) => s + num(g.bet_amount), 0);
+      const totalPrize = todayGames.reduce((s, g) => s + num(g.prize), 0);
       
       return respond(res, 200, {
         summary: {
@@ -586,9 +588,9 @@ module.exports = async function handler(req, res) {
           profit: fDeps.reduce((s, d) => s + num(d.amount), 0) - fWds.reduce((s, w) => s + num(w.amount), 0),
           ggr: totalBet - totalPrize,
           users: db.users.length,
-          games_count: db.games.length
+          games_count: todayGames.length
         },
-        chart: db.games.slice(-50).map(g => ({ t: g.created_at, b: g.bet_amount, p: g.prize }))
+        chart: todayGames.slice(-50).map(g => ({ t: g.created_at, b: g.bet_amount, p: g.prize }))
       });
     }
 
@@ -623,28 +625,31 @@ module.exports = async function handler(req, res) {
       return respond(res, 200, { success: true });
     }
 
-    // LISTAR DEPÓSITOS
+    // LISTAR DEPÓSITOS (REVERSE: RECENTES PRIMEIRO)
     if (url === '/api/admin/deposits' && method === 'GET') {
-      return respond(res, 200, db.deposits.map(d => {
+      const deps = db.deposits.map(d => {
         const u = db.users.find(x => x.id === d.user_id);
         return { ...d, user_name: u ? u.name : 'Desconhecido', user_email: u ? u.email : '-' };
-      }));
+      });
+      return respond(res, 200, deps.reverse());
     }
 
-    // LISTAR SAQUES
+    // LISTAR SAQUES (REVERSE: RECENTES PRIMEIRO)
     if (url === '/api/admin/withdrawals' && method === 'GET') {
-      return respond(res, 200, db.withdrawals.map(w => {
+      const wds = db.withdrawals.map(w => {
         const u = db.users.find(x => x.id === w.user_id);
         return { ...w, user_name: u ? u.name : 'Desconhecido', user_email: u ? u.email : '-' };
-      }));
+      });
+      return respond(res, 200, wds.reverse());
     }
 
-    // LISTAR JOGOS
+    // LISTAR JOGOS (REVERSE: RECENTES PRIMEIRO)
     if (url === '/api/admin/games' && method === 'GET') {
-      return respond(res, 200, db.games.map(g => {
+      const games = db.games.map(g => {
         const u = db.users.find(x => x.id === g.user_id);
         return { ...g, user_name: u ? u.name : 'Desconhecido', user_email: u ? u.email : '-' };
-      }));
+      });
+      return respond(res, 200, games.reverse());
     }
 
     // AFILIADOS / INFLUENCIADORES
