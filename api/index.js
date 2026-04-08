@@ -571,15 +571,23 @@ module.exports = async function handler(req, res) {
       return respond(res, 401, { error: 'Acesso negado' });
     }
 
-    // DASHBOARD ADMIN (RESET DIÁRIO ÀS 00H E PADRÃO HOJE)
+    // DASHBOARD ADMIN (FILTROS DE PERÍODO IMPLEMENTADOS)
     if (url === '/api/admin/dashboard' && method === 'GET') {
-      const today = new Date().toISOString().split('T')[0];
-      const fDeps = db.deposits.filter(d => d.status === 'approved' && d.created_at.startsWith(today));
-      const fWds = db.withdrawals.filter(w => w.status === 'approved' && w.created_at.startsWith(today));
-      const todayGames = db.games.filter(g => g.created_at.startsWith(today));
+      const q = new URL(req.url, `http://${req.headers.host}`).searchParams;
+      const range = q.get('range') || 'today';
+      const now = new Date();
+      let start = new Date(0);
+
+      if (range === 'today') start = new Date(now.setHours(0,0,0,0));
+      else if (range === '7days') start = new Date(now.setDate(now.getDate() - 7));
+      else if (range === 'month') start = new Date(now.getFullYear(), now.getMonth(), 1);
+
+      const fDeps = db.deposits.filter(d => d.status === 'approved' && new Date(d.created_at) >= start);
+      const fWds = db.withdrawals.filter(w => w.status === 'approved' && new Date(w.created_at) >= start);
+      const fGames = db.games.filter(g => new Date(g.created_at) >= start);
       
-      const totalBet = todayGames.reduce((s, g) => s + num(g.bet_amount), 0);
-      const totalPrize = todayGames.reduce((s, g) => s + num(g.prize), 0);
+      const totalBet = fGames.reduce((s, g) => s + num(g.bet_amount), 0);
+      const totalPrize = fGames.reduce((s, g) => s + num(g.prize), 0);
       
       return respond(res, 200, {
         summary: {
@@ -588,9 +596,9 @@ module.exports = async function handler(req, res) {
           profit: fDeps.reduce((s, d) => s + num(d.amount), 0) - fWds.reduce((s, w) => s + num(w.amount), 0),
           ggr: totalBet - totalPrize,
           users: db.users.length,
-          games_count: todayGames.length
+          games_count: fGames.length
         },
-        chart: todayGames.slice(-50).map(g => ({ t: g.created_at, b: g.bet_amount, p: g.prize }))
+        chart: fGames.slice(-50).map(g => ({ t: g.created_at, b: g.bet_amount, p: g.prize }))
       });
     }
 
