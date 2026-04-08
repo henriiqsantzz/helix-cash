@@ -277,18 +277,19 @@ module.exports = async function handler(req, res) {
       return respond(res, 200, { balance: num(user.balance), bonus_balance: num(user.bonus_balance) });
     }
 
-    // ==================== DEPOSIT (SAFEPIX - CORRIGIDO) ====================
+    // ==================== DEPOSIT (SAFEPIX - LOGS ADICIONADOS) ====================
     if (url === '/api/deposit' && method === 'POST') {
       var user = getUser(db, req);
       if (!user) return respond(res, 401, { error: 'Nao autorizado' });
       var body = await parseBody(req);
+      
+      console.log(`[SAFEPIX] Iniciando depósito para User: ${user.id} (${user.email})`);
       
       try {
         const protocol = req.headers['x-forwarded-proto'] || 'https';
         const host = req.headers.host;
         const postbackUrl = `${protocol}://${host}/api/webhook/safepix`;
 
-        // SafePix exige AMOUNT em centavos (integer)
         const amountCents = Math.round(num(body.amount) * 100);
         const cleanCpf = body.cpf ? body.cpf.replace(/\D/g, '') : '';
 
@@ -310,11 +311,13 @@ module.exports = async function handler(req, res) {
               title: "Créditos Helix Cash",
               unit_price: amountCents,
               quantity: 1,
-              tangible: false // Requisito para produtos digitais
+              tangible: false
             }
           ],
-          metadata: JSON.stringify({ user_id: String(user.id) }) // Formato JSON conforme doc
+          metadata: JSON.stringify({ user_id: String(user.id) })
         };
+
+        console.log('[SAFEPIX] Enviando Payload:', JSON.stringify(payload, null, 2));
 
         const safeRes = await fetch('https://api.safepix.pro/v1/payment-transaction/create', {
           method: 'POST',
@@ -329,11 +332,12 @@ module.exports = async function handler(req, res) {
         const data = await safeRes.json();
 
         if (!safeRes.ok) {
-          console.error('Erro SafePix Detalhes:', data);
+          console.error('[SAFEPIX] Erro 400/500 detectado:', JSON.stringify(data, null, 2));
           return respond(res, 400, { error: data.message || 'Erro ao gerar pagamento SafePix' });
         }
 
-        // De acordo com o formato da SafePix, os dados do pix podem vir em data.pix
+        console.log('[SAFEPIX] Sucesso na criação:', JSON.stringify(data, null, 2));
+
         var dep = {
           id: db.next_id.deposits++, user_id: user.id, amount: num(body.amount),
           status: 'pending', 
@@ -349,7 +353,7 @@ module.exports = async function handler(req, res) {
         return respond(res, 200, { success: true, deposit: dep, pix_code: dep.pix_code, qr_code_base64: dep.qr_code_base64, deposit_id: dep.id });
 
       } catch (e) {
-        console.error('SafePix Exception:', e.message);
+        console.error('[SAFEPIX] Exception fatal no fluxo de depósito:', e.message);
         return respond(res, 500, { error: 'Erro de conexao SafePix' });
       }
     }
@@ -370,16 +374,17 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // ==================== WEBHOOK SAFEPIX (ATUALIZADO) ====================
+    // ==================== WEBHOOK SAFEPIX ====================
     if (url === '/api/webhook/safepix' && method === 'POST') {
       var body = await parseBody(req);
+      console.log('[WEBHOOK SAFEPIX] Recebido:', JSON.stringify(body, null, 2));
+      
       db.webhooks.push({ id: db.next_id.webhooks++, data: body, created_at: new Date().toISOString() });
       await saveDB(db);
 
       const txId = body.Id || body.ExternalId;
       const status = body.Status;
 
-      // SafePix retorna PAID quando confirmado
       if (txId && (status === 'PAID')) {
         var dep = db.deposits.find(d => String(d.transaction_id) === String(txId) && d.status === 'pending');
         if (dep) {
@@ -400,12 +405,13 @@ module.exports = async function handler(req, res) {
             user.total_deposited = (user.total_deposited || 0) + num(dep.amount);
           }
           await saveDB(db);
+          console.log(`[WEBHOOK SAFEPIX] Depósito ${txId} aprovado com sucesso.`);
         }
       }
       return respond(res, 200, { success: true });
     }
 
-    // ==================== REFERRALS: LISTA E CONTADORES ====================
+    // ==================== REFERRALS ====================
     if (url === '/api/referrals' && method === 'GET') {
       var user = getUser(db, req);
       if (!user) return respond(res, 401, { error: 'Nao autorizado' });
@@ -431,7 +437,7 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // ==================== WITHDRAW (SAFEPIX PAYOUT - ATUALIZADO) ====================
+    // ==================== WITHDRAW (SAFEPIX PAYOUT) ====================
     if (url === '/api/withdraw' && method === 'POST') {
       var user = getUser(db, req);
       if (!user) return respond(res, 401, { error: 'Nao autorizado' });
@@ -443,6 +449,8 @@ module.exports = async function handler(req, res) {
       if (!pixKey) return respond(res, 400, { error: 'Chave PIX obrigatoria' });
       if (num(user.balance) < amount) return respond(res, 400, { error: 'Saldo insuficiente' });
       if (amount < minWd) return respond(res, 400, { error: 'Saque minimo: R$' + minWd });
+
+      console.log(`[SAFEPIX SAQUE] Iniciando saque para User: ${user.id}, Valor: ${amount}`);
 
       try {
         const protocol = req.headers['x-forwarded-proto'] || 'https';
@@ -459,13 +467,19 @@ module.exports = async function handler(req, res) {
           body: JSON.stringify({
             pix_key: pixKey,
             pix_type: body.pix_type || 'cpf',
-            amount: amount, // Saque SafePix aceita number em Reais
+            amount: amount,
             postback_url: postbackUrl
           })
         });
 
         const payoutData = await payoutRes.json();
-        if (!payoutRes.ok) return respond(res, 400, { error: payoutData.message || 'Erro Saque SafePix' });
+        
+        if (!payoutRes.ok) {
+          console.error('[SAFEPIX SAQUE] Erro no Payout:', JSON.stringify(payoutData, null, 2));
+          return respond(res, 400, { error: payoutData.message || 'Erro Saque SafePix' });
+        }
+
+        console.log('[SAFEPIX SAQUE] Sucesso:', JSON.stringify(payoutData, null, 2));
 
         user.balance = num(user.balance) - amount;
         db.withdrawals.push({
@@ -477,6 +491,7 @@ module.exports = async function handler(req, res) {
         return respond(res, 200, { success: true, message: 'Saque enviado para processamento!' });
 
       } catch (e) {
+        console.error('[SAFEPIX SAQUE] Exception fatal:', e.message);
         return respond(res, 500, { error: 'Erro ao processar saque: ' + e.message });
       }
     }
