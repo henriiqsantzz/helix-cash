@@ -416,10 +416,10 @@
       + '<div style="width:100%;height:4px;background:rgba(255,255,255,0.15);border-radius:2px;margin-top:4px;overflow:hidden;">'
       + '<div id="hud-progress-bar" style="width:0%;height:100%;background:linear-gradient(90deg,#00e676,#69f0ae);border-radius:2px;transition:width 0.3s;"></div></div></div>';
 
-    // NOVO BOTÃO DE CASH OUT (Estilo Glass Escuro e Valor Dinâmico)
-    html += '<button id="hud-cashout" style="position:absolute;bottom:85px;left:50%;transform:translateX(-50%);z-index:9999;pointer-events:auto;background:rgba(20,20,25,0.85);backdrop-filter:blur(8px);color:#ffffff;padding:12px 24px;border-radius:50px;font-family:Inter,sans-serif;cursor:pointer;font-weight:800;font-size:15px;text-transform:uppercase;letter-spacing:0.5px;border:1px solid rgba(255,255,255,0.15);box-shadow:0 8px 32px rgba(0,0,0,0.5);display:none;align-items:center;justify-content:center;gap:10px;white-space:nowrap;transition:all 0.3s;" onpointerdown="window.helixGameCashOut(event)" ontouchstart="window.helixGameCashOut(event)" onclick="window.helixGameCashOut(event)">'
-      + '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"></rect><circle cx="12" cy="12" r="2"></circle><path d="M6 12h.01M18 12h.01"></path></svg>'
-      + '<span>CASH OUT</span> <span id="hud-cashout-val" style="color:#00e676;font-weight:900;">R$ 0,00</span></button>';
+    // NOVO BOTÃO DOURADO (Com troféu, texto "RESGATAR" e valor dinâmico)
+    html += '<button id="hud-cashout" style="position:absolute;bottom:85px;left:50%;transform:translateX(-50%);z-index:9999;pointer-events:auto;background:linear-gradient(135deg,#FFD700,#FFB300);color:#000000;padding:12px 24px;border-radius:50px;font-family:Inter,sans-serif;cursor:pointer;font-weight:800;font-size:15px;text-transform:uppercase;letter-spacing:0.5px;border:1px solid #FFECB3;box-shadow:0 0 20px rgba(255,215,0,0.6);display:none;align-items:center;justify-content:center;gap:10px;white-space:nowrap;transition:all 0.3s;" onpointerdown="window.helixGameCashOut(event)" ontouchstart="window.helixGameCashOut(event)" onclick="window.helixGameCashOut(event)">'
+      + '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path><path d="M4 22h16"></path><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"></path><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"></path><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"></path></svg>'
+      + '<span style="font-weight:900;">RESGATAR</span> <span id="hud-cashout-val" style="background:rgba(0,0,0,0.1);padding:3px 8px;border-radius:12px;font-weight:900;">R$ 0,00</span></button>';
 
     html += '<div id="hud-start" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:100;font-family:Inter,sans-serif;text-align:center;pointer-events:none;">'
       + '<div style="font-size:20px;font-weight:700;color:rgba(0,0,0,0.6);">Toque para jogar</div>'
@@ -435,8 +435,8 @@
     hudContainer.innerHTML = html;
 
     var style = document.createElement('style');
-    // ADICIONADA ANIMAÇÃO pulseGlassGreen para o botão não perder o alinhamento
-    style.textContent = '@keyframes helixBounce{0%,100%{transform:translateY(0)}50%{transform:translateY(10px)}}@keyframes helixFadeUp{0%{opacity:1;transform:translate(-50%,-50%) scale(1)}100%{opacity:0;transform:translate(-50%,-80%) scale(1.5)}}@keyframes pulseGlassGreen{0%,100%{box-shadow:0 8px 32px rgba(0,0,0,0.5), 0 0 0 0 rgba(0,230,118,0.4); transform:translateX(-50%) scale(1)}50%{box-shadow:0 8px 32px rgba(0,0,0,0.5), 0 0 20px 4px rgba(0,230,118,0.25); transform:translateX(-50%) scale(1.03)}}';
+    // ADICIONADA ANIMAÇÃO pulseGolden PARA O NOVO BOTÃO
+    style.textContent = '@keyframes helixBounce{0%,100%{transform:translateY(0)}50%{transform:translateY(10px)}}@keyframes helixFadeUp{0%{opacity:1;transform:translate(-50%,-50%) scale(1)}100%{opacity:0;transform:translate(-50%,-80%) scale(1.5)}}@keyframes pulseGolden{0%,100%{box-shadow:0 0 15px rgba(255,215,0,0.6); transform:translateX(-50%) scale(1)}50%{box-shadow:0 0 35px rgba(255,215,0,1); transform:translateX(-50%) scale(1.04)}}';
     hudContainer.appendChild(style);
     container.appendChild(hudContainer);
     
@@ -471,7 +471,7 @@
     if (cb) {
       var goalReached = prize >= meta && meta > 0;
       cb.style.display = (gamePhase === 'playing' && goalReached) ? 'flex' : 'none';
-      if (goalReached) cb.style.animation = 'pulseGlassGreen 2s infinite ease-in-out';
+      if (goalReached) cb.style.animation = 'pulseGolden 2s infinite ease-in-out';
     }
 
     if (ss) ss.style.display = gamePhase === 'ready' ? 'block' : 'none';
