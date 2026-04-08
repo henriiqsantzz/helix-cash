@@ -54,6 +54,7 @@
   var isDragging = false, lastDragX = 0, helixRotation = 0;
   var cameraTargetY = 0, hudContainer = null;
   var lastGeneratedPlatformIndex = 0; // Controle para geração infinita
+  var audioCtx = null; // Controle de áudio
 
   window.startHelixGame = function(bet, serverConfig) {
     // 1. Reseta os valores base antes de aplicar configurações para não acumular dificuldade
@@ -82,27 +83,18 @@
     }
 
     // 3. --- SISTEMA DE DIFICULDADE DINÂMICA (INFLUENCIADOR) ---
-    // Modifica as variáveis de perigo baseando-se no Win Rate do usuário/influenciador
     if (winRate > 50) {
-      // FACILITAR (Ex: Influenciador com 100%)
+      // FACILITAR
       var easyFactor = (winRate - 50) / 50; 
-      
-      // Empurra o andar onde aparece o vermelho para muito longe (Ex: +40 andares)
       CONFIG.dangerStartLevel += Math.floor(easyFactor * 40); 
-      // Reduz o máximo de fatias vermelhas quase a zero
       CONFIG.dangerMaxSlices = Math.max(1, Math.floor(CONFIG.dangerMaxSlices * (1 - easyFactor))); 
-      // Deixa a progressão lentíssima
       CONFIG.dangerProgression = Math.max(1, CONFIG.dangerProgression * (1 - easyFactor)); 
       
     } else if (winRate < 50) {
-      // DIFICULTAR (Ex: Usuário azarado ou Casa recuperando lucro)
+      // DIFICULTAR
       var hardFactor = (50 - winRate) / 50; 
-      
-      // Vermelhos começam a aparecer quase no 1º andar
       CONFIG.dangerStartLevel = Math.max(1, CONFIG.dangerStartLevel - Math.floor(hardFactor * 2)); 
-      // Enche a plataforma de vermelho rápido
       CONFIG.dangerMaxSlices = Math.min(CONFIG.segmentsPerPlatform - 2, CONFIG.dangerMaxSlices + Math.floor(hardFactor * 6)); 
-      // Progressão muito acelerada
       CONFIG.dangerProgression += hardFactor * 10; 
     }
 
@@ -416,7 +408,6 @@
       + '<div style="width:100%;height:4px;background:rgba(255,255,255,0.15);border-radius:2px;margin-top:4px;overflow:hidden;">'
       + '<div id="hud-progress-bar" style="width:0%;height:100%;background:linear-gradient(90deg,#00e676,#69f0ae);border-radius:2px;transition:width 0.3s;"></div></div></div>';
 
-    // NOVO BOTÃO DOURADO (Com troféu, texto "RESGATAR" e valor dinâmico)
     html += '<button id="hud-cashout" style="position:absolute;bottom:85px;left:50%;transform:translateX(-50%);z-index:9999;pointer-events:auto;background:linear-gradient(135deg,#FFD700,#FFB300);color:#000000;padding:12px 24px;border-radius:50px;font-family:Inter,sans-serif;cursor:pointer;font-weight:800;font-size:15px;text-transform:uppercase;letter-spacing:0.5px;border:1px solid #FFECB3;box-shadow:0 0 20px rgba(255,215,0,0.6);display:none;align-items:center;justify-content:center;gap:10px;white-space:nowrap;transition:all 0.3s;" onpointerdown="window.helixGameCashOut(event)" ontouchstart="window.helixGameCashOut(event)" onclick="window.helixGameCashOut(event)">'
       + '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path><path d="M4 22h16"></path><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"></path><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"></path><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"></path></svg>'
       + '<span style="font-weight:900;">RESGATAR</span> <span id="hud-cashout-val" style="background:rgba(0,0,0,0.1);padding:3px 8px;border-radius:12px;font-weight:900;">R$ 0,00</span></button>';
@@ -435,7 +426,6 @@
     hudContainer.innerHTML = html;
 
     var style = document.createElement('style');
-    // ADICIONADA ANIMAÇÃO pulseGolden PARA O NOVO BOTÃO
     style.textContent = '@keyframes helixBounce{0%,100%{transform:translateY(0)}50%{transform:translateY(10px)}}@keyframes helixFadeUp{0%{opacity:1;transform:translate(-50%,-50%) scale(1)}100%{opacity:0;transform:translate(-50%,-80%) scale(1.5)}}@keyframes pulseGolden{0%,100%{box-shadow:0 0 15px rgba(255,215,0,0.6); transform:translateX(-50%) scale(1)}50%{box-shadow:0 0 35px rgba(255,215,0,1); transform:translateX(-50%) scale(1.04)}}';
     hudContainer.appendChild(style);
     container.appendChild(hudContainer);
@@ -453,7 +443,7 @@
     var pv = document.getElementById('hud-progress-val');
     var pb = document.getElementById('hud-progress-bar');
     var cb = document.getElementById('hud-cashout');
-    var cv = document.getElementById('hud-cashout-val'); // Puxa o valor do botão de resgate
+    var cv = document.getElementById('hud-cashout-val');
     var ss = document.getElementById('hud-start');
     var pc = document.getElementById('hud-platform-count');
 
@@ -465,7 +455,6 @@
     if (pv) pv.textContent = 'R$ ' + fmtBRL(prize) + ' / R$ ' + fmtBRL(meta);
     if (pb) pb.style.width = Math.min(100, (prize / (meta || 1)) * 100) + '%';
     
-    // Atualiza o valor dinamicamente no botão de CASH OUT
     if (cv) cv.textContent = 'R$ ' + fmtBRL(prize);
 
     if (cb) {
@@ -489,6 +478,33 @@
 
   function fmtBRL(v) { return v.toFixed(2).replace('.', ','); }
 
+  // FUNÇÃO DE ÁUDIO NATIVO (Efeito de Moeda)
+  function playMoneySound() {
+    try {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+
+      var osc = audioCtx.createOscillator();
+      var gainNode = audioCtx.createGain();
+
+      osc.type = 'sine';
+      // Frequências para o clássico som de "plim" de moeda
+      osc.frequency.setValueAtTime(987.77, audioCtx.currentTime); // Nota inicial (Si)
+      osc.frequency.setValueAtTime(1318.51, audioCtx.currentTime + 0.08); // Pula para nota mais alta (Mi)
+
+      gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
+      gainNode.gain.setTargetAtTime(0, audioCtx.currentTime + 0.1, 0.1);
+
+      osc.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.4);
+    } catch(e) { 
+      // Ignora silenciosamente se o navegador bloquear o áudio temporariamente
+    }
+  }
+
   function showScorePopup(text) {
     var el = document.getElementById('hud-score-popup');
     if (el) { el.textContent = text; el.style.opacity = '1'; el.style.animation = 'none'; el.offsetHeight; el.style.animation = 'helixFadeUp 0.8s ease-out forwards'; }
@@ -508,7 +524,7 @@
     c.addEventListener('touchstart', onTouchDown, {passive:false});
     c.addEventListener('touchmove', onTouchMove, {passive:false});
     c.addEventListener('touchend', onUp);
-    c.addEventListener('touchcancel', onUp); // Proteção contra travamento do sistema
+    c.addEventListener('touchcancel', onUp); 
     window.addEventListener('resize', onResize);
   }
 
@@ -526,17 +542,16 @@
     window.removeEventListener('resize', onResize);
   }
 
-  // EVENTOS DE TOQUE MODIFICADOS PARA CORRIGIR BUGS DE TRAVAMENTO E ROTAÇÃO FANTASMA
   function onDown(e) { 
     if (e.target && (e.target.id === 'hud-cashout' || e.target.closest('#hud-cashout'))) return;
-    if (gamePhase === 'gameover') return; // Bloqueia toque após perder/sacar
+    if (gamePhase === 'gameover') return; 
     if (gamePhase === 'ready') startPlaying(); 
     isDragging = true; 
     lastDragX = e.clientX; 
   }
   
   function onMove(e) { 
-    if (gamePhase === 'gameover') return; // Impede rodar a torre com o jogo pausado
+    if (gamePhase === 'gameover') return; 
     if (!isDragging) return; 
     var dx = e.clientX - lastDragX; 
     helixRotation += dx * CONFIG.rotationSensitivity; 
@@ -549,7 +564,7 @@
   function onTouchDown(e) { 
     if (e.target && (e.target.id === 'hud-cashout' || e.target.closest('#hud-cashout'))) return;
     if (e.cancelable) e.preventDefault(); 
-    if (gamePhase === 'gameover') return; // Bloqueia toque após perder/sacar
+    if (gamePhase === 'gameover') return; 
     if (gamePhase === 'ready') startPlaying(); 
     isDragging = true; 
     lastDragX = e.touches[0].clientX; 
@@ -557,9 +572,8 @@
   
   function onTouchMove(e) { 
     if (e.cancelable) e.preventDefault(); 
-    if (gamePhase === 'gameover') return; // Impede rodar a torre com o jogo pausado
+    if (gamePhase === 'gameover') return; 
     
-    // ANTI-LOCK: Se o toque tentar desativar na hora de mexer, força o destravamento
     if(!isDragging) {
       isDragging = true;
       lastDragX = e.touches[0].clientX;
@@ -579,11 +593,15 @@
     camera.aspect=W/H; camera.updateProjectionMatrix(); renderer.setSize(W,H);
   }
   
-  function startPlaying() { gamePhase='playing'; ballVelY=0; updateHUD(); }
+  function startPlaying() { 
+    gamePhase='playing'; ballVelY=0; updateHUD(); 
+    // Inicia o contexto de áudio em um toque do usuário (necessário pelos navegadores)
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+  }
 
-  // ANIMATE CORRIGIDO PARA NÃO RODAR NO VAZIO
   function animate() {
-    if (!gameActive) return; // Trava real do motor de renderização
+    if (!gameActive) return; 
     animFrame = requestAnimationFrame(animate);
     update();
     if (renderer && scene && camera) renderer.render(scene, camera);
@@ -604,12 +622,10 @@
       if (comboTimer > 0) { comboTimer--; if (comboTimer <= 0) comboCount = 0; }
       checkCollisions();
       
-      // GERAÇÃO INFINITA: Se a bolinha se aproximar do fim das plataformas atuais, gera mais
       if (Math.abs(ballWorldY) > (lastGeneratedPlatformIndex - 10) * CONFIG.platformSpacing) {
           generateSinglePlatform(lastGeneratedPlatformIndex + 1);
       }
 
-      // LIMPEZA: Remove plataformas que ficaram muito para cima para otimizar performance
       for (var i = platforms.length - 1; i >= 0; i--) {
           if (platforms[i].y > ballWorldY + 15) {
               helixGroup.remove(platforms[i].group);
@@ -636,10 +652,7 @@
     if (ballVelY <= 0) return;
     var ballAngle = normAngle((3 * Math.PI / 2) - helixRotation);
     
-    // HITBOX RIGOROSO: Calcula exatamente o arco (ângulo) que a bola ocupa na tela
     var ballRadiusAngle = Math.asin(CONFIG.ballRadius / ((CONFIG.platformInnerRadius + CONFIG.platformOuterRadius) / 2));
-    
-    // MAIS JUSTO: Apenas 60% do raio conta como hitbox letal (Hitbox Perdoável)
     var killMargin = ballRadiusAngle * 0.6; 
 
     for (var i = 0; i < platforms.length; i++) {
@@ -656,16 +669,18 @@
           if (comboCount >= 3) showCombo(comboCount);
           var oldP = prizeAmount;
           var newP = calcPrize();
+          
+          // TOCA O SOM DE DINHEIRO AQUI!
+          playMoneySound();
+          
           showScorePopup('+R$ ' + fmtBRL(newP - oldP));
           p.segments.forEach(function(seg) { seg.mesh.material.transparent = true; seg.mesh.material.opacity = 0.2; });
           createSplash(p.y);
           if (typeof onPlatformPassed === 'function') onPlatformPassed(platformsPassed);
         } else {
-          // CHECAGEM FATAL com a nova Hitbox Perdoável
           var hitDanger = p.segments.some(seg => seg.isKiller && isAngleInRange(ballAngle, seg.startAngle - killMargin, seg.endAngle + killMargin));
           
           if (hitDanger) { 
-            // Faz a bolinha "explodir" em vez de ficar bugada
             if (ballMesh) ballMesh.visible = false;
             createSplash(ballWorldY);
             createSplash(ballWorldY - 0.1); 
@@ -694,12 +709,10 @@
     var cb = document.getElementById('hud-cashout');
     if (cb) cb.style.display = 'none';
     
-    // Aguarda o efeito de explosão antes de desligar o render da câmera
     setTimeout(function() {
         gameActive = false;
     }, 1500); 
 
-    // Manda o popup na hora
     setTimeout(function() {
       if (typeof window.onGameEnd === 'function') window.onGameEnd(finalScore, false, finalPrize);
       else if (typeof onGameEnd === 'function') onGameEnd(finalScore, false, finalPrize);
