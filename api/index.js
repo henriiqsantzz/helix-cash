@@ -7,7 +7,10 @@ const DB_FILE = '/tmp/helix-db.json';
 const SUPABASE_URL = process.env.SUPABASE_URL || '';
 const SUPABASE_KEY = process.env.SUPABASE_KEY || '';
 const USE_SUPABASE = !!(SUPABASE_URL && SUPABASE_KEY);
-const PENGUIMPAY_KEY = process.env.PENGUIMPAY_KEY || 'pk_c31cb3b5ca7dbbf11e75f30ba70ebf470c31446488264380e40f194b185a6feb';
+
+// CREDENCIAIS SAFEPIX (Configure no seu ambiente ou substitua aqui)
+const SAFEPIX_PUBLIC_KEY = process.env.SAFEPIX_PUBLIC_KEY || 'SUA_PUBLIC_KEY';
+const SAFEPIX_SECRET_KEY = process.env.SAFEPIX_SECRET_KEY || 'SUA_SECRET_KEY';
 
 // ===================== SUPABASE HELPER =====================
 async function supaFetch(path, method, body, extraHeaders) {
@@ -212,7 +215,6 @@ module.exports = async function handler(req, res) {
         created_at: new Date().toISOString(), last_login: new Date().toISOString()
       };
       db.users.push(newUser);
-
       await saveDB(db);
       var token = createToken(newUser.id);
       return respond(res, 200, {
@@ -272,119 +274,92 @@ module.exports = async function handler(req, res) {
       return respond(res, 200, { balance: num(user.balance), bonus_balance: num(user.bonus_balance) });
     }
 
-    // ==================== DEPOSIT (PARADISE BRIDGE) ====================
+    // ==================== DEPOSIT (SAFEPIX INTEGRATION) ====================
     if (url === '/api/deposit' && method === 'POST') {
       var user = getUser(db, req);
       if (!user) return respond(res, 401, { error: 'Nao autorizado' });
       var body = await parseBody(req);
       
       try {
-        var randomPhone = "119" + Math.floor(10000000 + Math.random() * 90000000);
+        const protocol = req.headers['x-forwarded-proto'] || 'https';
+        const host = req.headers.host;
+        const postbackUrl = `${protocol}://${host}/api/webhook/safepix`;
 
-        var phpRes = await fetch('https://kitbrinde.online/gerar_deposito.php', {
+        const amountCents = Math.round(num(body.amount) * 100);
+
+        const safeRes = await fetch('https://api.safepix.pro/v1/payment-transaction/create', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'accept': 'application/json',
+            'content-type': 'application/json',
+            'authorization': 'Basic ' + Buffer.from(`${SAFEPIX_PUBLIC_KEY}:${SAFEPIX_SECRET_KEY}`).toString('base64')
+          },
           body: JSON.stringify({
-            amount: body.amount,
-            cpf: body.cpf,
-            name: user.name,
-            email: user.email,
-            phone: randomPhone
+            amount: amountCents,
+            payment_method: "pix",
+            postback_url: postbackUrl,
+            customer: {
+              name: user.name,
+              email: user.email,
+              document: {
+                type: "cpf",
+                number: body.cpf.replace(/\D/g, '')
+              }
+            },
+            metadata: { user_id: user.id }
           })
         });
 
-        var dataFromPhp = await phpRes.json();
+        const data = await safeRes.json();
 
-        if (!phpRes.ok || !dataFromPhp.success) {
-          return respond(res, 400, { error: dataFromPhp.error || 'Erro ao gerar PIX na Paradise' });
-        }
-
-        var qrCodeImage = dataFromPhp.qr_code_image || dataFromPhp.qr_code_base64 || dataFromPhp.qrCode || dataFromPhp.qrcode || dataFromPhp.qrCodeBase64 || dataFromPhp.imagemQrcode || dataFromPhp.brcode || "";
-        var pixCopiaECola = dataFromPhp.pix_code || dataFromPhp.payload || dataFromPhp.brcode || "";
-
-        if (!qrCodeImage && pixCopiaECola) {
-          try {
-            var qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=' + encodeURIComponent(pixCopiaECola);
-            var qrFetch = await fetch(qrUrl);
-            var qrBuff = await qrFetch.arrayBuffer();
-            qrCodeImage = 'data:image/png;base64,' + Buffer.from(qrBuff).toString('base64');
-          } catch(e) {
-            console.error('Erro no Fallback de QR Code:', e.message);
-          }
+        if (!safeRes.ok) {
+          return respond(res, 400, { error: data.message || 'Erro SafePix' });
         }
 
         var dep = {
           id: db.next_id.deposits++, user_id: user.id, amount: num(body.amount),
-          status: 'pending', pix_code: pixCopiaECola, transaction_id: dataFromPhp.transaction_id || dataFromPhp.txid || "",
-          qr_code_base64: qrCodeImage,
+          status: 'pending', pix_code: data.PixCopyPaste || data.PixPayload || data.Id, 
+          transaction_id: data.Id,
+          qr_code_base64: data.PixQrCodeBase64 || "",
           created_at: new Date().toISOString(), updated_at: new Date().toISOString()
         };
 
         db.deposits.push(dep);
         await saveDB(db);
 
-        return respond(res, 200, {
-          success: true, pix_code: dep.pix_code, qr_code_base64: dep.qr_code_base64,
-          transaction_id: dep.transaction_id, deposit_id: dep.id, deposit: dep
-        });
+        return respond(res, 200, { success: true, deposit: dep, pix_code: dep.pix_code, qr_code_base64: dep.qr_code_base64, deposit_id: dep.id });
 
       } catch (e) {
-        console.error('Paradise Bridge Error:', e.message);
-        return respond(res, 500, { error: 'Erro de conexao Paradise Bridge' });
+        console.error('SafePix Error:', e.message);
+        return respond(res, 500, { error: 'Erro de conexao SafePix' });
       }
     }
 
-    // ==================== CHECK DEPOSIT STATUS ====================
-    if (url === '/api/deposit/status' && method === 'POST') {
-      var user = getUser(db, req);
-      if (!user) return respond(res, 401, { error: 'Nao autorizado' });
+    // ==================== WEBHOOK SAFEPIX ====================
+    if (url === '/api/webhook/safepix' && method === 'POST') {
       var body = await parseBody(req);
-      var depId = body.deposit_id;
-
-      var dep = db.deposits.find(function(d) { return d.id === depId && d.user_id === user.id; });
-      if (!dep) return respond(res, 404, { error: 'Deposito nao encontrado' });
-
-      return respond(res, 200, {
-        status: dep.status, amount: num(dep.amount), new_balance: num(user.balance),
-        pix_code: dep.pix_code, qr_code_base64: dep.qr_code_base64
-      });
-    }
-
-    // ==================== WEBHOOK (COM REGRA DE R$ 50 PARA AFILIADOS) ====================
-    if (url === '/api/webhook/paradise' && method === 'POST') {
-      var body = await parseBody(req);
-      
       db.webhooks.push({ id: db.next_id.webhooks++, data: body, created_at: new Date().toISOString() });
       await saveDB(db);
 
-      var txId = body.transaction_id;
-      var status = body.status;
+      const txId = body.Id || body.ExternalId;
+      const status = body.Status;
 
-      if (txId && (status === 'approved' || status === 'paid')) {
-        var dep = db.deposits.find(function(d) { 
-          return String(d.transaction_id) === String(txId) && d.status === 'pending'; 
-        });
-
+      if (txId && status === 'PAID') {
+        var dep = db.deposits.find(d => String(d.transaction_id) === String(txId) && d.status === 'pending');
         if (dep) {
           dep.status = 'approved';
           dep.updated_at = new Date().toISOString();
-
-          var user = db.users.find(function(u) { return u.id === dep.user_id; });
-          
+          var user = db.users.find(u => u.id === dep.user_id);
           if (user) {
-            // 1. Crédito do saldo normal
             user.balance = num(user.balance) + num(dep.amount);
-            
-            // 2. Lógica de Bônus de Indicação (R$ 20 se depósito >= 50 e for o primeiro)
+            // Regra de Indicação R$ 50
             if (num(user.total_deposited) === 0 && num(dep.amount) >= 50) {
               if (user.referred_by) {
                 var referrer = db.users.find(u => u.referral_code === user.referred_by);
                 if (referrer) {
-                  var bonus = 20; 
-                  referrer.balance = num(referrer.balance) + bonus;
+                  referrer.balance = num(referrer.balance) + 20;
                   db.referral_earnings.push({
-                    id: db.next_id.referral_earnings++, user_id: referrer.id,
-                    from_user_id: user.id, amount: bonus, created_at: new Date().toISOString()
+                    id: db.next_id.referral_earnings++, user_id: referrer.id, from_user_id: user.id, amount: 20, created_at: new Date().toISOString()
                   });
                 }
               }
@@ -397,7 +372,55 @@ module.exports = async function handler(req, res) {
       return respond(res, 200, { success: true });
     }
 
-    // ==================== REFERRALS: LISTA E CONTADORES (USUÁRIO) ====================
+    // ==================== WITHDRAW (SAFEPIX PAYOUT) ====================
+    if (url === '/api/withdraw' && method === 'POST') {
+      var user = getUser(db, req);
+      if (!user) return respond(res, 401, { error: 'Nao autorizado' });
+      var body = await parseBody(req);
+      var amount = num(body.amount);
+      var minWd = num(db.settings.min_withdrawal) || 20;
+
+      if (num(user.balance) < amount) return respond(res, 400, { error: 'Saldo insuficiente' });
+      if (amount < minWd) return respond(res, 400, { error: 'Saque minimo: R$' + minWd });
+
+      try {
+        const protocol = req.headers['x-forwarded-proto'] || 'https';
+        const host = req.headers.host;
+        const postbackUrl = `${protocol}://${host}/api/webhook/safepix_withdrawal`;
+
+        const payoutRes = await fetch('https://api.safepix.pro/v1/wallet-transaction/create/withdrawal', {
+          method: 'POST',
+          headers: {
+            'accept': 'application/json',
+            'content-type': 'application/json',
+            'authorization': 'Basic ' + Buffer.from(`${SAFEPIX_PUBLIC_KEY}:${SAFEPIX_SECRET_KEY}`).toString('base64')
+          },
+          body: JSON.stringify({
+            pix_key: body.pix_key,
+            pix_type: body.pix_type,
+            amount: amount,
+            postback_url: postbackUrl
+          })
+        });
+
+        const payoutData = await payoutRes.json();
+        if (!payoutRes.ok) return respond(res, 400, { error: payoutData.message || 'Erro Saque SafePix' });
+
+        user.balance = num(user.balance) - amount;
+        db.withdrawals.push({
+          id: db.next_id.withdrawals++, user_id: user.id, amount,
+          pix_key: body.pix_key, status: 'processing', transaction_id: payoutData.Id,
+          created_at: new Date().toISOString(), updated_at: new Date().toISOString()
+        });
+        await saveDB(db);
+        return respond(res, 200, { success: true, message: 'Saque enviado para processamento!' });
+
+      } catch (e) {
+        return respond(res, 500, { error: 'Erro ao processar saque: ' + e.message });
+      }
+    }
+
+    // ==================== REFERRALS: LISTA E CONTADORES ====================
     if (url === '/api/referrals' && method === 'GET') {
       var user = getUser(db, req);
       if (!user) return respond(res, 401, { error: 'Nao autorizado' });
@@ -421,31 +444,6 @@ module.exports = async function handler(req, res) {
         count_total: referredUsers.length,
         referrals: list
       });
-    }
-
-    // ==================== WITHDRAW (CLIENTE SOLICITA) ====================
-    if (url === '/api/withdraw' && method === 'POST') {
-      var user = getUser(db, req);
-      if (!user) return respond(res, 401, { error: 'Nao autorizado' });
-      var body = await parseBody(req);
-      var amount = num(body.amount);
-      var pixKey = (body.pix_key || '').trim();
-      var minWd = num(db.settings.min_withdrawal) || 30;
-
-      if (!pixKey) return respond(res, 400, { error: 'Chave PIX obrigatoria' });
-      if (!amount || amount < minWd) return respond(res, 400, { error: 'Saque minimo: R$' + minWd });
-      if (num(user.balance) < amount) return respond(res, 400, { error: 'Saldo insuficiente' });
-
-      user.balance = num(user.balance) - amount;
-      var wd = {
-        id: db.next_id.withdrawals++, user_id: user.id, amount: amount,
-        pix_key: pixKey, pix_type: body.pix_type || 'cpf', status: 'pending', transaction_id: '',
-        created_at: new Date().toISOString(), updated_at: new Date().toISOString()
-      };
-      db.withdrawals.push(wd);
-      await saveDB(db);
-
-      return respond(res, 200, { success: true, message: 'Saque solicitado!' });
     }
 
     // ==================== GAME CONFIG: DIFICULDADE PROGRESSIVA ====================
@@ -483,7 +481,6 @@ module.exports = async function handler(req, res) {
       if (betAmount > num(user.balance)) return respond(res, 400, { error: 'Saldo insuficiente' });
 
       user.balance = num(user.balance) - betAmount;
-
       var pg = {
         id: db.next_id.pending_games++, user_id: user.id,
         bet_amount: betAmount, created_at: new Date().toISOString()
@@ -536,7 +533,7 @@ module.exports = async function handler(req, res) {
     // ==================== ADMIN HELPERS ====================
     var isAdminUser = (req) => { var u = getUser(db, req); return u && u.is_admin ? u : null; };
 
-    // ==================== ADMIN: DASHBOARD ROBUSTA ====================
+    // ==================== ADMIN ROUTES ====================
     if (url === '/api/admin/dashboard' && method === 'GET') {
       if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
       const params = new URLSearchParams(req.url.split('?')[1]);
@@ -552,7 +549,13 @@ module.exports = async function handler(req, res) {
       const fGames = db.games.filter(g => new Date(g.created_at) >= start);
 
       return respond(res, 200, {
-        summary: { deposits: fDeps.reduce((s, d) => s + num(d.amount), 0), withdrawals: fWds.reduce((s, w) => s + num(w.amount), 0), profit: fDeps.reduce((s, d) => s + num(d.amount), 0) - fWds.reduce((s, w) => s + num(w.amount), 0), users: db.users.length, games_count: fGames.length },
+        summary: { 
+          deposits: fDeps.reduce((s, d) => s + num(d.amount), 0), 
+          withdrawals: fWds.reduce((s, w) => s + num(w.amount), 0), 
+          profit: fDeps.reduce((s, d) => s + num(d.amount), 0) - fWds.reduce((s, w) => s + num(w.amount), 0), 
+          users: db.users.length, 
+          games_count: fGames.length 
+        },
         chart: fGames.slice(-50).map(g => ({ t: g.created_at, b: g.bet_amount, p: g.prize }))
       });
     }
@@ -582,12 +585,9 @@ module.exports = async function handler(req, res) {
       
       const affs = db.users.filter(u => u.is_influencer === true || u.id === 1).map(i => {
         const referredUsers = db.users.filter(u => u.referred_by === i.referral_code);
-        
-        // CORREÇÃO: Conta qualquer usuário que tenha pelo menos um depósito aprovado (independente de valor)
         const activeDepositors = referredUsers.filter(u => 
             db.deposits.some(d => d.user_id === u.id && d.status === 'approved')
         );
-
         return { 
           name: i.name, code: i.referral_code, 
           link: `${protocol}://${host}/#cadastro?ref=${i.referral_code}`,
