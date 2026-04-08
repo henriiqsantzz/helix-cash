@@ -206,14 +206,12 @@ module.exports = async function handler(req, res) {
       var newUser = {
         id: db.next_id.users++, name: name, email: email, phone: phone || null,
         password: hashPassword(password), balance: 0, bonus_balance: 0,
-        referral_code: code, referred_by: referralCode || null, // Marca quem indicou
+        referral_code: code, referred_by: referralCode || null,
         is_admin: false, is_blocked: false, is_influencer: false,
         influencer_win_rate: 0, total_deposited: 0, total_withdrawn: 0, total_games: 0,
         created_at: new Date().toISOString(), last_login: new Date().toISOString()
       };
       db.users.push(newUser);
-
-      // NOTA: O bônus não é mais dado aqui. Agora é dado apenas no depósito de R$ 50 via Webhook.
 
       await saveDB(db);
       var token = createToken(newUser.id);
@@ -382,7 +380,7 @@ module.exports = async function handler(req, res) {
               if (user.referred_by) {
                 var referrer = db.users.find(u => u.referral_code === user.referred_by);
                 if (referrer) {
-                  var bonus = 20; // Valor fixo de R$ 20
+                  var bonus = 20; 
                   referrer.balance = num(referrer.balance) + bonus;
                   db.referral_earnings.push({
                     id: db.next_id.referral_earnings++, user_id: referrer.id,
@@ -584,9 +582,12 @@ module.exports = async function handler(req, res) {
       
       const affs = db.users.filter(u => u.is_influencer === true || u.id === 1).map(i => {
         const referredUsers = db.users.filter(u => u.referred_by === i.referral_code);
+        
+        // CORREÇÃO: Conta qualquer usuário que tenha pelo menos um depósito aprovado (independente de valor)
         const activeDepositors = referredUsers.filter(u => 
-            db.deposits.some(d => d.user_id === u.id && d.status === 'approved' && d.amount >= 50)
+            db.deposits.some(d => d.user_id === u.id && d.status === 'approved')
         );
+
         return { 
           name: i.name, code: i.referral_code, 
           link: `${protocol}://${host}/#cadastro?ref=${i.referral_code}`,
