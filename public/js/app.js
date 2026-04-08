@@ -355,7 +355,7 @@ document.getElementById('btnDeposit').addEventListener('click', async () => {
   const cpfEl = document.getElementById('depositCpf');
   const cpf = cpfEl ? cpfEl.value.trim() : '';
   
-  if (!amount || amount < 10) return showToast('Depósito mínimo: R$10,00', 'error');
+  if (!amount || amount < 1) return showToast('Depósito mínimo: R$10,00', 'error');
   if (!cpf || cpf.length < 11) return showToast('Informe um CPF válido para gerar o PIX', 'error');
 
   const btn = document.getElementById('btnDeposit');
