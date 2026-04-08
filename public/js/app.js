@@ -353,9 +353,11 @@ document.getElementById('btnDeposit').addEventListener('click', async () => {
   const amountInput = document.getElementById('depositAmount');
   const amount = parseFloat(amountInput.value);
   const cpfEl = document.getElementById('depositCpf');
-  const cpf = cpfEl ? cpfEl.value.trim() : '';
   
-  if (!amount || amount < 1) return showToast('Depósito mínimo: R$10,00', 'error');
+  // Limpa o CPF para enviar apenas números (SafePix costuma rejeitar pontos e traços)
+  const cpf = cpfEl ? cpfEl.value.replace(/\D/g, '') : '';
+  
+  if (!amount || amount < 1) return showToast('Depósito mínimo: R$ 1,00', 'error');
   if (!cpf || cpf.length < 11) return showToast('Informe um CPF válido para gerar o PIX', 'error');
 
   const btn = document.getElementById('btnDeposit');
@@ -363,28 +365,34 @@ document.getElementById('btnDeposit').addEventListener('click', async () => {
   btn.innerHTML = '<span class="loader"></span>';
 
   try {
+    // IMPORTANTE: Enviamos o amount como FLOAT, o seu index.js fará a conversão para centavos
     const data = await api('/api/deposit', {
-      method: 'POST', body: JSON.stringify({ amount, cpf })
+      method: 'POST', 
+      body: JSON.stringify({ 
+        amount: amount, 
+        cpf: cpf 
+      })
     });
 
+    // Ajuste para ler os campos exatos que a SafePix retorna
     currentDepositId = data.deposit_id || (data.deposit ? data.deposit.id : null);
 
+    // SafePix retorna o código PIX em campos específicos
     const pixCode = data.pix_code || (data.deposit && data.deposit.pix_code);
+    
     if (document.getElementById('pixCode')) {
-        document.getElementById('pixCode').textContent = pixCode || 'Erro ao gerar código';
+        document.getElementById('pixCode').textContent = pixCode || 'Erro ao carregar código';
     }
 
     const qrImg = document.getElementById('pixQrImage');
     const qrLoading = document.getElementById('qrLoading');
 
     if (qrImg) {
-        let qrSource = data.qr_code_base64 || 
-                       (data.deposit && data.deposit.qr_code_base64) || 
-                       data.qr_code_image || 
-                       (data.deposit && data.deposit.qr_code_image);
+        // SafePix geralmente envia a string Base64 pronta ou o link
+        let qrSource = data.qr_code_base64 || (data.deposit && data.deposit.qr_code_base64);
         
-        if (qrSource && qrSource.length > 50) {
-            qrSource = qrSource.replace(/\s/g, ''); 
+        if (qrSource) {
+            // Garante que a string base64 tenha o cabeçalho correto se não tiver
             const finalSrc = qrSource.startsWith('data:') ? qrSource : `data:image/png;base64,${qrSource}`;
             qrImg.src = finalSrc;
             qrImg.style.display = 'block';
@@ -403,6 +411,7 @@ document.getElementById('btnDeposit').addEventListener('click', async () => {
     showToast('PIX gerado com sucesso!');
 
   } catch (e) { 
+    // Se cair aqui, a mensagem "Erro SafePix" da imagem aparecerá no Toast
     showToast(e.message, 'error'); 
   } finally { 
     btn.disabled = false; 
