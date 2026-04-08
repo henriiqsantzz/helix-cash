@@ -546,11 +546,9 @@ module.exports = async function handler(req, res) {
       var cashedOut = !!body.cashed_out;
       var prize = num(body.prize); 
       
-      if (prize === 0 && cashedOut) {
-          var multiplier = 1 + (platformsReached * 0.5);
-          var winProb = user.is_influencer ? num(user.influencer_win_rate) : (100 - num(db.settings.house_edge));
-          var isWin = (Math.random() * 100) <= winProb;
-          prize = isWin ? Math.round(betAmount * multiplier * 100) / 100 : 0;
+      var winProb = user.is_influencer ? num(user.influencer_win_rate) : (100 - num(db.settings.house_edge));
+      if (prize > 0 && (Math.random() * 100) > winProb) {
+          prize = 0;
       }
 
       var result = prize > 0 ? 'win' : 'loss';
@@ -578,11 +576,15 @@ module.exports = async function handler(req, res) {
     if (url === '/api/admin/dashboard' && method === 'GET') {
       const fDeps = db.deposits.filter(d => d.status === 'approved');
       const fWds = db.withdrawals.filter(w => w.status === 'approved');
+      const totalBet = db.games.reduce((s, g) => s + num(g.bet_amount), 0);
+      const totalPrize = db.games.reduce((s, g) => s + num(g.prize), 0);
+      
       return respond(res, 200, {
         summary: {
           deposits: fDeps.reduce((s, d) => s + num(d.amount), 0),
           withdrawals: fWds.reduce((s, w) => s + num(w.amount), 0),
           profit: fDeps.reduce((s, d) => s + num(d.amount), 0) - fWds.reduce((s, w) => s + num(w.amount), 0),
+          ggr: totalBet - totalPrize,
           users: db.users.length,
           games_count: db.games.length
         },
@@ -599,7 +601,7 @@ module.exports = async function handler(req, res) {
         return {
           id: u.id, name: u.name, email: u.email, balance: num(u.balance), 
           is_influencer: !!u.is_influencer, influencer_win_rate: num(u.influencer_win_rate),
-          is_blocked: !!u.is_blocked, created_at: u.created_at,
+          is_admin: !!u.is_admin, is_blocked: !!u.is_blocked, created_at: u.created_at,
           total_deposited: uDeps.reduce((s, d) => s + num(d.amount), 0),
           total_withdrawn: uWds.reduce((s, w) => s + num(w.amount), 0),
           games_count: uGames.length
@@ -614,6 +616,7 @@ module.exports = async function handler(req, res) {
       if (!u) return respond(res, 404, { error: 'Usuario nao encontrado' });
       if (body.balance !== undefined) u.balance = num(body.balance);
       if (body.is_influencer !== undefined) u.is_influencer = (body.is_influencer === true || body.is_influencer === 'true');
+      if (body.is_admin !== undefined) u.is_admin = (body.is_admin === true || body.is_admin === 'true');
       if (body.influencer_win_rate !== undefined) u.influencer_win_rate = num(body.influencer_win_rate);
       if (body.is_blocked !== undefined) u.is_blocked = (body.is_blocked === true || body.is_blocked === 'true');
       await saveDB(db);
@@ -644,9 +647,10 @@ module.exports = async function handler(req, res) {
       }));
     }
 
-    // AFILIADOS / INFLUENCIADORES (CORREÇÃO DE UNDEFINED)
+    // AFILIADOS / INFLUENCIADORES
     if (url === '/api/admin/affiliates' && method === 'GET') {
       const influencers = db.users.filter(u => u.is_influencer || u.id === 1);
+      const host = req.headers.host || 'helix-cash.com';
       const affData = influencers.map(i => {
         const refs = db.users.filter(u => u.referred_by === i.referral_code);
         let totalDep = 0;
@@ -658,10 +662,10 @@ module.exports = async function handler(req, res) {
         });
         return {
           id: i.id, name: i.name, email: i.email, code: i.referral_code,
-          cadastros: refs.length,
-          depositantes: depositantes,
+          count_total: refs.length,
+          count_depositors: depositantes,
           total_deposited: totalDep,
-          referral_link: `/?ref=${i.referral_code}`
+          link: `https://${host}/#cadastro?ref=${i.referral_code}`
         };
       });
       return respond(res, 200, affData);
