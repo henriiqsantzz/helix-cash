@@ -409,24 +409,29 @@
 
     <div id="panel-game" class="panel-sub active">
       
-      <div class="panel-banner" style="position: relative; overflow: hidden; background: linear-gradient(135deg, #13132B 0%, #1A1A3A 100%); padding: 20px; border-radius: 16px; border: 1px solid rgba(124, 77, 255, 0.2); text-align: left; margin-bottom: 20px;">
+      <div style="position: relative; overflow: hidden; background: linear-gradient(135deg, #1d0738 0%, #5c2068 100%); padding: 30px 20px; border-radius: 16px; text-align: center; margin-bottom: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.3);">
         
-        <div style="position: absolute; right: -10%; top: -20%; width: 150px; height: 150px; background: radial-gradient(circle, rgba(124, 77, 255, 0.3) 0%, transparent 70%); filter: blur(10px); z-index: 1;"></div>
-        <div style="position: absolute; right: 10px; bottom: -10px; font-size: 80px; opacity: 0.1; z-index: 1; transform: rotate(15deg);">🌀</div>
+        <div style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-image: url('data:image/svg+xml,%3Csvg width=\'30\' height=\'30\' viewBox=\'0 0 30 30\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cpath d=\'M14 14H10v2h4v4h2v-4h4v-2h-4v-4h-2v4z\' fill=\'rgba(255,255,255,0.04)\'/%3E%3C/svg%3E'); z-index: 1;"></div>
         
         <div style="position: relative; z-index: 2;">
-          <h3 style="font-size: 22px; font-weight: 900; color: #fff; margin: 0 0 4px 0; text-transform: uppercase;">Helix Jump</h3>
-          <p style="font-size: 13px; color: #a0a0c0; margin: 0 0 15px 0;">Modo infinito com multiplicador!</p>
+          <div style="font-size: 11px; font-weight: 700; color: #a0a0c0; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px;">SEU SALDO DISPONÍVEL</div>
+          <div id="bannerBalanceDisplay" style="font-size: 46px; font-weight: 900; color: #ffffff; letter-spacing: -1px; margin-bottom: 24px; text-shadow: 0 4px 10px rgba(0,0,0,0.3);">R$ 0,00</div>
           
-          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-            <span style="background: rgba(0, 230, 118, 0.1); color: #00e676; padding: 6px 10px; border-radius: 8px; font-size: 11px; font-weight: 700; border: 1px solid rgba(0, 230, 118, 0.2); display: flex; align-items: center; gap: 4px;">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-              Acumule Ganhos
-            </span>
-            <span style="background: rgba(179, 136, 255, 0.1); color: #b388ff; padding: 6px 10px; border-radius: 8px; font-size: 11px; font-weight: 700; border: 1px solid rgba(179, 136, 255, 0.2); display: flex; align-items: center; gap: 4px;">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-              Dificuldade Dinâmica
-            </span>
+          <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
+            <button onclick="document.querySelector('[data-panel=\'deposit\']').click()" style="flex: 1; min-width: 100px; background: #00d26a; color: #fff; border: none; padding: 12px 10px; border-radius: 50px; font-weight: 700; font-size: 13px; display: flex; align-items: center; justify-content: center; gap: 6px; cursor: pointer; box-shadow: 0 4px 15px rgba(0, 210, 106, 0.3); font-family: 'Inter', sans-serif;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M19 12l-7 7-7-7"/></svg>
+              Depositar
+            </button>
+            
+            <button onclick="document.querySelector('[data-panel=\'withdraw\']').click()" style="flex: 1; min-width: 100px; background: rgba(255,255,255,0.08); color: #fff; border: 1px solid rgba(255,255,255,0.2); padding: 12px 10px; border-radius: 50px; font-weight: 700; font-size: 13px; display: flex; align-items: center; justify-content: center; gap: 6px; cursor: pointer; font-family: 'Inter', sans-serif; transition: all 0.2s;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+              Sacar
+            </button>
+
+            <button onclick="document.querySelector('[data-panel=\'referral\']').click()" style="flex: 1; min-width: 100px; background: rgba(255,255,255,0.08); color: #fff; border: 1px solid rgba(255,255,255,0.2); padding: 12px 10px; border-radius: 50px; font-weight: 700; font-size: 13px; display: flex; align-items: center; justify-content: center; gap: 6px; cursor: pointer; font-family: 'Inter', sans-serif; transition: all 0.2s;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              Indicar
+            </button>
           </div>
         </div>
       </div>
@@ -739,6 +744,24 @@
   
   // Cria o intervalo para oscilar o número a cada 5 segundos
   setInterval(updateFakeStats, 5000);
+
+  // Sincronizar o banner central com o saldo atual do header
+  const headerBalance = document.getElementById('userBalance');
+  const bannerBalance = document.getElementById('bannerBalanceDisplay');
+
+  if(headerBalance && bannerBalance) {
+      // Sincronização inicial
+      bannerBalance.textContent = 'R$ ' + headerBalance.textContent;
+      
+      // Observa mudanças no header para refletir no banner em tempo real
+      const observer = new MutationObserver((mutations) => {
+          mutations.forEach((mutation) => {
+              bannerBalance.textContent = 'R$ ' + headerBalance.textContent;
+          });
+      });
+      
+      observer.observe(headerBalance, { childList: true, characterData: true, subtree: true });
+  }
 
 </script>
 </body>
