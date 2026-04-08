@@ -136,26 +136,19 @@ function logout() {
 async function loadUserData() {
   try {
     const data = await api('/api/user/me');
-    if (!data || data.error) throw new Error('Falha ao carregar dados');
     user = data;
     localStorage.setItem('hc_user', JSON.stringify(user));
     updateUI();
   } catch (e) {
-    if (e.message.includes('Token') || e.message.includes('Usuário') || e.message.includes('autorizado')) logout();
+    if (e.message.includes('Token') || e.message.includes('Usuário')) logout();
   }
 }
 
 function updateUI() {
-  if (!user || !user.name) return;
-  
-  const balanceEl = document.getElementById('userBalance');
-  if (balanceEl) balanceEl.textContent = formatMoney(user.balance);
-  
-  const avatarEl = document.getElementById('userAvatar');
-  if (avatarEl) avatarEl.textContent = user.name.charAt(0).toUpperCase();
-  
-  const withdrawBalEl = document.getElementById('withdrawBalance');
-  if (withdrawBalEl) withdrawBalEl.textContent = 'R$ ' + formatMoney(user.balance);
+  if (!user) return;
+  document.getElementById('userBalance').textContent = formatMoney(user.balance);
+  document.getElementById('userAvatar').textContent = user.name.charAt(0).toUpperCase();
+  document.getElementById('withdrawBalance').textContent = 'R$ ' + formatMoney(user.balance);
   
   const referralLinkDisplay = document.getElementById('referralLinkDisplay');
   if (referralLinkDisplay) {
@@ -163,8 +156,9 @@ function updateUI() {
     referralLinkDisplay.textContent = `${baseUrl}/#cadastro?ref=${user.referral_code}`;
   }
   
-  const refCountEl = document.getElementById('refCount');
-  if (refCountEl) refCountEl.textContent = user.referrals || 0;
+  if (document.getElementById('refCount')) {
+    document.getElementById('refCount').textContent = user.referrals || 0;
+  }
 }
 
 // ===================== MENU LATERAL =====================
@@ -178,13 +172,11 @@ function toggleMenu() {
 
   if (isActive) {
     const currentUser = JSON.parse(localStorage.getItem('hc_user') || '{}');
-    if (!currentUser || !currentUser.name) return;
-
-    if (document.getElementById('menuUserName')) document.getElementById('menuUserName').textContent = currentUser.name;
+    if (document.getElementById('menuUserName')) document.getElementById('menuUserName').textContent = currentUser.name || 'Usuário';
     if (document.getElementById('menuUserEmail')) document.getElementById('menuUserEmail').textContent = currentUser.email || '';
     if (document.getElementById('menuBalance')) document.getElementById('menuBalance').textContent = formatMoney(currentUser.balance);
     if (document.getElementById('menuBonus')) document.getElementById('menuBonus').textContent = formatMoney(currentUser.bonus_balance);
-    if (document.getElementById('menuAvatar')) document.getElementById('menuAvatar').textContent = currentUser.name.charAt(0).toUpperCase();
+    if (document.getElementById('menuAvatar')) document.getElementById('menuAvatar').textContent = (currentUser.name || 'U').charAt(0).toUpperCase();
     
     const adminArea = document.getElementById('adminMenuArea');
     if (adminArea) {
@@ -271,8 +263,6 @@ document.getElementById('btnPlay').addEventListener('click', async () => {
   }
 });
 
-function onPlatformPassed(count) { }
-
 async function onGameEnd(platformsReached, cashed, prizeFromGame) {
   try {
     const data = await api('/api/game/finish', {
@@ -325,7 +315,7 @@ function closeGame() {
   loadUserData();
 }
 
-// ===================== DEPOSIT =====================
+// ===================== DEPOSIT (SAFEPIX QR CODE 100%) =====================
 document.querySelectorAll('.amount-option').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.amount-option').forEach(b => b.classList.remove('active'));
@@ -364,8 +354,11 @@ document.getElementById('btnDeposit').addEventListener('click', async () => {
     const qrLoading = document.getElementById('qrLoading');
 
     if (qrImg) {
+        // Pega a URL da imagem (Google Charts) vinda do seu index.js
         let qrSource = data.qr_code_base64 || (data.deposit && data.deposit.qr_code_base64);
+        
         if (qrSource) {
+            // Se for URL (http), atribui. Se for Base64 sem prefixo, adiciona.
             qrImg.src = qrSource.startsWith('http') ? qrSource : (qrSource.startsWith('data:') ? qrSource : `data:image/png;base64,${qrSource}`);
             qrImg.onload = () => {
               qrImg.style.display = 'block';
@@ -435,7 +428,7 @@ async function loadReferrals() {
     const data = await api('/api/referrals');
     document.getElementById('refEarned').textContent = 'R$ ' + formatMoney(data.total_earned);
     const listEl = document.getElementById('referralList');
-    if (!data.referrals || data.referrals.length === 0) {
+    if (data.referrals.length === 0) {
       listEl.innerHTML = '<div class="referral-card" style="text-align:center;color:var(--text-secondary)">Nenhum indicado.</div>';
     } else {
       listEl.innerHTML = data.referrals.map(r =>
