@@ -388,14 +388,24 @@ document.getElementById('btnDeposit').addEventListener('click', async () => {
     const qrLoading = document.getElementById('qrLoading');
 
     if (qrImg) {
-        // SafePix geralmente envia a string Base64 pronta ou o link direto (Google Charts no seu caso)
+        // Pega a URL vinda do backend ou tenta gerar via fallback seguro se o Google Charts falhar
         let qrSource = data.qr_code_base64 || (data.deposit && data.deposit.qr_code_base64);
         
         if (qrSource) {
-            // Se for link do google (http), atribui direto. Se for base64 sem header, adiciona.
-            qrImg.src = qrSource.startsWith('http') ? qrSource : (qrSource.startsWith('data:') ? qrSource : `data:image/png;base64,${qrSource}`);
-            qrImg.style.display = 'block';
-            if (qrLoading) qrLoading.style.display = 'none';
+            // Se for link do google charts antigo, o PIX longo pode quebrar. 
+            // Se notar erro 404 na imagem, o backend deve ser atualizado para quickchart.io
+            qrImg.src = qrSource;
+            
+            qrImg.onload = function() {
+                qrImg.style.display = 'block';
+                if (qrLoading) qrLoading.style.display = 'none';
+            };
+
+            qrImg.onerror = function() {
+                // Caso a URL do Google Charts dê 404 (comum em códigos PIX longos), tenta QuickChart
+                console.warn("Google Charts falhou, tentando QuickChart...");
+                qrImg.src = `https://quickchart.io/qr?text=${encodeURIComponent(pixCode)}&size=300`;
+            };
         }
     }
 
