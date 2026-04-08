@@ -569,8 +569,8 @@ module.exports = async function handler(req, res) {
     }
 
     // ==================== ADMIN ROUTES ====================
-    var adminUser = getUser(db, req);
-    if (url.startsWith('/api/admin') && (!adminUser || !adminUser.is_admin)) {
+    var admin = getUser(db, req);
+    if (url.startsWith('/api/admin') && (!admin || !admin.is_admin)) {
       return respond(res, 401, { error: 'Acesso negado' });
     }
 
@@ -590,22 +590,19 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // LISTAR USUÁRIOS (COM DADOS CALCULADOS)
+    // LISTAR USUÁRIOS
     if (url === '/api/admin/users' && method === 'GET') {
       return respond(res, 200, db.users.map(u => {
         const uDeps = db.deposits.filter(d => d.user_id === u.id && d.status === 'approved');
         const uWds = db.withdrawals.filter(w => w.user_id === u.id && w.status === 'approved');
+        const uGames = db.games.filter(g => g.user_id === u.id);
         return {
-          id: u.id, 
-          name: u.name, 
-          email: u.email, 
-          balance: num(u.balance), 
-          is_influencer: !!u.is_influencer, 
-          influencer_win_rate: num(u.influencer_win_rate),
-          is_blocked: !!u.is_blocked, 
+          id: u.id, name: u.name, email: u.email, balance: num(u.balance), 
+          is_influencer: !!u.is_influencer, influencer_win_rate: num(u.influencer_win_rate),
+          is_blocked: !!u.is_blocked, created_at: u.created_at,
           total_deposited: uDeps.reduce((s, d) => s + num(d.amount), 0),
           total_withdrawn: uWds.reduce((s, w) => s + num(w.amount), 0),
-          created_at: u.created_at
+          games_count: uGames.length
         };
       }));
     }
@@ -615,12 +612,10 @@ module.exports = async function handler(req, res) {
       var body = await parseBody(req);
       var u = db.users.find(x => x.id === parseInt(body.id));
       if (!u) return respond(res, 404, { error: 'Usuario nao encontrado' });
-      
       if (body.balance !== undefined) u.balance = num(body.balance);
       if (body.is_influencer !== undefined) u.is_influencer = (body.is_influencer === true || body.is_influencer === 'true');
       if (body.influencer_win_rate !== undefined) u.influencer_win_rate = num(body.influencer_win_rate);
       if (body.is_blocked !== undefined) u.is_blocked = (body.is_blocked === true || body.is_blocked === 'true');
-      
       await saveDB(db);
       return respond(res, 200, { success: true });
     }
@@ -629,15 +624,7 @@ module.exports = async function handler(req, res) {
     if (url === '/api/admin/deposits' && method === 'GET') {
       return respond(res, 200, db.deposits.map(d => {
         const u = db.users.find(x => x.id === d.user_id);
-        return { 
-          id: d.id,
-          amount: num(d.amount),
-          status: d.status,
-          transaction_id: d.transaction_id,
-          created_at: d.created_at,
-          user_name: u ? u.name : 'Desconhecido',
-          user_email: u ? u.email : '-'
-        };
+        return { ...d, user_name: u ? u.name : 'Desconhecido', user_email: u ? u.email : '-' };
       }));
     }
 
@@ -645,33 +632,34 @@ module.exports = async function handler(req, res) {
     if (url === '/api/admin/withdrawals' && method === 'GET') {
       return respond(res, 200, db.withdrawals.map(w => {
         const u = db.users.find(x => x.id === w.user_id);
-        return { 
-          id: w.id,
-          amount: num(w.amount),
-          status: w.status,
-          pix_key: w.pix_key,
-          created_at: w.created_at,
-          user_name: u ? u.name : 'Desconhecido',
-          user_email: u ? u.email : '-'
-        };
+        return { ...w, user_name: u ? u.name : 'Desconhecido', user_email: u ? u.email : '-' };
       }));
     }
 
-    // AFILIADOS / INFLUENCIADORES
+    // LISTAR JOGOS
+    if (url === '/api/admin/games' && method === 'GET') {
+      return respond(res, 200, db.games.map(g => {
+        const u = db.users.find(x => x.id === g.user_id);
+        return { ...g, user_name: u ? u.name : 'Desconhecido', user_email: u ? u.email : '-' };
+      }));
+    }
+
+    // AFILIADOS / INFLUENCIADORES (CORREÇÃO DE UNDEFINED)
     if (url === '/api/admin/affiliates' && method === 'GET') {
-      const influencers = db.users.filter(u => u.is_influencer || u.is_admin);
+      const influencers = db.users.filter(u => u.is_influencer || u.id === 1);
       const affData = influencers.map(i => {
         const refs = db.users.filter(u => u.referred_by === i.referral_code);
         let totalDep = 0;
+        let depositantes = 0;
         refs.forEach(r => {
-          totalDep += db.deposits.filter(d => d.user_id === r.id && d.status === 'approved').reduce((s, d) => s + num(d.amount), 0);
+          const userDeps = db.deposits.filter(d => d.user_id === r.id && d.status === 'approved');
+          if (userDeps.length > 0) depositantes++;
+          totalDep += userDeps.reduce((s, d) => s + num(d.amount), 0);
         });
         return {
-          id: i.id,
-          name: i.name,
-          email: i.email,
-          code: i.referral_code,
-          affiliates_count: refs.length,
+          id: i.id, name: i.name, email: i.email, code: i.referral_code,
+          cadastros: refs.length,
+          depositantes: depositantes,
           total_deposited: totalDep,
           referral_link: `/?ref=${i.referral_code}`
         };
@@ -679,20 +667,15 @@ module.exports = async function handler(req, res) {
       return respond(res, 200, affData);
     }
 
-    // CONFIGURAÇÕES DO SITE
-    if (url === '/api/admin/settings' && method === 'GET') {
-      return respond(res, 200, db.settings || {});
-    }
-
+    // CONFIGURAÇÕES
+    if (url === '/api/admin/settings' && method === 'GET') return respond(res, 200, db.settings || {});
     if (url === '/api/admin/settings' && method === 'POST') {
-      var body = await parseBody(req);
-      db.settings = { ...db.settings, ...body };
+      db.settings = { ...db.settings, ...(await parseBody(req)) };
       await saveDB(db);
       return respond(res, 200, { success: true });
     }
 
     return respond(res, 404, { error: 'Rota nao encontrada' });
-
   } catch (err) {
     console.error('API Error:', err);
     return respond(res, 500, { error: 'Erro interno no servidor: ' + err.message });
