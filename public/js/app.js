@@ -178,7 +178,7 @@ function toggleMenu() {
 
   if (isActive) {
     const currentUser = JSON.parse(localStorage.getItem('hc_user') || '{}');
-    if (!currentUser.name) return;
+    if (!currentUser || !currentUser.name) return;
 
     if (document.getElementById('menuUserName')) document.getElementById('menuUserName').textContent = currentUser.name;
     if (document.getElementById('menuUserEmail')) document.getElementById('menuUserEmail').textContent = currentUser.email || '';
@@ -270,6 +270,8 @@ document.getElementById('btnPlay').addEventListener('click', async () => {
     btn.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg> JOGAR AGORA';
   }
 });
+
+function onPlatformPassed(count) { }
 
 async function onGameEnd(platformsReached, cashed, prizeFromGame) {
   try {
