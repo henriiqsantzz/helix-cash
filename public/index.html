@@ -258,10 +258,10 @@
       <h1>GIRE E<br><span class="gradient-text">GANHE</span></h1>
       <p>Jogue Helix Jump e transforme suas habilidades em dinheiro real. Passe plataformas para ganhar prêmios incríveis!</p>
       <div class="hero-cta">
-        <a href="#cadastro" class="btn btn-primary btn-block" style="max-width:320px;margin:0 auto">
+        <button onclick="document.querySelectorAll('.page').forEach(p => p.classList.remove('active')); document.getElementById('page-game').classList.remove('hidden'); window.startHelixDemo();" class="btn btn-primary btn-block" style="max-width:320px; margin:0 auto; border:none; cursor:pointer;">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
-          JOGAR GRÁTIS
-        </a>
+          JOGAR GRÁTIS (DEMO)
+        </button>
       </div>
       <a href="#login" class="hero-link">Já tenho conta →</a>
       <div class="hero-tags">
@@ -718,6 +718,7 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="/js/game.js"></script>
+<script src="/js/demo.js"></script>
 <script src="/js/app.js"></script>
 <script>
   // Função para copiar o link de indicação
