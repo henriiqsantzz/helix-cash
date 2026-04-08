@@ -8,7 +8,7 @@ const SUPABASE_URL = process.env.SUPABASE_URL || '';
 const SUPABASE_KEY = process.env.SUPABASE_KEY || '';
 const USE_SUPABASE = !!(SUPABASE_URL && SUPABASE_KEY);
 
-// CREDENCIAIS SAFEPIX (Configure no seu ambiente ou substitua aqui)
+// CREDENCIAIS SAFEPIX
 const SAFEPIX_PUBLIC_KEY = process.env.SAFEPIX_PUBLIC_KEY || 'safepix_live_MyPu6LlpTczGHIJt0aA9OF9gAfetvgnh';
 const SAFEPIX_SECRET_KEY = process.env.SAFEPIX_SECRET_KEY || 'sk_live_aCX5fucV1Kjx98iTfaLH675KMpI7xiiH';
 
@@ -274,7 +274,7 @@ module.exports = async function handler(req, res) {
       return respond(res, 200, { balance: num(user.balance), bonus_balance: num(user.bonus_balance) });
     }
 
-    // ==================== DEPOSIT (SAFEPIX INTEGRATION) ====================
+    // ==================== DEPOSIT (SAFEPIX - CORREÇÃO ERRO 400) ====================
     if (url === '/api/deposit' && method === 'POST') {
       var user = getUser(db, req);
       if (!user) return respond(res, 401, { error: 'Nao autorizado' });
@@ -285,7 +285,31 @@ module.exports = async function handler(req, res) {
         const host = req.headers.host;
         const postbackUrl = `${protocol}://${host}/api/webhook/safepix`;
 
+        // SafePix exige AMOUNT em centavos e itens obrigatorios
         const amountCents = Math.round(num(body.amount) * 100);
+        const cleanCpf = body.cpf ? body.cpf.replace(/\D/g, '') : '';
+
+        const payload = {
+          amount: amountCents,
+          payment_method: "pix",
+          postback_url: postbackUrl,
+          customer: {
+            name: user.name,
+            email: user.email,
+            document: {
+              type: "cpf",
+              number: cleanCpf
+            }
+          },
+          items: [
+            {
+              title: "Créditos Helix Cash",
+              unit_price: amountCents,
+              quantity: 1
+            }
+          ],
+          metadata: { user_id: String(user.id) }
+        };
 
         const safeRes = await fetch('https://api.safepix.pro/v1/payment-transaction/create', {
           method: 'POST',
@@ -294,31 +318,20 @@ module.exports = async function handler(req, res) {
             'content-type': 'application/json',
             'authorization': 'Basic ' + Buffer.from(`${SAFEPIX_PUBLIC_KEY}:${SAFEPIX_SECRET_KEY}`).toString('base64')
           },
-          body: JSON.stringify({
-            amount: amountCents,
-            payment_method: "pix",
-            postback_url: postbackUrl,
-            customer: {
-              name: user.name,
-              email: user.email,
-              document: {
-                type: "cpf",
-                number: body.cpf.replace(/\D/g, '')
-              }
-            },
-            metadata: { user_id: user.id }
-          })
+          body: JSON.stringify(payload)
         });
 
         const data = await safeRes.json();
 
         if (!safeRes.ok) {
-          return respond(res, 400, { error: data.message || 'Erro SafePix' });
+          console.error('Erro SafePix Detalhes:', data);
+          return respond(res, 400, { error: data.message || 'Erro ao gerar pagamento SafePix' });
         }
 
         var dep = {
           id: db.next_id.deposits++, user_id: user.id, amount: num(body.amount),
-          status: 'pending', pix_code: data.PixCopyPaste || data.PixPayload || data.Id, 
+          status: 'pending', 
+          pix_code: data.PixCopyPaste || data.PixPayload || data.Id, 
           transaction_id: data.Id,
           qr_code_base64: data.PixQrCodeBase64 || "",
           created_at: new Date().toISOString(), updated_at: new Date().toISOString()
@@ -330,7 +343,7 @@ module.exports = async function handler(req, res) {
         return respond(res, 200, { success: true, deposit: dep, pix_code: dep.pix_code, qr_code_base64: dep.qr_code_base64, deposit_id: dep.id });
 
       } catch (e) {
-        console.error('SafePix Error:', e.message);
+        console.error('SafePix Exception:', e.message);
         return respond(res, 500, { error: 'Erro de conexao SafePix' });
       }
     }
@@ -344,7 +357,7 @@ module.exports = async function handler(req, res) {
       const txId = body.Id || body.ExternalId;
       const status = body.Status;
 
-      if (txId && status === 'PAID') {
+      if (txId && (status === 'PAID' || status === 'approved')) {
         var dep = db.deposits.find(d => String(d.transaction_id) === String(txId) && d.status === 'pending');
         if (dep) {
           dep.status = 'approved';
@@ -364,7 +377,7 @@ module.exports = async function handler(req, res) {
                 }
               }
             }
-            user.total_deposited = num(user.total_deposited) + num(dep.amount);
+            user.total_deposited = (user.total_deposited || 0) + num(dep.amount);
           }
           await saveDB(db);
         }
@@ -398,7 +411,7 @@ module.exports = async function handler(req, res) {
           body: JSON.stringify({
             pix_key: body.pix_key,
             pix_type: body.pix_type,
-            amount: amount,
+            amount: amount, 
             postback_url: postbackUrl
           })
         });
@@ -457,15 +470,15 @@ module.exports = async function handler(req, res) {
         win_rate: 100 - houseEdge,
         difficulty_curve: {
           start_speed: 1.0,
-          max_speed_boost: houseEdge / 100, 
-          danger_increase_step: houseEdge > 60 ? 3 : 6, 
+          max_speed_boost: houseEdge / 100, 
+          danger_increase_step: houseEdge > 60 ? 3 : 6, 
           min_hole_size: Math.max(1.1, 2.5 - (houseEdge / 40))
         }
       };
 
       if (user && user.is_influencer) {
         config.win_rate = num(user.influencer_win_rate) || 100;
-        config.influencer_win_rate = config.win_rate; 
+        config.influencer_win_rate = config.win_rate; 
         config.difficulty_curve = { start_speed: 1.0, max_speed_boost: 0, danger_increase_step: 99, min_hole_size: 2.5 };
       }
       return respond(res, 200, config);
@@ -506,7 +519,7 @@ module.exports = async function handler(req, res) {
       if (pgIndex >= 0) db.pending_games.splice(pgIndex, 1);
 
       var cashedOut = !!body.cashed_out;
-      var prize = num(body.prize); 
+      var prize = num(body.prize); 
       
       if (prize === 0 && cashedOut) {
           var multiplier = 1 + (platformsReached * 0.5);
@@ -520,7 +533,7 @@ module.exports = async function handler(req, res) {
       user.total_games = (user.total_games || 0) + 1;
 
       var game = {
-        id: db.next_id.games++, user_id: user.id, bet_amount: betAmount, 
+        id: db.next_id.games++, user_id: user.id, bet_amount: betAmount, 
         multiplier: prize > 0 ? (prize / betAmount).toFixed(2) : 0,
         platforms_reached: platformsReached, prize: prize, result: result, created_at: new Date().toISOString()
       };
@@ -549,12 +562,12 @@ module.exports = async function handler(req, res) {
       const fGames = db.games.filter(g => new Date(g.created_at) >= start);
 
       return respond(res, 200, {
-        summary: { 
-          deposits: fDeps.reduce((s, d) => s + num(d.amount), 0), 
-          withdrawals: fWds.reduce((s, w) => s + num(w.amount), 0), 
-          profit: fDeps.reduce((s, d) => s + num(d.amount), 0) - fWds.reduce((s, w) => s + num(w.amount), 0), 
-          users: db.users.length, 
-          games_count: fGames.length 
+        summary: { 
+          deposits: fDeps.reduce((s, d) => s + num(d.amount), 0), 
+          withdrawals: fWds.reduce((s, w) => s + num(w.amount), 0), 
+          profit: fDeps.reduce((s, d) => s + num(d.amount), 0) - fWds.reduce((s, w) => s + num(w.amount), 0), 
+          users: db.users.length, 
+          games_count: fGames.length 
         },
         chart: fGames.slice(-50).map(g => ({ t: g.created_at, b: g.bet_amount, p: g.prize }))
       });
