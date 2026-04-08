@@ -285,7 +285,7 @@ module.exports = async function handler(req, res) {
         const host = req.headers.host;
         const postbackUrl = `${protocol}://${host}/api/webhook/safepix`;
 
-        // SafePix exige AMOUNT em centavos e itens obrigatorios
+        // SafePix exige AMOUNT em centavos (integer) e campo items
         const amountCents = Math.round(num(body.amount) * 100);
         const cleanCpf = body.cpf ? body.cpf.replace(/\D/g, '') : '';
 
@@ -348,6 +348,22 @@ module.exports = async function handler(req, res) {
       }
     }
 
+    // ==================== CHECK DEPOSIT STATUS ====================
+    if (url === '/api/deposit/status' && method === 'POST') {
+      var user = getUser(db, req);
+      if (!user) return respond(res, 401, { error: 'Nao autorizado' });
+      var body = await parseBody(req);
+      var depId = body.deposit_id;
+
+      var dep = db.deposits.find(function(d) { return d.id === depId && d.user_id === user.id; });
+      if (!dep) return respond(res, 404, { error: 'Deposito nao encontrado' });
+
+      return respond(res, 200, {
+        status: dep.status, amount: num(dep.amount), new_balance: num(user.balance),
+        pix_code: dep.pix_code, qr_code_base64: dep.qr_code_base64
+      });
+    }
+
     // ==================== WEBHOOK SAFEPIX ====================
     if (url === '/api/webhook/safepix' && method === 'POST') {
       var body = await parseBody(req);
@@ -365,16 +381,13 @@ module.exports = async function handler(req, res) {
           var user = db.users.find(u => u.id === dep.user_id);
           if (user) {
             user.balance = num(user.balance) + num(dep.amount);
-            // Regra de Indicação R$ 50
-            if (num(user.total_deposited) === 0 && num(dep.amount) >= 50) {
-              if (user.referred_by) {
-                var referrer = db.users.find(u => u.referral_code === user.referred_by);
-                if (referrer) {
-                  referrer.balance = num(referrer.balance) + 20;
-                  db.referral_earnings.push({
-                    id: db.next_id.referral_earnings++, user_id: referrer.id, from_user_id: user.id, amount: 20, created_at: new Date().toISOString()
-                  });
-                }
+            if (num(user.total_deposited) === 0 && num(dep.amount) >= 50 && user.referred_by) {
+              var referrer = db.users.find(u => u.referral_code === user.referred_by);
+              if (referrer) {
+                referrer.balance = num(referrer.balance) + 20;
+                db.referral_earnings.push({
+                  id: db.next_id.referral_earnings++, user_id: referrer.id, from_user_id: user.id, amount: 20, created_at: new Date().toISOString()
+                });
               }
             }
             user.total_deposited = (user.total_deposited || 0) + num(dep.amount);
@@ -383,54 +396,6 @@ module.exports = async function handler(req, res) {
         }
       }
       return respond(res, 200, { success: true });
-    }
-
-    // ==================== WITHDRAW (SAFEPIX PAYOUT) ====================
-    if (url === '/api/withdraw' && method === 'POST') {
-      var user = getUser(db, req);
-      if (!user) return respond(res, 401, { error: 'Nao autorizado' });
-      var body = await parseBody(req);
-      var amount = num(body.amount);
-      var minWd = num(db.settings.min_withdrawal) || 20;
-
-      if (num(user.balance) < amount) return respond(res, 400, { error: 'Saldo insuficiente' });
-      if (amount < minWd) return respond(res, 400, { error: 'Saque minimo: R$' + minWd });
-
-      try {
-        const protocol = req.headers['x-forwarded-proto'] || 'https';
-        const host = req.headers.host;
-        const postbackUrl = `${protocol}://${host}/api/webhook/safepix_withdrawal`;
-
-        const payoutRes = await fetch('https://api.safepix.pro/v1/wallet-transaction/create/withdrawal', {
-          method: 'POST',
-          headers: {
-            'accept': 'application/json',
-            'content-type': 'application/json',
-            'authorization': 'Basic ' + Buffer.from(`${SAFEPIX_PUBLIC_KEY}:${SAFEPIX_SECRET_KEY}`).toString('base64')
-          },
-          body: JSON.stringify({
-            pix_key: body.pix_key,
-            pix_type: body.pix_type,
-            amount: amount, 
-            postback_url: postbackUrl
-          })
-        });
-
-        const payoutData = await payoutRes.json();
-        if (!payoutRes.ok) return respond(res, 400, { error: payoutData.message || 'Erro Saque SafePix' });
-
-        user.balance = num(user.balance) - amount;
-        db.withdrawals.push({
-          id: db.next_id.withdrawals++, user_id: user.id, amount,
-          pix_key: body.pix_key, status: 'processing', transaction_id: payoutData.Id,
-          created_at: new Date().toISOString(), updated_at: new Date().toISOString()
-        });
-        await saveDB(db);
-        return respond(res, 200, { success: true, message: 'Saque enviado para processamento!' });
-
-      } catch (e) {
-        return respond(res, 500, { error: 'Erro ao processar saque: ' + e.message });
-      }
     }
 
     // ==================== REFERRALS: LISTA E CONTADORES ====================
@@ -459,6 +424,56 @@ module.exports = async function handler(req, res) {
       });
     }
 
+    // ==================== WITHDRAW (SAFEPIX PAYOUT) ====================
+    if (url === '/api/withdraw' && method === 'POST') {
+      var user = getUser(db, req);
+      if (!user) return respond(res, 401, { error: 'Nao autorizado' });
+      var body = await parseBody(req);
+      var amount = num(body.amount);
+      var pixKey = (body.pix_key || '').trim();
+      var minWd = num(db.settings.min_withdrawal) || 20;
+
+      if (!pixKey) return respond(res, 400, { error: 'Chave PIX obrigatoria' });
+      if (num(user.balance) < amount) return respond(res, 400, { error: 'Saldo insuficiente' });
+      if (amount < minWd) return respond(res, 400, { error: 'Saque minimo: R$' + minWd });
+
+      try {
+        const protocol = req.headers['x-forwarded-proto'] || 'https';
+        const host = req.headers.host;
+        const postbackUrl = `${protocol}://${host}/api/webhook/safepix_withdrawal`;
+
+        const payoutRes = await fetch('https://api.safepix.pro/v1/wallet-transaction/create/withdrawal', {
+          method: 'POST',
+          headers: {
+            'accept': 'application/json',
+            'content-type': 'application/json',
+            'authorization': 'Basic ' + Buffer.from(`${SAFEPIX_PUBLIC_KEY}:${SAFEPIX_SECRET_KEY}`).toString('base64')
+          },
+          body: JSON.stringify({
+            pix_key: pixKey,
+            pix_type: body.pix_type || 'cpf',
+            amount: amount, 
+            postback_url: postbackUrl
+          })
+        });
+
+        const payoutData = await payoutRes.json();
+        if (!payoutRes.ok) return respond(res, 400, { error: payoutData.message || 'Erro Saque SafePix' });
+
+        user.balance = num(user.balance) - amount;
+        db.withdrawals.push({
+          id: db.next_id.withdrawals++, user_id: user.id, amount,
+          pix_key: pixKey, status: 'processing', transaction_id: payoutData.Id,
+          created_at: new Date().toISOString(), updated_at: new Date().toISOString()
+        });
+        await saveDB(db);
+        return respond(res, 200, { success: true, message: 'Saque enviado para processamento!' });
+
+      } catch (e) {
+        return respond(res, 500, { error: 'Erro ao processar saque: ' + e.message });
+      }
+    }
+
     // ==================== GAME CONFIG: DIFICULDADE PROGRESSIVA ====================
     if (url === '/api/game/config' && method === 'GET') {
       var user = getUser(db, req);
@@ -470,15 +485,15 @@ module.exports = async function handler(req, res) {
         win_rate: 100 - houseEdge,
         difficulty_curve: {
           start_speed: 1.0,
-          max_speed_boost: houseEdge / 100, 
-          danger_increase_step: houseEdge > 60 ? 3 : 6, 
+          max_speed_boost: houseEdge / 100, 
+          danger_increase_step: houseEdge > 60 ? 3 : 6, 
           min_hole_size: Math.max(1.1, 2.5 - (houseEdge / 40))
         }
       };
 
       if (user && user.is_influencer) {
         config.win_rate = num(user.influencer_win_rate) || 100;
-        config.influencer_win_rate = config.win_rate; 
+        config.influencer_win_rate = config.win_rate; 
         config.difficulty_curve = { start_speed: 1.0, max_speed_boost: 0, danger_increase_step: 99, min_hole_size: 2.5 };
       }
       return respond(res, 200, config);
@@ -519,7 +534,7 @@ module.exports = async function handler(req, res) {
       if (pgIndex >= 0) db.pending_games.splice(pgIndex, 1);
 
       var cashedOut = !!body.cashed_out;
-      var prize = num(body.prize); 
+      var prize = num(body.prize); 
       
       if (prize === 0 && cashedOut) {
           var multiplier = 1 + (platformsReached * 0.5);
@@ -533,7 +548,7 @@ module.exports = async function handler(req, res) {
       user.total_games = (user.total_games || 0) + 1;
 
       var game = {
-        id: db.next_id.games++, user_id: user.id, bet_amount: betAmount, 
+        id: db.next_id.games++, user_id: user.id, bet_amount: betAmount, 
         multiplier: prize > 0 ? (prize / betAmount).toFixed(2) : 0,
         platforms_reached: platformsReached, prize: prize, result: result, created_at: new Date().toISOString()
       };
@@ -562,12 +577,12 @@ module.exports = async function handler(req, res) {
       const fGames = db.games.filter(g => new Date(g.created_at) >= start);
 
       return respond(res, 200, {
-        summary: { 
-          deposits: fDeps.reduce((s, d) => s + num(d.amount), 0), 
-          withdrawals: fWds.reduce((s, w) => s + num(w.amount), 0), 
-          profit: fDeps.reduce((s, d) => s + num(d.amount), 0) - fWds.reduce((s, w) => s + num(w.amount), 0), 
-          users: db.users.length, 
-          games_count: fGames.length 
+        summary: { 
+          deposits: fDeps.reduce((s, d) => s + num(d.amount), 0), 
+          withdrawals: fWds.reduce((s, w) => s + num(w.amount), 0), 
+          profit: fDeps.reduce((s, d) => s + num(d.amount), 0) - fWds.reduce((s, w) => s + num(w.amount), 0), 
+          users: db.users.length, 
+          games_count: fGames.length 
         },
         chart: fGames.slice(-50).map(g => ({ t: g.created_at, b: g.bet_amount, p: g.prize }))
       });
