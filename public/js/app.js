@@ -388,13 +388,12 @@ document.getElementById('btnDeposit').addEventListener('click', async () => {
     const qrLoading = document.getElementById('qrLoading');
 
     if (qrImg) {
-        // SafePix geralmente envia a string Base64 pronta ou o link
+        // SafePix geralmente envia a string Base64 pronta ou o link direto (Google Charts no seu caso)
         let qrSource = data.qr_code_base64 || (data.deposit && data.deposit.qr_code_base64);
         
         if (qrSource) {
-            // Garante que a string base64 tenha o cabeçalho correto se não tiver
-            const finalSrc = qrSource.startsWith('data:') ? qrSource : `data:image/png;base64,${qrSource}`;
-            qrImg.src = finalSrc;
+            // Se for link do google (http), atribui direto. Se for base64 sem header, adiciona.
+            qrImg.src = qrSource.startsWith('http') ? qrSource : (qrSource.startsWith('data:') ? qrSource : `data:image/png;base64,${qrSource}`);
             qrImg.style.display = 'block';
             if (qrLoading) qrLoading.style.display = 'none';
         }
@@ -411,7 +410,6 @@ document.getElementById('btnDeposit').addEventListener('click', async () => {
     showToast('PIX gerado com sucesso!');
 
   } catch (e) { 
-    // Se cair aqui, a mensagem "Erro SafePix" da imagem aparecerá no Toast
     showToast(e.message, 'error'); 
   } finally { 
     btn.disabled = false; 
@@ -448,7 +446,7 @@ document.getElementById('btnWithdraw').addEventListener('click', async () => {
   const amount = parseFloat(document.getElementById('withdrawAmount').value);
   const pixKey = document.getElementById('pixKey').value;
   const pixType = document.getElementById('pixType').value;
-  if (!amount || amount < 20) return showToast('Saque mínimo: R$30,00', 'error');
+  if (!amount || amount < 20) return showToast('Saque mínimo: R$ 20,00', 'error');
   if (!pixKey) return showToast('Informe a chave PIX', 'error');
 
   const btn = document.getElementById('btnWithdraw');
