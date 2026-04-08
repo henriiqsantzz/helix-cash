@@ -524,17 +524,24 @@
             <div>Mais de <strong style="color:#00e676;">12.000 jogadores</strong> já resgataram prêmios esta semana</div>
           </div>
 
+          <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.05);border-radius:12px;padding:12px;margin-bottom:20px;display:flex;align-items:center;gap:10px;font-size:13px;color:#d0d0e0;text-align:left;">
+            <div style="font-size:16px;">🎁</div>
+            <div><strong style="color:#ff4081;">Ganhe 50% de bônus</strong> no primeiro depósito — oferta por tempo limitado!</div>
+          </div>
+
           <p style="font-size:12px;color:#a0a0c0;margin-bottom:20px;">Com uma conta real você pode resgatar de verdade. Não perca mais oportunidades!</p>
 
           <button onclick="window.sairDoDemo('#cadastro')" style="width:100%;background:linear-gradient(135deg, #ff4081, #d500f9);color:#fff;border:none;padding:16px;border-radius:50px;font-size:15px;font-weight:900;text-transform:uppercase;margin-bottom:12px;cursor:pointer;box-shadow:0 10px 20px rgba(213,0,249,0.3);display:flex;align-items:center;justify-content:center;gap:8px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
             CRIAR CONTA E GANHAR DE VERDADE
           </button>
 
           <button onclick="window.sairDoDemo('#login')" style="width:100%;background:rgba(255,255,255,0.05);color:#fff;border:1px solid rgba(255,255,255,0.1);padding:16px;border-radius:50px;font-size:14px;font-weight:700;text-transform:uppercase;margin-bottom:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path><polyline points="10 17 15 12 10 7"></polyline><line x1="15" y1="12" x2="3" y2="12"></line></svg>
             JÁ TENHO CONTA — ENTRAR
           </button>
 
-          <div style="margin-top:10px;font-size:9px;color:rgba(255,255,255,0.2);line-height:1.4;">Valores fictícios apenas para demonstração.</div>
+          <div style="margin-top:10px;font-size:9px;color:rgba(255,255,255,0.2);line-height:1.4;">Estes valores são fictícios e servem apenas para demonstração.<br>Nenhum valor foi debitado ou creditado em conta real.</div>
         </div>
       `;
 
