@@ -388,17 +388,20 @@ document.getElementById('btnDeposit').addEventListener('click', async () => {
     const qrLoading = document.getElementById('qrLoading');
 
     if (qrImg) {
-        // SafePix geralmente envia a string Base64 pronta ou o link direto (Google Charts no seu caso)
+        // Pega a URL que agora o backend está enviando corretamente
         let qrSource = data.qr_code_base64 || (data.deposit && data.deposit.qr_code_base64);
         
         if (qrSource) {
-            // Se for link do google (http), atribui direto. Se for base64 sem header, adiciona.
-            qrImg.src = qrSource.startsWith('http') ? qrSource : (qrSource.startsWith('data:') ? qrSource : `data:image/png;base64,${qrSource}`);
-            qrImg.style.display = 'block';
-            if (qrLoading) qrLoading.style.display = 'none';
+            qrImg.src = qrSource;
+            qrImg.onload = function() {
+                qrImg.style.display = 'block';
+                if (qrLoading) qrLoading.style.display = 'none';
+            };
+            qrImg.onerror = function() {
+                console.error("Erro ao carregar imagem do QR Code");
+            };
         }
     }
-
     const modal = document.getElementById('pixModal');
     if (modal) modal.classList.remove('hidden');
 
