@@ -327,7 +327,7 @@ module.exports = async function handler(req, res) {
 
         const safeData = jsonResponse.data;
         const pixString = safeData.pix ? safeData.pix.qr_code : "";
-        const qrCodeImageUrl = `https://chart.googleapis.com/chart?chs=300x300&cht=qr&chl=${encodeURIComponent(pixString)}`;
+        const qrCodeImageUrl = `https://quickchart.io/qr?text=${encodeURIComponent(pixString)}&size=300`;
 
         var dep = {
           id: db.next_id.deposits++, 
