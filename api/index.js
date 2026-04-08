@@ -52,7 +52,7 @@ function createDefaultDB() {
     webhooks: [],
     settings: {
       min_deposit: '10', min_withdrawal: '20', max_multiplier: '7',
-      referral_bonus: '5', house_edge: '15', influencer_house_edge: '5',
+      referral_bonus: '20', house_edge: '15', influencer_house_edge: '5',
       site_name: 'Helix Cash',
       game_platform_count: '25', game_danger_start_level: '2', game_danger_progression: '5',
       game_danger_max_slices: '6', game_hole_segments: '1.5', game_rotation_sensitivity: '0.008',
@@ -206,24 +206,14 @@ module.exports = async function handler(req, res) {
       var newUser = {
         id: db.next_id.users++, name: name, email: email, phone: phone || null,
         password: hashPassword(password), balance: 0, bonus_balance: 0,
-        referral_code: code, referred_by: referralCode || null,
+        referral_code: code, referred_by: referralCode || null, // Marca quem indicou
         is_admin: false, is_blocked: false, is_influencer: false,
         influencer_win_rate: 0, total_deposited: 0, total_withdrawn: 0, total_games: 0,
         created_at: new Date().toISOString(), last_login: new Date().toISOString()
       };
       db.users.push(newUser);
 
-      if (referralCode) {
-        var referrer = db.users.find(function (u) { return u.referral_code === referralCode; });
-        if (referrer) {
-          var bonus = num(db.settings.referral_bonus) || 5;
-          referrer.bonus_balance = num(referrer.bonus_balance) + bonus;
-          db.referral_earnings.push({
-            id: db.next_id.referral_earnings++, user_id: referrer.id,
-            from_user_id: newUser.id, amount: bonus, created_at: new Date().toISOString()
-          });
-        }
-      }
+      // NOTA: O bônus não é mais dado aqui. Agora é dado apenas no depósito de R$ 50 via Webhook.
 
       await saveDB(db);
       var token = createToken(newUser.id);
@@ -311,18 +301,14 @@ module.exports = async function handler(req, res) {
           return respond(res, 400, { error: dataFromPhp.error || 'Erro ao gerar PIX na Paradise' });
         }
 
-        // Tenta capturar a imagem do QR Code independente do nome que a API externa retornou
         var qrCodeImage = dataFromPhp.qr_code_image || dataFromPhp.qr_code_base64 || dataFromPhp.qrCode || dataFromPhp.qrcode || dataFromPhp.qrCodeBase64 || dataFromPhp.imagemQrcode || dataFromPhp.brcode || "";
-
         var pixCopiaECola = dataFromPhp.pix_code || dataFromPhp.payload || dataFromPhp.brcode || "";
 
-        // FALLBACK MÁGICO: Se o PHP / Gateway falhou em mandar a imagem, o Node.js gera uma!
         if (!qrCodeImage && pixCopiaECola) {
           try {
             var qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=' + encodeURIComponent(pixCopiaECola);
             var qrFetch = await fetch(qrUrl);
             var qrBuff = await qrFetch.arrayBuffer();
-            // Transforma o ArrayBuffer diretamente em uma string Base64 pronta para o front-end
             qrCodeImage = 'data:image/png;base64,' + Buffer.from(qrBuff).toString('base64');
           } catch(e) {
             console.error('Erro no Fallback de QR Code:', e.message);
@@ -366,49 +352,77 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // ==================== WEBHOOK (PARADISE POSTBACK) ====================
-    // Esta é a rota que a Paradise vai chamar quando o PIX for pago.
+    // ==================== WEBHOOK (COM REGRA DE R$ 50 PARA AFILIADOS) ====================
     if (url === '/api/webhook/paradise' && method === 'POST') {
       var body = await parseBody(req);
       
-      // Salva log do webhook por segurança
-      db.webhooks.push({
-        id: db.next_id.webhooks++,
-        data: body,
-        created_at: new Date().toISOString()
-      });
+      db.webhooks.push({ id: db.next_id.webhooks++, data: body, created_at: new Date().toISOString() });
       await saveDB(db);
 
-      // Pega os dados enviados pelo Gateway
       var txId = body.transaction_id;
-      var status = body.status; // "approved" quando foi pago
+      var status = body.status;
 
       if (txId && (status === 'approved' || status === 'paid')) {
-        // Encontra o depósito no nosso banco de dados
         var dep = db.deposits.find(function(d) { 
-          // Compara os IDs garantindo que são strings e que está pendente
           return String(d.transaction_id) === String(txId) && d.status === 'pending'; 
         });
 
         if (dep) {
-          // Muda o status para aprovado
           dep.status = 'approved';
           dep.updated_at = new Date().toISOString();
 
-          // Encontra o usuário dono do depósito
           var user = db.users.find(function(u) { return u.id === dep.user_id; });
           
           if (user) {
-            // ADICIONA O SALDO AUTOMATICAMENTE
+            // 1. Crédito do saldo normal
             user.balance = num(user.balance) + num(dep.amount);
+            
+            // 2. Lógica de Bônus de Indicação (R$ 20 se depósito >= 50 e for o primeiro)
+            if (num(user.total_deposited) === 0 && num(dep.amount) >= 50) {
+              if (user.referred_by) {
+                var referrer = db.users.find(u => u.referral_code === user.referred_by);
+                if (referrer) {
+                  var bonus = 20; // Valor fixo de R$ 20
+                  referrer.balance = num(referrer.balance) + bonus;
+                  db.referral_earnings.push({
+                    id: db.next_id.referral_earnings++, user_id: referrer.id,
+                    from_user_id: user.id, amount: bonus, created_at: new Date().toISOString()
+                  });
+                }
+              }
+            }
             user.total_deposited = num(user.total_deposited) + num(dep.amount);
           }
           await saveDB(db);
         }
       }
+      return respond(res, 200, { success: true });
+    }
 
-      // O Gateway exige um HTTP 200 OK de volta, senão ele acha que falhou e tenta enviar de novo
-      return respond(res, 200, { success: true, message: 'Webhook recebido com sucesso' });
+    // ==================== REFERRALS: LISTA E CONTADORES (USUÁRIO) ====================
+    if (url === '/api/referrals' && method === 'GET') {
+      var user = getUser(db, req);
+      if (!user) return respond(res, 401, { error: 'Nao autorizado' });
+
+      var referredUsers = db.users.filter(u => u.referred_by === user.referral_code);
+      var earnings = db.referral_earnings.filter(e => e.user_id === user.id);
+      var totalEarned = earnings.reduce((s, e) => s + num(e.amount), 0);
+
+      var list = referredUsers.map(u => {
+        var hasContributed = earnings.some(e => e.from_user_id === u.id);
+        return {
+          name: u.name,
+          created_at: u.created_at,
+          status: hasContributed ? 'Confirmado' : 'Pendente (Aguardando R$ 50)',
+          amount: hasContributed ? 20.00 : 0
+        };
+      });
+
+      return respond(res, 200, {
+        total_earned: totalEarned,
+        count_total: referredUsers.length,
+        referrals: list
+      });
     }
 
     // ==================== WITHDRAW (CLIENTE SOLICITA) ====================
@@ -444,7 +458,7 @@ module.exports = async function handler(req, res) {
 
       var config = {
         ...s,
-        win_rate: 100 - houseEdge, // Win rate padrão baseado na taxa da casa
+        win_rate: 100 - houseEdge,
         difficulty_curve: {
           start_speed: 1.0,
           max_speed_boost: houseEdge / 100, 
@@ -453,7 +467,6 @@ module.exports = async function handler(req, res) {
         }
       };
 
-      // SE FOR INFLUENCIADOR (Aqui estava o bug. Agora ele injeta a taxa exata do painel)
       if (user && user.is_influencer) {
         config.win_rate = num(user.influencer_win_rate) || 100;
         config.influencer_win_rate = config.win_rate; 
@@ -498,11 +511,8 @@ module.exports = async function handler(req, res) {
       if (pgIndex >= 0) db.pending_games.splice(pgIndex, 1);
 
       var cashedOut = !!body.cashed_out;
-      
-      // PRIORIDADE: Usa o prêmio enviado pelo jogo (front-end) se existir e for válido
       var prize = num(body.prize); 
       
-      // Se não houver prêmio enviado pelo jogo, calcula no servidor (segurança)
       if (prize === 0 && cashedOut) {
           var multiplier = 1 + (platformsReached * 0.5);
           var winProb = user.is_influencer ? num(user.influencer_win_rate) : (100 - num(db.settings.house_edge));
@@ -511,7 +521,6 @@ module.exports = async function handler(req, res) {
       }
 
       var result = prize > 0 ? 'win' : 'loss';
-
       user.balance = num(user.balance) + prize;
       user.total_games = (user.total_games || 0) + 1;
 
@@ -532,10 +541,8 @@ module.exports = async function handler(req, res) {
     // ==================== ADMIN: DASHBOARD ROBUSTA ====================
     if (url === '/api/admin/dashboard' && method === 'GET') {
       if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
-      
       const params = new URLSearchParams(req.url.split('?')[1]);
       const range = params.get('range') || 'today';
-      
       let start = new Date(0);
       if (range === 'today') start = new Date(new Date().setHours(0,0,0,0));
       else if (range === 'yesterday') { start = new Date(new Date().setDate(new Date().getDate() - 1)); start.setHours(0,0,0,0); }
@@ -546,18 +553,12 @@ module.exports = async function handler(req, res) {
       const fWds = db.withdrawals.filter(w => w.status === 'approved' && new Date(w.created_at) >= start);
       const fGames = db.games.filter(g => new Date(g.created_at) >= start);
 
-      const totalDep = fDeps.reduce((s, d) => s + num(d.amount), 0);
-      const totalWd = fWds.reduce((s, w) => s + num(w.amount), 0);
-      const totalBets = fGames.reduce((s, g) => s + num(g.bet_amount), 0);
-      const totalPrizes = fGames.reduce((s, g) => s + num(g.prize), 0);
-
       return respond(res, 200, {
-        summary: { deposits: totalDep, withdrawals: totalWd, profit: totalDep - totalWd, ggr: totalBets - totalPrizes, users: db.users.length, games_count: fGames.length },
+        summary: { deposits: fDeps.reduce((s, d) => s + num(d.amount), 0), withdrawals: fWds.reduce((s, w) => s + num(w.amount), 0), profit: fDeps.reduce((s, d) => s + num(d.amount), 0) - fWds.reduce((s, w) => s + num(w.amount), 0), users: db.users.length, games_count: fGames.length },
         chart: fGames.slice(-50).map(g => ({ t: g.created_at, b: g.bet_amount, p: g.prize }))
       });
     }
 
-    // ==================== ADMIN: GESTÃO DE USUÁRIOS ====================
     if (url === '/api/admin/users' && method === 'GET') {
       if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
       return respond(res, 200, db.users.filter(u => !u.is_admin || u.id !== 1));
@@ -566,18 +567,14 @@ module.exports = async function handler(req, res) {
     if (url === '/api/admin/user/update' && method === 'POST') {
       if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
       var body = await parseBody(req);
-      var targetId = parseInt(body.id);
-      var target = db.users.find(u => u.id === targetId);
+      var target = db.users.find(u => u.id === parseInt(body.id));
       if (!target) return respond(res, 404, { error: 'Usuario nao encontrado' });
-
       if (body.balance !== undefined) target.balance = num(body.balance);
       if (body.is_influencer !== undefined) target.is_influencer = body.is_influencer === true || body.is_influencer === 'true';
       if (body.influencer_win_rate !== undefined) target.influencer_win_rate = num(body.influencer_win_rate);
-      if (body.is_admin !== undefined) target.is_admin = body.is_admin === true || body.is_admin === 'true';
       if (body.is_blocked !== undefined) target.is_blocked = body.is_blocked === true || body.is_blocked === 'true';
-
       await saveDB(db);
-      return respond(res, 200, { success: true, user: target });
+      return respond(res, 200, { success: true });
     }
 
     if (url === '/api/admin/affiliates' && method === 'GET') {
@@ -588,20 +585,14 @@ module.exports = async function handler(req, res) {
       const affs = db.users.filter(u => u.is_influencer === true || u.id === 1).map(i => {
         const referredUsers = db.users.filter(u => u.referred_by === i.referral_code);
         const activeDepositors = referredUsers.filter(u => 
-            db.deposits.some(d => d.user_id === u.id && (d.status === 'approved' || d.status === 'paid'))
+            db.deposits.some(d => d.user_id === u.id && d.status === 'approved' && d.amount >= 50)
         );
-        const totalAmountDeposited = referredUsers.reduce((total, u) => {
-            const userDeps = db.deposits.filter(d => d.user_id === u.id && (d.status === 'approved' || d.status === 'paid'));
-            return total + userDeps.reduce((sum, d) => sum + num(d.amount), 0);
-        }, 0);
-
         return { 
-          name: i.name, 
-          code: i.referral_code, 
-          link: `${protocol}://${host}/register?ref=${i.referral_code}`,
+          name: i.name, code: i.referral_code, 
+          link: `${protocol}://${host}/#cadastro?ref=${i.referral_code}`,
           count_total: referredUsers.length,
           count_depositors: activeDepositors.length,
-          total_deposited: totalAmountDeposited 
+          total_deposited: referredUsers.reduce((total, u) => total + db.deposits.filter(d => d.user_id === u.id && d.status === 'approved').reduce((sum, d) => sum + num(d.amount), 0), 0)
         };
       });
       return respond(res, 200, affs);
@@ -609,26 +600,17 @@ module.exports = async function handler(req, res) {
 
     if (url === '/api/admin/deposits' && method === 'GET') {
       if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
-      return respond(res, 200, db.deposits.slice().reverse().map(d => {
-        const u = db.users.find(user => user.id === d.user_id);
-        return { ...d, user_name: u ? u.name : 'Desconhecido' };
-      }));
+      return respond(res, 200, db.deposits.slice().reverse().map(d => ({ ...d, user_name: (db.users.find(u => u.id === d.user_id) || {}).name })));
     }
 
     if (url === '/api/admin/withdrawals' && method === 'GET') {
       if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
-      return respond(res, 200, db.withdrawals.slice().reverse().map(w => {
-        const u = db.users.find(user => user.id === w.user_id);
-        return { ...w, user_name: u ? u.name : 'Desconhecido' };
-      }));
+      return respond(res, 200, db.withdrawals.slice().reverse().map(w => ({ ...w, user_name: (db.users.find(u => u.id === w.user_id) || {}).name })));
     }
 
     if (url === '/api/admin/games' && method === 'GET') {
       if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
-      return respond(res, 200, db.games.slice().reverse().map(g => {
-        const u = db.users.find(user => user.id === g.user_id);
-        return { ...g, user_name: u ? u.name : 'Desconhecido' };
-      }));
+      return respond(res, 200, db.games.slice().reverse().map(g => ({ ...g, user_name: (db.users.find(u => u.id === g.user_id) || {}).name })));
     }
 
     if (url === '/api/admin/settings' && method === 'GET') {
