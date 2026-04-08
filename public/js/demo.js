@@ -2,13 +2,27 @@
 (function() {
   'use strict';
 
-  // Configurações travadas para o modo Demo
+  // Configurações travadas para o modo Demo (Versão Fácil / 60%)
   var CONFIG = {
-    platformCount: 30, platformSpacing: 2.2, platformOuterRadius: 2.2,
-    platformInnerRadius: 0.5, platformHeight: 0.35, postRadius: 0.5,
-    postHeight: 5000, ballRadius: 0.30, ballBounceForce: 0.35, gravity: 0.025,
-    segmentsPerPlatform: 12, holeSegments: 2,
-    dangerStartLevel: 3, dangerProgression: 4, dangerMaxSlices: 4, // Demo um pouco mais fácil
+    platformCount: 30, 
+    platformSpacing: 2.2, 
+    platformOuterRadius: 2.2,
+    platformInnerRadius: 0.5, 
+    platformHeight: 0.35, 
+    postRadius: 0.5,
+    postHeight: 5000, 
+    ballRadius: 0.30, 
+    ballBounceForce: 0.35, 
+    gravity: 0.025,
+    segmentsPerPlatform: 12, 
+    
+    // --- MUDANÇAS DA VERSÃO FÁCIL ---
+    holeSegments: 3,         // AUMENTADO: O buraco de descida agora é maior (ocupa 3 fatias), facilitando muito a passagem.
+    dangerStartLevel: 6,     // AUMENTADO: O jogador desce as primeiras 5 plataformas sem NENHUM perigo (tudo azul).
+    dangerProgression: 10,   // AUMENTADO: Demora muito mais andares para o jogo adicionar mais fatias vermelhas.
+    dangerMaxSlices: 2,      // REDUZIDO: O máximo de fatias vermelhas por andar nunca passa de 2 (sobrando muito espaço seguro).
+    // --------------------------------
+    
     cameraFov: 60, cameraDistance: 11.0, cameraHeight: 6.5, cameraOffsetDown: 3.5,
     postExtraTop: 20.0, cameraFollowSpeed: 0.15, rotationSensitivity: 0.008,
     targetMultiplier: 8, // Meta de R$ 80 (10 de entrada * 8)
