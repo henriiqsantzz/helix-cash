@@ -1,582 +1,1009 @@
-const crypto = require('crypto');
-const fs = require('fs');
+// ===================== STATE =====================
 
-// ===================== CONFIG =====================
-const JWT_SECRET = process.env.JWT_SECRET || 'helix-cash-secret-2024';
-const DB_FILE = '/tmp/helix-db.json';
-const SUPABASE_URL = process.env.SUPABASE_URL || '';
-const SUPABASE_KEY = process.env.SUPABASE_KEY || '';
-const USE_SUPABASE = !!(SUPABASE_URL && SUPABASE_KEY);
+let token = localStorage.getItem('hc_token');
 
-const SAFEPIX_PUBLIC_KEY = process.env.SAFEPIX_PUBLIC_KEY || 'safepix_live_MyPu6LlpTczGHIJt0aA9OF9gAfetvgnh';
-const SAFEPIX_SECRET_KEY = process.env.SAFEPIX_SECRET_KEY || 'sk_live_aCX5fucV1Kjx98iTfaLH675KMpI7xiiH';
+let user = JSON.parse(localStorage.getItem('hc_user') || 'null');
 
-// ===================== SUPABASE HELPER =====================
-async function supaFetch(path, method, body, extraHeaders) {
-  if (!USE_SUPABASE) return null;
-  var url = SUPABASE_URL + '/rest/v1/' + path;
-  var opts = {
-    method: method || 'GET',
-    headers: {
-      'apikey': SUPABASE_KEY,
-      'Authorization': 'Bearer ' + SUPABASE_KEY,
-      'Content-Type': 'application/json',
-      ...(extraHeaders || {})
-    }
+let currentBet = 0;
+
+let currentGameId = null;
+
+let currentDepositId = null;
+
+let depositCheckInterval = null;
+
+
+
+// ===================== ROUTER =====================
+
+function navigate(rawHash) {
+
+  // Limpa o hash para remover parâmetros da URL (Ex: transforma "#cadastro?ref=123" em "#cadastro")
+
+  let hash = rawHash.split('?')[0];
+
+
+
+  const routes = {
+
+    '': 'page-landing',
+
+    '#': 'page-landing',
+
+    '#login': 'page-login',
+
+    '#cadastro': 'page-register',
+
+    '#painel': 'page-panel',
+
+    '#jogo': 'page-game'
+
   };
-  if (body && (method === 'POST' || method === 'PATCH' || method === 'PUT')) {
-    opts.body = JSON.stringify(body);
+
+
+
+  if ((hash === '#painel' || hash === '#jogo') && !token) hash = '#login';
+
+  if (token && (hash === '' || hash === '#' || hash === '#login' || hash === '#cadastro')) hash = '#painel';
+
+
+
+  const pageId = routes[hash] || 'page-landing';
+
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+
+  const page = document.getElementById(pageId);
+
+  if (page) { 
+
+    page.classList.add('active'); 
+
+    page.classList.remove('hidden'); 
+
   }
-  var res = await fetch(url, opts);
-  var text = await res.text();
-  if (!res.ok) throw new Error('Supabase ' + res.status + ': ' + text);
-  return text ? JSON.parse(text) : null;
+
+  if (hash === '#painel') { loadUserData(); loadStats(); }
+
 }
 
-// ===================== DATABASE =====================
-function createDefaultDB() {
-  const salt = crypto.randomBytes(16).toString('hex');
-  const hash = crypto.pbkdf2Sync('admin123', salt, 1000, 64, 'sha512').toString('hex');
-  return {
-    users: [{
-      id: 1, name: 'Admin', email: 'admin@helixcash.com', phone: null,
-      password: salt + ':' + hash, balance: 0, bonus_balance: 0,
-      referral_code: 'ADMIN001', referred_by: null,
-      is_admin: true, is_blocked: false, is_influencer: false,
-      influencer_win_rate: 0, total_deposited: 0, total_withdrawn: 0, total_games: 0,
-      created_at: new Date().toISOString(), last_login: null
-    }],
-    deposits: [],
-    withdrawals: [],
-    games: [],
-    pending_games: [],
-    referral_earnings: [],
-    webhooks: [],
-    settings: {
-      min_deposit: '1', min_withdrawal: '20', max_multiplier: '7',
-      referral_bonus: '20', house_edge: '15', influencer_house_edge: '5',
-      site_name: 'Helix Cash',
-      game_platform_count: '25', game_danger_start_level: '2', game_danger_progression: '5',
-      game_danger_max_slices: '6', game_hole_segments: '1.5', game_rotation_sensitivity: '0.008',
-      inf_game_danger_max_slices: '1', inf_game_danger_start_level: '10', inf_game_hole_segments: '3.0'
-    },
-    next_id: { users: 2, deposits: 1, withdrawals: 1, games: 1, pending_games: 1, referral_earnings: 1, webhooks: 1 }
-  };
-}
 
-async function loadDB() {
-  if (USE_SUPABASE) {
-    try {
-      var rows = await supaFetch('app_state?select=data&id=eq.1');
-      if (rows && rows.length > 0 && rows[0].data) {
-        var data = typeof rows[0].data === 'string' ? JSON.parse(rows[0].data) : rows[0].data;
-        if (!data.pending_games) data.pending_games = [];
-        if (!data.webhooks) data.webhooks = [];
-        if (!data.next_id.pending_games) data.next_id.pending_games = 1;
-        try { fs.writeFileSync(DB_FILE, JSON.stringify(data)); } catch(e) {}
-        return data;
-      }
-    } catch (e) { console.error('Supabase load error:', e.message); }
+
+window.addEventListener('hashchange', () => navigate(location.hash));
+
+
+
+window.addEventListener('load', () => { 
+
+  // Captura o código de indicação da query normal (?ref=) ou de dentro do Hash (#cadastro?ref=)
+
+  let refCode = new URLSearchParams(window.location.search).get('ref');
+
+  if (!refCode && window.location.hash.includes('?')) {
+
+      refCode = new URLSearchParams(window.location.hash.split('?')[1]).get('ref');
+
   }
-  try {
-    if (fs.existsSync(DB_FILE)) {
-      var data = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
-      if (!data.pending_games) data.pending_games = [];
-      if (!data.webhooks) data.webhooks = [];
-      if (!data.next_id.pending_games) data.next_id.pending_games = 1;
-      return data;
+
+
+
+  if (refCode) {
+
+    localStorage.setItem('hc_pending_ref', refCode);
+
+    
+
+    // Tenta preencher no input se ele já existir na tela
+
+    const refInput = document.getElementById('registerReferralInput');
+
+    if (refInput) refInput.value = refCode;
+
+    
+
+    // Se a pessoa acessou com link de indicação e não está logada, força o redirecionamento pro cadastro
+
+    if (!token) {
+
+        window.location.hash = '#cadastro';
+
     }
-  } catch (e) { console.error('DB load error:', e.message); }
-  return createDefaultDB();
-}
 
-async function saveDB(db) {
-  try { fs.writeFileSync(DB_FILE, JSON.stringify(db)); } catch (e) {}
-  if (USE_SUPABASE) {
-    try {
-      await supaFetch('app_state', 'POST',
-        { id: 1, data: db, updated_at: new Date().toISOString() },
-        { 'Prefer': 'return=minimal,resolution=merge-duplicates' }
-      );
-    } catch (e) { console.error('Supabase save error:', e.message); }
   }
-}
 
-// ===================== AUTH HELPERS =====================
-function hashPassword(password) {
-  const salt = crypto.randomBytes(16).toString('hex');
-  const hash = crypto.pbkdf2Sync(password, salt, 1000, 64, 'sha512').toString('hex');
-  return salt + ':' + hash;
-}
+  
 
-function verifyPassword(password, stored) {
-  const parts = stored.split(':');
-  const test = crypto.pbkdf2Sync(password, parts[0], 1000, 64, 'sha512').toString('hex');
-  return parts[1] === test;
-}
+  navigate(window.location.hash); 
 
-function createToken(userId) {
-  const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
-  const payload = Buffer.from(JSON.stringify({ id: userId, exp: Date.now() + 7 * 24 * 60 * 60 * 1000 })).toString('base64url');
-  const sig = crypto.createHmac('sha256', JWT_SECRET).update(header + '.' + payload).digest('base64url');
-  return header + '.' + payload + '.' + sig;
-}
+  loadPublicStats(); 
 
-function verifyToken(token) {
+});
+
+
+
+// ===================== API HELPER =====================
+
+async function api(url, options = {}) {
+
+  const headers = { 'Content-Type': 'application/json' };
+
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
   try {
-    const p = token.split('.');
-    const sig = crypto.createHmac('sha256', JWT_SECRET).update(p[0] + '.' + p[1]).digest('base64url');
-    if (p[2] !== sig) return null;
-    const data = JSON.parse(Buffer.from(p[1], 'base64url').toString());
-    if (data.exp < Date.now()) return null;
+
+    const res = await fetch(url, { ...options, headers });
+
+    const data = await res.json();
+
+    if (!res.ok) throw new Error(data.error || 'Erro desconhecido');
+
     return data;
-  } catch (e) { return null; }
+
+  } catch (e) { throw e; }
+
 }
 
-function parseBody(req) {
-  if (req.body) return Promise.resolve(req.body);
-  return new Promise(function (resolve) {
-    let d = '';
-    req.on('data', function (c) { d += c; });
-    req.on('end', function () { try { resolve(JSON.parse(d)); } catch (e) { resolve({}); } });
-  });
-}
 
-function respond(res, code, data) {
-  if (typeof res.status === 'function') return res.status(code).json(data);
-  res.statusCode = code;
-  res.setHeader('Content-Type', 'application/json');
-  res.end(JSON.stringify(data));
-}
 
-function getUser(db, req) {
-  const auth = (req.headers && (req.headers.authorization || req.headers.Authorization)) || '';
-  const token = auth.replace('Bearer ', '');
-  if (!token) return null;
-  const decoded = verifyToken(token);
-  if (!decoded) return null;
-  return db.users.find(function (u) { return u.id === decoded.id; }) || null;
-}
+// ===================== AUTH =====================
 
-function num(v) { return parseFloat(v) || 0; }
+document.getElementById('registerForm').addEventListener('submit', async (e) => {
 
-// ===================== MAIN HANDLER =====================
-module.exports = async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
-  if (req.method === 'OPTIONS') return respond(res, 200, {});
+  e.preventDefault();
 
-  var db = await loadDB();
-  var url = req.url.split('?')[0];
-  var method = req.method;
+  const form = e.target;
 
-  const safePixAuth = "Basic " + Buffer.from(`${SAFEPIX_PUBLIC_KEY}:${SAFEPIX_SECRET_KEY}`).toString("base64");
+  const errEl = document.getElementById('registerError');
+
+  errEl.classList.add('hidden');
+
+  const btn = form.querySelector('button[type="submit"]');
+
+  btn.disabled = true; btn.innerHTML = '<span class="loader"></span>';
+
+  
+
+  // Pega o código de indicação salvo no localStorage
+
+  const pendingRef = localStorage.getItem('hc_pending_ref') || '';
+
+
 
   try {
-    // PUBLIC STATS
-    if (url === '/api/stats' && method === 'GET') {
-      var nonAdmin = db.users.filter(function (u) { return !u.is_admin; });
-      var todayGames = db.games.filter(function (g) {
-        return g.created_at && g.created_at.startsWith(new Date().toISOString().split('T')[0]);
-      });
-      var todayPaid = todayGames.filter(function (g) { return g.result === 'win'; })
-        .reduce(function (s, g) { return s + num(g.prize); }, 0);
-      var maxWin = todayGames.filter(function (g) { return g.result === 'win'; })
-        .reduce(function (max, g) { return Math.max(max, num(g.prize)); }, 0);
-      return respond(res, 200, {
-        online: Math.max(nonAdmin.length, Math.floor(Math.random() * 50) + 20),
-        today_paid: todayPaid,
-        max_win_today: maxWin
-      });
-    }
 
-    // AUTH: REGISTER
-    if (url === '/api/auth/register' && method === 'POST') {
-      var body = await parseBody(req);
-      var name = (body.name || '').trim();
-      var email = (body.email || '').trim().toLowerCase();
-      var phone = (body.phone || '').trim();
-      var password = body.password || '';
-      var referralCode = (body.referral_code || '').trim();
+    const data = await api('/api/auth/register', {
 
-      if (!name || !email || !password) return respond(res, 400, { error: 'Nome, email e senha sao obrigatorios' });
-      if (password.length < 4) return respond(res, 400, { error: 'Senha deve ter pelo menos 4 caracteres' });
+      method: 'POST',
 
-      var existing = db.users.find(function (u) { return u.email === email; });
-      if (existing) return respond(res, 400, { error: 'Email ja cadastrado' });
+      body: JSON.stringify({
 
-      var code = 'HC' + crypto.randomBytes(3).toString('hex').toUpperCase();
-      var newUser = {
-        id: db.next_id.users++, name: name, email: email, phone: phone || null,
-        password: hashPassword(password), balance: 0, bonus_balance: 0,
-        referral_code: code, referred_by: referralCode || null,
-        is_admin: false, is_blocked: false, is_influencer: false,
-        influencer_win_rate: 0, total_deposited: 0, total_withdrawn: 0, total_games: 0,
-        created_at: new Date().toISOString(), last_login: new Date().toISOString()
-      };
-      db.users.push(newUser);
-      await saveDB(db);
-      var token = createToken(newUser.id);
-      return respond(res, 200, {
-        token: token,
-        user: { id: newUser.id, name: newUser.name, email: newUser.email, balance: 0, bonus_balance: 0, referral_code: code, is_admin: newUser.is_admin }
-      });
-    }
+        name: form.name.value, 
 
-    // AUTH: LOGIN
-    if (url === '/api/auth/login' && method === 'POST') {
-      var body = await parseBody(req);
-      var email = (body.email || '').trim().toLowerCase();
-      var password = body.password || '';
+        email: form.email.value,
 
-      if (!email || !password) return respond(res, 400, { error: 'Email e senha sao obrigatorios' });
+        phone: form.phone.value, 
 
-      var user = db.users.find(function (u) { return u.email === email; });
-      if (!user) return respond(res, 401, { error: 'Email ou senha incorretos' });
-      if (!verifyPassword(password, user.password)) return respond(res, 401, { error: 'Email ou senha incorretos' });
-      if (user.is_blocked) return respond(res, 403, { error: 'Conta bloqueada' });
+        password: form.password.value,
 
-      user.last_login = new Date().toISOString();
-      await saveDB(db);
+        referral_code: pendingRef
 
-      var token = createToken(user.id);
-      return respond(res, 200, {
-        token: token,
-        user: {
-          id: user.id, name: user.name, email: user.email,
-          balance: num(user.balance), bonus_balance: num(user.bonus_balance),
-          referral_code: user.referral_code, is_admin: user.is_admin
-        }
-      });
-    }
+      })
 
-    // AUTH: ME
-    if ((url === '/api/auth/me' || url === '/api/user/me') && method === 'GET') {
-      var user = getUser(db, req);
-      if (!user) return respond(res, 401, { error: 'Nao autorizado' });
-      return respond(res, 200, {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        balance: num(user.balance),
-        bonus_balance: num(user.bonus_balance),
-        referral_code: user.referral_code,
-        is_admin: user.is_admin,
-        is_influencer: user.is_influencer,
-        referrals: db.users.filter(function (u) { return u.referred_by === user.referral_code; }).length
-      });
-    }
+    });
 
-    // USER: BALANCE
-    if (url === '/api/user/balance' && method === 'GET') {
-      var user = getUser(db, req);
-      if (!user) return respond(res, 401, { error: 'Nao autorizado' });
-      return respond(res, 200, { balance: num(user.balance), bonus_balance: num(user.bonus_balance) });
-    }
+    token = data.token; user = data.user;
 
-    // DEPOSIT (SAFEPIX QR CODE FIX)
-    if (url === '/api/deposit' && method === 'POST') {
-      var user = getUser(db, req);
-      if (!user) return respond(res, 401, { error: 'Nao autorizado' });
-      var body = await parseBody(req);
-      
-      try {
-        const protocol = req.headers['x-forwarded-proto'] || 'https';
-        const host = req.headers.host;
-        const postbackUrl = `${protocol}://${host}/api/webhook/safepix`;
+    localStorage.setItem('hc_token', token);
 
-        const amountCents = Math.round(num(body.amount) * 100);
-        const cleanCpf = body.cpf ? body.cpf.replace(/\D/g, '') : '';
+    localStorage.setItem('hc_user', JSON.stringify(user));
 
-        const payload = {
-          amount: amountCents,
-          payment_method: "pix",
-          postback_url: postbackUrl,
-          customer: {
-            name: user.name,
-            email: user.email,
-            document: { type: "cpf", number: cleanCpf },
-            phone: user.phone || "5511999999999"
-          },
-          items: [{
-            title: "Creditos Helix Cash",
-            unit_price: amountCents,
-            quantity: 1,
-            tangible: false
-          }],
-          metadata: { provider_name: "API Pix", user_id: String(user.id) }
-        };
+    localStorage.removeItem('hc_pending_ref');
 
-        const safeRes = await fetch('https://api.safepix.pro/v1/payment-transaction/create', {
-          method: 'POST',
-          headers: {
-            'accept': 'application/json',
-            'content-type': 'application/json',
-            'authorization': safePixAuth
-          },
-          body: JSON.stringify(payload)
-        });
+    showToast('Conta criada com sucesso!');
 
-        const jsonResponse = await safeRes.json();
+    location.hash = '#painel';
 
-        if (!safeRes.ok || !jsonResponse.success) {
-          return respond(res, 400, { error: jsonResponse.message || 'Erro ao gerar pagamento SafePix' });
-        }
+  } catch (e) { errEl.textContent = e.message; errEl.classList.remove('hidden'); }
 
-        const safeData = jsonResponse.data;
-        const pixString = (safeData.pix && safeData.pix.qr_code) ? safeData.pix.qr_code : "";
+  finally { btn.disabled = false; btn.textContent = 'CRIAR CONTA'; }
 
-        // URL do Google Charts para gerar a imagem do QR Code
-        const qrCodeImageUrl = pixString 
-          ? `https://chart.googleapis.com/chart?chs=300x300&cht=qr&chl=${encodeURIComponent(pixString)}&choe=UTF-8`
-          : "";
+});
 
-        var dep = {
-          id: db.next_id.deposits++, 
-          user_id: user.id, 
-          amount: num(body.amount),
-          status: 'pending', 
-          pix_code: pixString, 
-          transaction_id: safeData.id,
-          qr_code_base64: qrCodeImageUrl, // CAMPO PREENCHIDO COM A URL DA IMAGEM
-          created_at: new Date().toISOString(), 
-          updated_at: new Date().toISOString()
-        };
 
-        db.deposits.push(dep);
-        await saveDB(db);
 
-        return respond(res, 200, { 
-          success: true, 
-          deposit: dep, 
-          pix_code: dep.pix_code, 
-          qr_code_base64: qrCodeImageUrl, // CAMPO ENVIADO PARA O APP.JS
-          deposit_id: dep.id 
-        });
+document.getElementById('loginForm').addEventListener('submit', async (e) => {
 
-      } catch (e) {
-        return respond(res, 500, { error: 'Erro de conexao SafePix' });
-      }
-    }
+  e.preventDefault();
 
-    // CHECK DEPOSIT STATUS
-    if (url === '/api/deposit/status' && method === 'POST') {
-      var user = getUser(db, req);
-      if (!user) return respond(res, 401, { error: 'Nao autorizado' });
-      var body = await parseBody(req);
-      var depId = body.deposit_id;
+  const form = e.target;
 
-      var dep = db.deposits.find(function(d) { return d.id === depId && d.user_id === user.id; });
-      if (!dep) return respond(res, 404, { error: 'Deposito nao encontrado' });
+  const errEl = document.getElementById('loginError');
 
-      return respond(res, 200, {
-        status: dep.status, amount: num(dep.amount), new_balance: num(user.balance),
-        pix_code: dep.pix_code, qr_code_base64: dep.qr_code_base64
-      });
-    }
+  errEl.classList.add('hidden');
 
-    // WEBHOOK SAFEPIX
-    if (url === '/api/webhook/safepix' && method === 'POST') {
-      var body = await parseBody(req);
-      db.webhooks.push({ id: db.next_id.webhooks++, data: body, created_at: new Date().toISOString() });
-      await saveDB(db);
+  const btn = form.querySelector('button[type="submit"]');
 
-      const txId = body.Id || body.id;
-      const status = body.Status || body.status;
+  btn.disabled = true; btn.innerHTML = '<span class="loader"></span>';
 
-      if (txId && (status === 'PAID')) {
-        var dep = db.deposits.find(d => String(d.transaction_id) === String(txId) && d.status === 'pending');
-        if (dep) {
-          dep.status = 'approved';
-          dep.updated_at = new Date().toISOString();
-          var user = db.users.find(u => u.id === dep.user_id);
-          if (user) {
-            user.balance = num(user.balance) + num(dep.amount);
-            if (num(user.total_deposited) === 0 && num(dep.amount) >= 50 && user.referred_by) {
-              var referrer = db.users.find(u => u.referral_code === user.referred_by);
-              if (referrer) {
-                referrer.balance = num(referrer.balance) + 20;
-                db.referral_earnings.push({
-                  id: db.next_id.referral_earnings++, user_id: referrer.id, from_user_id: user.id, amount: 20, created_at: new Date().toISOString()
-                });
-              }
-            }
-            user.total_deposited = (user.total_deposited || 0) + num(dep.amount);
-          }
-          await saveDB(db);
-        }
-      }
-      return respond(res, 200, { success: true });
-    }
+  try {
 
-    // REFERRALS
-    if (url === '/api/referrals' && method === 'GET') {
-      var user = getUser(db, req);
-      if (!user) return respond(res, 401, { error: 'Nao autorizado' });
-      var referredUsers = db.users.filter(u => u.referred_by === user.referral_code);
-      var earnings = db.referral_earnings.filter(e => e.user_id === user.id);
-      var totalEarned = earnings.reduce((s, e) => s + num(e.amount), 0);
-      var list = referredUsers.map(u => {
-        var hasContributed = earnings.some(e => e.from_user_id === u.id);
-        return {
-          name: u.name, created_at: u.created_at, status: hasContributed ? 'Confirmado' : 'Pendente (Aguardando R$ 50)', amount: hasContributed ? 20.00 : 0
-        };
-      });
-      return respond(res, 200, { total_earned: totalEarned, count_total: referredUsers.length, referrals: list });
-    }
+    const data = await api('/api/auth/login', {
 
-    // WITHDRAW
-    if (url === '/api/withdraw' && method === 'POST') {
-      var user = getUser(db, req);
-      if (!user) return respond(res, 401, { error: 'Nao autorizado' });
-      var body = await parseBody(req);
-      var amount = num(body.amount);
-      var pixKey = (body.pix_key || '').trim();
-      var minWd = num(db.settings.min_withdrawal) || 20;
+      method: 'POST',
 
-      if (!pixKey || num(user.balance) < amount || amount < minWd) return respond(res, 400, { error: 'Dados invalidos ou saldo insuficiente' });
+      body: JSON.stringify({ email: form.email.value, password: form.password.value })
 
-      try {
-        const protocol = req.headers['x-forwarded-proto'] || 'https';
-        const host = req.headers.host;
-        const postbackUrl = `${protocol}://${host}/api/webhook/safepix_withdrawal`;
-        const payoutRes = await fetch('https://api.safepix.pro/v1/wallet-transaction/create/withdrawal', {
-          method: 'POST',
-          headers: { 'accept': 'application/json', 'content-type': 'application/json', 'authorization': safePixAuth },
-          body: JSON.stringify({ pix_key: pixKey, pix_type: body.pix_type || 'cpf', amount: amount, postback_url: postbackUrl })
-        });
-        const payoutData = await payoutRes.json();
-        if (!payoutRes.ok || !payoutData.success) return respond(res, 400, { error: payoutData.message || 'Erro Saque' });
+    });
 
-        user.balance = num(user.balance) - amount;
-        db.withdrawals.push({ id: db.next_id.withdrawals++, user_id: user.id, amount, pix_key: pixKey, status: 'processing', transaction_id: payoutData.data ? payoutData.data.id : payoutData.Id, created_at: new Date().toISOString(), updated_at: new Date().toISOString() });
-        await saveDB(db);
-        return respond(res, 200, { success: true, message: 'Saque solicitado com sucesso' });
-      } catch (e) { return respond(res, 500, { error: 'Erro ao processar saque' }); }
-    }
+    token = data.token; user = data.user;
 
-    // GAME ROUTES
-    if (url === '/api/game/config' && method === 'GET') {
-      var user = getUser(db, req);
-      var s = db.settings;
-      var houseEdge = num(s.house_edge);
-      var config = { ...s, win_rate: 100 - houseEdge, difficulty_curve: { start_speed: 1.0, max_speed_boost: houseEdge / 100, danger_increase_step: houseEdge > 60 ? 3 : 6, min_hole_size: Math.max(1.1, 2.5 - (houseEdge / 40)) } };
-      if (user && user.is_influencer) {
-        config.win_rate = num(user.influencer_win_rate) || 100;
-        config.difficulty_curve = { start_speed: 1.0, max_speed_boost: 0, danger_increase_step: 99, min_hole_size: 2.5 };
-      }
-      return respond(res, 200, config);
-    }
+    localStorage.setItem('hc_token', token);
 
-    if (url === '/api/game/start' && method === 'POST') {
-      var user = getUser(db, req);
-      if (!user) return respond(res, 401, { error: 'Nao autorizado' });
-      var body = await parseBody(req);
-      var betAmount = num(body.bet_amount);
-      if (betAmount <= 0 || betAmount > num(user.balance)) return respond(res, 400, { error: 'Saldo insuficiente' });
-      user.balance = num(user.balance) - betAmount;
-      var pg = { id: db.next_id.pending_games++, user_id: user.id, bet_amount: betAmount, created_at: new Date().toISOString() };
-      db.pending_games.push(pg);
-      await saveDB(db);
-      return respond(res, 200, { game_id: pg.id, new_balance: user.balance });
-    }
+    localStorage.setItem('hc_user', JSON.stringify(user));
 
-    if (url === '/api/game/finish' && method === 'POST') {
-      var user = getUser(db, req);
-      if (!user) return respond(res, 401, { error: 'Nao autorizado' });
-      var body = await parseBody(req);
-      var pgIndex = db.pending_games.findIndex(p => p.id === body.game_id && p.user_id === user.id);
-      var pg = pgIndex >= 0 ? db.pending_games[pgIndex] : null;
-      var betAmount = pg ? num(pg.bet_amount) : num(body.bet_amount);
-      if (pgIndex >= 0) db.pending_games.splice(pgIndex, 1);
-      var prize = num(body.prize);
-      if (prize === 0 && body.cashed_out) {
-          var multiplier = 1 + (num(body.platforms_reached) * 0.5);
-          var winProb = user.is_influencer ? num(user.influencer_win_rate) : (100 - num(db.settings.house_edge));
-          prize = (Math.random() * 100) <= winProb ? Math.round(betAmount * multiplier * 100) / 100 : 0;
-      }
-      user.balance = num(user.balance) + prize;
-      user.total_games = (user.total_games || 0) + 1;
-      db.games.push({ id: db.next_id.games++, user_id: user.id, bet_amount: betAmount, multiplier: prize > 0 ? (prize / betAmount).toFixed(2) : 0, platforms_reached: num(body.platforms_reached), prize: prize, result: prize > 0 ? 'win' : 'loss', created_at: new Date().toISOString() });
-      await saveDB(db);
-      return respond(res, 200, { result: prize > 0 ? 'win' : 'loss', prize: prize, new_balance: num(user.balance) });
-    }
+    if (user.is_admin) { window.location.href = '/admin.html'; return; }
 
-    // ADMIN ROUTES
-    var isAdminUser = (req) => { var u = getUser(db, req); return u && u.is_admin ? u : null; };
+    showToast('Bem-vindo de volta!');
 
-    if (url === '/api/admin/dashboard' && method === 'GET') {
-      if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
-      const range = (new URLSearchParams(req.url.split('?')[1])).get('range') || 'today';
-      let start = range === 'today' ? new Date(new Date().setHours(0,0,0,0)) : new Date(0);
-      const fDeps = db.deposits.filter(d => d.status === 'approved' && new Date(d.created_at) >= start);
-      const fWds = db.withdrawals.filter(w => w.status === 'approved' && new Date(w.created_at) >= start);
-      const fGames = db.games.filter(g => new Date(g.created_at) >= start);
-      return respond(res, 200, { summary: { deposits: fDeps.reduce((s, d) => s + num(d.amount), 0), withdrawals: fWds.reduce((s, w) => s + num(w.amount), 0), profit: fDeps.reduce((s, d) => s + num(d.amount), 0) - fWds.reduce((s, w) => s + num(w.amount), 0), users: db.users.length, games_count: fGames.length }, chart: fGames.slice(-50).map(g => ({ t: g.created_at, b: g.bet_amount, p: g.prize })) });
-    }
+    location.hash = '#painel';
 
-    // --- NOVAS ROTAS ADMIN (PARA GARANTIR AS 648 LINHAS) ---
-    if (url === '/api/admin/users' && method === 'GET') {
-      if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
-      return respond(res, 200, db.users.filter(u => !u.is_admin || u.id !== 1));
-    }
+  } catch (e) { errEl.textContent = e.message; errEl.classList.remove('hidden'); }
 
-    if (url === '/api/admin/user/update' && method === 'POST') {
-      if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
-      var body = await parseBody(req);
-      var target = db.users.find(u => u.id === parseInt(body.id));
-      if (!target) return respond(res, 404, { error: 'Usuario nao encontrado' });
-      if (body.balance !== undefined) target.balance = num(body.balance);
-      if (body.is_influencer !== undefined) target.is_influencer = body.is_influencer === true || body.is_influencer === 'true';
-      if (body.influencer_win_rate !== undefined) target.influencer_win_rate = num(body.influencer_win_rate);
-      if (body.is_blocked !== undefined) target.is_blocked = body.is_blocked === true || body.is_blocked === 'true';
-      await saveDB(db);
-      return respond(res, 200, { success: true });
-    }
+  finally { btn.disabled = false; btn.textContent = 'ENTRAR'; }
 
-    if (url === '/api/admin/affiliates' && method === 'GET') {
-      if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
-      const host = req.headers.host;
-      const protocol = req.headers['x-forwarded-proto'] || 'https';
-      const affs = db.users.filter(u => u.is_influencer === true || u.id === 1).map(i => {
-        const referredUsers = db.users.filter(u => u.referred_by === i.referral_code);
-        const activeDepositors = referredUsers.filter(u => db.deposits.some(d => d.user_id === u.id && d.status === 'approved'));
-        return { 
-          name: i.name, code: i.referral_code, 
-          link: `${protocol}://${host}/#cadastro?ref=${i.referral_code}`,
-          count_total: referredUsers.length,
-          count_depositors: activeDepositors.length,
-          total_deposited: referredUsers.reduce((total, u) => total + db.deposits.filter(d => d.user_id === u.id && d.status === 'approved').reduce((sum, d) => sum + num(d.amount), 0), 0)
-        };
-      });
-      return respond(res, 200, affs);
-    }
+});
 
-    if (url === '/api/admin/deposits' && method === 'GET') {
-      if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
-      return respond(res, 200, db.deposits.slice().reverse().map(d => ({ ...d, user_name: (db.users.find(u => u.id === d.user_id) || {}).name })));
-    }
 
-    if (url === '/api/admin/withdrawals' && method === 'GET') {
-      if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
-      return respond(res, 200, db.withdrawals.slice().reverse().map(w => ({ ...w, user_name: (db.users.find(u => u.id === w.user_id) || {}).name })));
-    }
 
-    if (url === '/api/admin/games' && method === 'GET') {
-      if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
-      return respond(res, 200, db.games.slice().reverse().map(g => ({ ...g, user_name: (db.users.find(u => u.id === g.user_id) || {}).name })));
-    }
+function logout() {
 
-    if (url === '/api/admin/settings' && (method === 'GET' || method === 'POST')) {
-      if (!isAdminUser(req)) return respond(res, 401, { error: 'Nao autorizado' });
-      if (method === 'POST') { db.settings = { ...db.settings, ...(await parseBody(req)) }; await saveDB(db); return respond(res, 200, { success: true }); }
-      return respond(res, 200, db.settings || {});
-    }
+  token = null; user = null;
 
-    return respond(res, 404, { error: 'Rota nao encontrada' });
-  } catch (err) {
-    console.error('API Error:', err);
-    return respond(res, 500, { error: 'Erro interno' });
+  localStorage.removeItem('hc_token'); 
+
+  localStorage.removeItem('hc_user');
+
+  
+
+  // Fecha o menu se estiver aberto
+
+  const menu = document.getElementById('sideMenu');
+
+  const overlay = document.getElementById('menuOverlay');
+
+  if (menu) menu.classList.remove('active');
+
+  if (overlay) overlay.classList.remove('active');
+
+
+
+  // Direciona para o login e força atualização para zerar o estado
+
+  window.location.hash = '#login';
+
+  window.location.reload();
+
+}
+
+
+
+// ===================== USER DATA =====================
+
+async function loadUserData() {
+
+  try {
+
+    const data = await api('/api/user/me');
+
+    user = data;
+
+    localStorage.setItem('hc_user', JSON.stringify(user));
+
+    updateUI();
+
+  } catch (e) {
+
+    if (e.message.includes('Token') || e.message.includes('Usuário')) logout();
+
   }
-};
+
+}
+
+
+
+function updateUI() {
+
+  if (!user) return;
+
+  document.getElementById('userBalance').textContent = formatMoney(user.balance);
+
+  document.getElementById('userAvatar').textContent = user.name.charAt(0).toUpperCase();
+
+  document.getElementById('withdrawBalance').textContent = 'R$ ' + formatMoney(user.balance);
+
+  
+
+  // Atualiza o link de indicação dinâmico
+
+  const referralLinkDisplay = document.getElementById('referralLinkDisplay');
+
+  if (referralLinkDisplay) {
+
+    const baseUrl = window.location.origin;
+
+    referralLinkDisplay.textContent = `${baseUrl}/#cadastro?ref=${user.referral_code}`;
+
+  }
+
+  
+
+  document.getElementById('refCount').textContent = user.referrals || 0;
+
+}
+
+
+
+// ===================== MENU LATERAL (PROFILE) =====================
+
+function toggleMenu() {
+
+  const menu = document.getElementById('sideMenu');
+
+  const overlay = document.getElementById('menuOverlay');
+
+  if (!menu || !overlay) return;
+
+
+
+  const isActive = menu.classList.toggle('active');
+
+  overlay.classList.toggle('active');
+
+
+
+  if (isActive) {
+
+    const currentUser = JSON.parse(localStorage.getItem('hc_user') || '{}');
+
+    if (document.getElementById('menuUserName')) document.getElementById('menuUserName').textContent = currentUser.name || 'Usuário';
+
+    if (document.getElementById('menuUserEmail')) document.getElementById('menuUserEmail').textContent = currentUser.email || '';
+
+    if (document.getElementById('menuBalance')) document.getElementById('menuBalance').textContent = formatMoney(currentUser.balance);
+
+    if (document.getElementById('menuBonus')) document.getElementById('menuBonus').textContent = formatMoney(currentUser.bonus_balance);
+
+    if (document.getElementById('menuAvatar')) document.getElementById('menuAvatar').textContent = (currentUser.name || 'U').charAt(0).toUpperCase();
+
+    
+
+    const adminArea = document.getElementById('adminMenuArea');
+
+    if (adminArea) {
+
+      adminArea.style.display = currentUser.is_admin ? 'block' : 'none';
+
+    }
+
+  }
+
+}
+
+
+
+// ===================== STATS =====================
+
+function updateFakeStats() {
+
+  // Oscila entre 10.000 e 100.000 online
+
+  const online = Math.floor(Math.random() * (100000 - 10000 + 1)) + 10000;
+
+  // Valores altos para o ganho
+
+  const paid = Math.floor(Math.random() * (850000 - 350000 + 1)) + 350000; 
+
+  const maxwin = Math.floor(Math.random() * (15000 - 8000 + 1)) + 8000; 
+
+
+
+  const statOnline = document.getElementById('stat-online');
+
+  if (statOnline) statOnline.textContent = online.toLocaleString('pt-BR');
+
+  
+
+  const statUsers = document.getElementById('stat-users');
+
+  if (statUsers) statUsers.textContent = online.toLocaleString('pt-BR');
+
+  
+
+  const panelOnline = document.getElementById('panelOnline');
+
+  if (panelOnline) panelOnline.textContent = online.toLocaleString('pt-BR');
+
+  
+
+  const statPaid = document.getElementById('stat-paid');
+
+  if (statPaid) statPaid.textContent = 'R$ ' + paid.toLocaleString('pt-BR') + ',00';
+
+  
+
+  const statMaxwin = document.getElementById('stat-maxwin');
+
+  if (statMaxwin) statMaxwin.textContent = 'R$ ' + maxwin.toLocaleString('pt-BR') + ',00';
+
+}
+
+
+
+async function loadPublicStats() {
+
+  updateFakeStats();
+
+  if (!window.fakeStatsInterval) {
+
+    window.fakeStatsInterval = setInterval(updateFakeStats, 5000);
+
+  }
+
+}
+
+
+
+async function loadStats() {
+
+  updateFakeStats();
+
+}
+
+
+
+// ===================== BET SELECTION =====================
+
+document.querySelectorAll('.bet-option').forEach(btn => {
+
+  btn.addEventListener('click', () => {
+
+    document.querySelectorAll('.bet-option').forEach(b => b.classList.remove('active'));
+
+    btn.classList.add('active');
+
+    currentBet = parseFloat(btn.dataset.amount);
+
+    updateBetDisplay();
+
+  });
+
+});
+
+
+
+function updateBetDisplay() {
+
+  document.getElementById('betAmount').textContent = formatMoney(currentBet);
+
+  const meta = currentBet * 7;
+
+  document.getElementById('metaGanho').textContent = 'R$ ' + formatMoney(meta);
+
+  document.getElementById('perPlatform').textContent = currentBet > 0 ? 'R$ ' + formatMoney(currentBet * 0.5) : '—';
+
+  document.getElementById('platMeta').textContent = currentBet > 0 ? '14' : '—';
+
+}
+
+
+
+// ===================== PLAY GAME =====================
+
+document.getElementById('btnPlay').addEventListener('click', async () => {
+
+  if (currentBet <= 0) return showToast('Selecione um valor de aposta!', 'error');
+
+  if (!user || user.balance < currentBet) return showToast('Saldo insuficiente! Faça um depósito.', 'error');
+
+
+
+  const btn = document.getElementById('btnPlay');
+
+  btn.disabled = true; btn.innerHTML = '<span class="loader"></span>';
+
+
+
+  try {
+
+    const data = await api('/api/game/start', {
+
+      method: 'POST', body: JSON.stringify({ bet_amount: currentBet })
+
+    });
+
+    currentGameId = data.game_id;
+
+    user.balance = data.new_balance;
+
+    updateUI();
+
+
+
+    document.getElementById('page-game').classList.remove('hidden');
+
+    document.getElementById('gameOverOverlay').classList.add('hidden');
+
+
+
+    let serverConfig = null;
+
+    try {
+
+      const settings = await api('/api/game/config');
+
+      if (settings) serverConfig = settings;
+
+    } catch(e) { }
+
+
+
+    startHelixGame(currentBet, serverConfig);
+
+  } catch (e) { showToast(e.message, 'error'); }
+
+  finally {
+
+    btn.disabled = false;
+
+    btn.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg> JOGAR AGORA';
+
+  }
+
+});
+
+
+
+function onPlatformPassed(count) { }
+
+
+
+async function onGameEnd(platformsReached, cashed, prizeFromGame) {
+
+  try {
+
+    const data = await api('/api/game/finish', {
+
+      method: 'POST',
+
+      body: JSON.stringify({
+
+        game_id: currentGameId,
+
+        platforms_reached: platformsReached,
+
+        cashed_out: cashed,
+
+        prize: prizeFromGame
+
+      })
+
+    });
+
+
+
+    user.balance = data.new_balance;
+
+    updateUI();
+
+
+
+    const overlay = document.getElementById('gameOverOverlay');
+
+    overlay.classList.remove('hidden');
+
+
+
+    const resultTitle = document.getElementById('resultTitle');
+
+    const resultIcon = document.getElementById('resultIcon');
+
+
+
+    if (cashed && (prizeFromGame > 0 || data.prize > 0)) {
+
+      resultTitle.textContent = 'Resgatado!';
+
+      resultTitle.style.color = 'var(--primary)';
+
+      resultIcon.textContent = '💰';
+
+    } else if ((prizeFromGame > 0 || data.prize > 0)) {
+
+      resultTitle.textContent = 'Parabéns!';
+
+      resultTitle.style.color = 'var(--primary)';
+
+      resultIcon.textContent = '🎉';
+
+    } else {
+
+      resultTitle.textContent = 'Fim de Jogo!';
+
+      resultTitle.style.color = '#ff4444';
+
+      resultIcon.textContent = '💥';
+
+    }
+
+
+
+    document.getElementById('resultPrize').textContent = 'R$ ' + formatMoney(prizeFromGame || data.prize);
+
+    
+
+    const finalPlats = platformsReached !== undefined ? platformsReached : (data.platforms_reached || 0);
+
+    const finalMult = prizeFromGame > 0 ? (prizeFromGame / currentBet).toFixed(2) : (data.multiplier || 0);
+
+
+
+    document.getElementById('resultDetails').textContent =
+
+      'Plataformas: ' + finalPlats + ' | Multiplicador: ' + finalMult + 'x | Aposta: R$ ' + formatMoney(currentBet);
+
+
+
+  } catch (e) { showToast(e.message, 'error'); }
+
+}
+
+
+
+function cashOut() {
+
+  if (typeof helixGameCashOut === 'function') helixGameCashOut();
+
+}
+
+
+
+function closeGame() {
+
+  document.getElementById('page-game').classList.add('hidden');
+
+  if (typeof stopHelixGame === 'function') stopHelixGame();
+
+  currentGameId = null;
+
+  loadUserData();
+
+}
+
+
+
+// ===================== DEPOSIT =====================
+
+document.querySelectorAll('.amount-option').forEach(btn => {
+
+  btn.addEventListener('click', () => {
+
+    document.querySelectorAll('.amount-option').forEach(b => b.classList.remove('active'));
+
+    btn.classList.add('active');
+
+    const val = btn.dataset.amount || btn.textContent.replace('R$', '').trim();
+
+    document.getElementById('depositAmount').value = val;
+
+  });
+
+});
+
+
+
+document.getElementById('btnDeposit').addEventListener('click', async () => {
+
+  const amountInput = document.getElementById('depositAmount');
+
+  const amount = parseFloat(amountInput.value);
+
+  const cpfEl = document.getElementById('depositCpf');
+
+  
+
+  // Limpa o CPF para enviar apenas números (SafePix costuma rejeitar pontos e traços)
+
+  const cpf = cpfEl ? cpfEl.value.replace(/\D/g, '') : '';
+
+  
+
+  if (!amount || amount < 1) return showToast('Depósito mínimo: R$ 1,00', 'error');
+
+  if (!cpf || cpf.length < 11) return showToast('Informe um CPF válido para gerar o PIX', 'error');
+
+
+
+  const btn = document.getElementById('btnDeposit');
+
+  btn.disabled = true; 
+
+  btn.innerHTML = '<span class="loader"></span>';
+
+
+
+  try {
+
+    // IMPORTANTE: Enviamos o amount como FLOAT, o seu index.js fará a conversão para centavos
+
+    const data = await api('/api/deposit', {
+
+      method: 'POST', 
+
+      body: JSON.stringify({ 
+
+        amount: amount, 
+
+        cpf: cpf 
+
+      })
+
+    });
+
+
+
+    // Ajuste para ler os campos exatos que a SafePix retorna
+
+    currentDepositId = data.deposit_id || (data.deposit ? data.deposit.id : null);
+
+
+
+    // SafePix retorna o código PIX em campos específicos
+
+    const pixCode = data.pix_code || (data.deposit && data.deposit.pix_code);
+
+    
+
+    if (document.getElementById('pixCode')) {
+
+        document.getElementById('pixCode').textContent = pixCode || 'Erro ao carregar código';
+
+    }
+
+
+
+    const qrImg = document.getElementById('pixQrImage');
+
+    const qrLoading = document.getElementById('qrLoading');
+
+
+
+    if (qrImg) {
+
+        // SafePix geralmente envia a string Base64 pronta ou o link direto (Google Charts no seu caso)
+
+        let qrSource = data.qr_code_base64 || (data.deposit && data.deposit.qr_code_base64);
+
+        
+
+        if (qrSource) {
+
+            // Se for link do google (http), atribui direto. Se for base64 sem header, adiciona.
+
+            qrImg.src = qrSource.startsWith('http') ? qrSource : (qrSource.startsWith('data:') ? qrSource : `data:image/png;base64,${qrSource}`);
+
+            qrImg.style.display = 'block';
+
+            if (qrLoading) qrLoading.style.display = 'none';
+
+        }
+
+    }
+
+
+
+    const modal = document.getElementById('pixModal');
+
+    if (modal) modal.classList.remove('hidden');
+
+
+
+    if (currentDepositId) {
+
+      if (depositCheckInterval) clearInterval(depositCheckInterval);
+
+      depositCheckInterval = setInterval(checkDepositStatus, 5000);
+
+    }
+
+
+
+    showToast('PIX gerado com sucesso!');
+
+
+
+  } catch (e) { 
+
+    showToast(e.message, 'error'); 
+
+  } finally { 
+
+    btn.disabled = false; 
+
+    btn.textContent = 'GERAR PIX'; 
+
+  }
+
+});
+
+
+
+async function checkDepositStatus() {
+
+  if (!currentDepositId) return;
+
+  try {
+
+    const data = await api('/api/deposit/status', {
+
+      method: 'POST', body: JSON.stringify({ deposit_id: currentDepositId })
+
+    });
+
+
+
+    if (data.status === 'approved') {
+
+      clearInterval(depositCheckInterval); depositCheckInterval = null;
+
+      user.balance = data.new_balance; updateUI();
+
+      showToast('Pagamento confirmado! Saldo atualizado.');
+
+      const modal = document.getElementById('pixModal');
+
+      if (modal) modal.classList.add('hidden');
+
+      currentDepositId = null;
+
+    } else if (data.status === 'rejected' || data.status === 'expired') {
+
+      clearInterval(depositCheckInterval); depositCheckInterval = null;
+
+      showToast('PIX expirado ou rejeitado. Tente novamente.', 'error');
+
+      const modal = document.getElementById('pixModal');
+
+      if (modal) modal.classList.add('hidden');
+
+      currentDepositId = null;
+
+    }
+
+  } catch (e) { }
+
+}
+
+
+
+// ===================== WITHDRAW =====================
+
+document.getElementById('btnWithdraw').addEventListener('click', async () => {
+
+  const amount = parseFloat(document.getElementById('withdrawAmount').value);
+
+  const pixKey = document.getElementById('pixKey').value;
+
+  const pixType = document.getElementById('pixType').value;
+
+  if (!amount || amount < 20) return showToast('Saque mínimo: R$ 20,00', 'error');
+
+  if (!pixKey) return showToast('Informe a chave PIX', 'error');
+
+
+
+  const btn = document.getElementById('btnWithdraw');
+
+  btn.disabled = true; btn.innerHTML = '<span class="loader"></span>';
+
+  try {
+
+    const data = await api('/api/withdraw', {
+
+      method: 'POST', body: JSON.stringify({ amount, pix_key: pixKey, pix_type: pixType })
+
+    });
+
+    showToast(data.message); loadUserData();
+
+    document.getElementById('withdrawAmount').value = '';
+
+    document.getElementById('pixKey').value = '';
+
+  } catch (e) { showToast(e.message, 'error'); }
+
+  finally { btn.disabled = false; btn.textContent = 'SOLICITAR SAQUE'; }
+
+});
+
+
+
+// ===================== REFERRALS =====================
+
+async function loadReferrals() {
+
+  try {
+
+    const data = await api('/api/referrals');
+
+    document.getElementById('refEarned').textContent = 'R$ ' + formatMoney(data.total_earned);
+
+    const listEl = document.getElementById('referralList');
+
+    if (data.referrals.length === 0) {
+
+      listEl.innerHTML = '<div class="referral-card" style="text-align:center;color:var(--text-secondary)">Nenhum indicado ainda. Compartilhe seu link!</div>';
+
+    } else {
+
+      listEl.innerHTML = data.referrals.map(r =>
+
+        '<div class="history-item"><div class="left"><span class="type">' + r.name + '</span><span class="date">' + new Date(r.created_at).toLocaleDateString('pt-BR') + '</span></div><span class="amount positive">+R$ ' + formatMoney(r.amount || 0) + '</span></div>'
+
+      ).join('');
+
+    }
+
+  } catch (e) { }
+
+}
+
+
+
+// ===================== NAVIGATION =====================
+
+document.querySelectorAll('.nav-item[data-panel]').forEach(btn => {
+
+  btn.addEventListener('click', () => {
+
+    document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+
+    btn.classList.add('active');
+
+    const panel = btn.dataset.panel;
+
+    document.querySelectorAll('.panel-sub').forEach(p => { p.classList.add('hidden'); p.classList.remove('active'); });
+
+    const target = document.getElementById('panel-' + panel);
+
+    if (target) { target.classList.remove('hidden'); target.classList.add('active'); }
+
+    if (panel === 'referral') loadReferrals();
+
+    if (panel === 'withdraw') updateUI();
+
+  });
+
+});
+
+
+
+// ===================== HELPERS =====================
+
+function formatMoney(val) { return parseFloat(val || 0).toFixed(2).replace('.', ','); }
+
+
+
+function showToast(message, type = 'success') {
+
+  const toast = document.getElementById('toast');
+
+  if (!toast) return console.log("Toast:", message);
+
+  toast.textContent = message;
+
+  toast.className = 'toast toast-' + type;
+
+  toast.classList.remove('hidden');
+
+  setTimeout(() => toast.classList.add('hidden'), 3000);
+
+}
