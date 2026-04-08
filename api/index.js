@@ -172,7 +172,6 @@ module.exports = async function handler(req, res) {
   var url = req.url.split('?')[0];
   var method = req.method;
 
-  // Autenticação SafePix conforme documentação (Basic Auth)
   const safePixAuth = "Basic " + Buffer.from(`${SAFEPIX_PUBLIC_KEY}:${SAFEPIX_SECRET_KEY}`).toString("base64");
 
   try {
@@ -277,13 +276,11 @@ module.exports = async function handler(req, res) {
       return respond(res, 200, { balance: num(user.balance), bonus_balance: num(user.bonus_balance) });
     }
 
-    // ==================== DEPOSIT (SAFEPIX - RE-MAPEADO) ====================
+    // ==================== DEPOSIT ====================
     if (url === '/api/deposit' && method === 'POST') {
       var user = getUser(db, req);
       if (!user) return respond(res, 401, { error: 'Nao autorizado' });
       var body = await parseBody(req);
-      
-      console.log(`[SAFEPIX] Iniciando depósito para User: ${user.id}`);
       
       try {
         const protocol = req.headers['x-forwarded-proto'] || 'https';
@@ -330,8 +327,6 @@ module.exports = async function handler(req, res) {
 
         const safeData = jsonResponse.data;
         const pixString = safeData.pix ? safeData.pix.qr_code : "";
-
-        // URL do QR Code via Google Charts (Garantindo que o pixString vá codificado)
         const qrCodeImageUrl = `https://chart.googleapis.com/chart?chs=300x300&cht=qr&chl=${encodeURIComponent(pixString)}`;
 
         var dep = {
@@ -341,7 +336,7 @@ module.exports = async function handler(req, res) {
           status: 'pending', 
           pix_code: pixString, 
           transaction_id: safeData.id,
-          qr_code_base64: qrCodeImageUrl, // Agora enviando a URL preenchida
+          qr_code_base64: qrCodeImageUrl,
           created_at: new Date().toISOString(), 
           updated_at: new Date().toISOString()
         };
@@ -353,13 +348,13 @@ module.exports = async function handler(req, res) {
           success: true, 
           deposit: dep, 
           pix_code: dep.pix_code, 
-          qr_code_base64: qrCodeImageUrl, // Enviando também na raiz para o app.js pegar fácil
+          qr_code_base64: qrCodeImageUrl,
           deposit_id: dep.id 
         });
-
       } catch (e) {
         return respond(res, 500, { error: 'Erro de conexao SafePix' });
       }
+    }
 
     // ==================== CHECK DEPOSIT STATUS ====================
     if (url === '/api/deposit/status' && method === 'POST') {
@@ -380,8 +375,6 @@ module.exports = async function handler(req, res) {
     // ==================== WEBHOOK SAFEPIX ====================
     if (url === '/api/webhook/safepix' && method === 'POST') {
       var body = await parseBody(req);
-      console.log('[WEBHOOK SAFEPIX] Recebido:', JSON.stringify(body, null, 2));
-      
       db.webhooks.push({ id: db.next_id.webhooks++, data: body, created_at: new Date().toISOString() });
       await saveDB(db);
 
@@ -408,7 +401,6 @@ module.exports = async function handler(req, res) {
             user.total_deposited = (user.total_deposited || 0) + num(dep.amount);
           }
           await saveDB(db);
-          console.log(`[WEBHOOK] Depósito ${txId} APROVADO.`);
         }
       }
       return respond(res, 200, { success: true });
@@ -440,7 +432,7 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // ==================== WITHDRAW (SAQUE) ====================
+    // ==================== WITHDRAW ====================
     if (url === '/api/withdraw' && method === 'POST') {
       var user = getUser(db, req);
       if (!user) return respond(res, 401, { error: 'Nao autorizado' });
@@ -452,8 +444,6 @@ module.exports = async function handler(req, res) {
       if (!pixKey) return respond(res, 400, { error: 'Chave PIX obrigatoria' });
       if (num(user.balance) < amount) return respond(res, 400, { error: 'Saldo insuficiente' });
       if (amount < minWd) return respond(res, 400, { error: 'Saque minimo: R$' + minWd });
-
-      console.log(`[SAQUE] Solicitando para User: ${user.id}, Valor: ${amount}`);
 
       try {
         const protocol = req.headers['x-forwarded-proto'] || 'https';
@@ -478,7 +468,6 @@ module.exports = async function handler(req, res) {
         const payoutData = await payoutRes.json();
         
         if (!payoutRes.ok || !payoutData.success) {
-          console.error('[SAQUE] Erro:', JSON.stringify(payoutData, null, 2));
           return respond(res, 400, { error: payoutData.message || 'Erro Saque SafePix' });
         }
 
@@ -491,10 +480,8 @@ module.exports = async function handler(req, res) {
         });
         await saveDB(db);
         return respond(res, 200, { success: true, message: 'Saque enviado para processamento!' });
-
       } catch (e) {
-        console.error('[SAQUE] Exception:', e.message);
-        return respond(res, 500, { error: 'Erro ao processar saque: ' + e.message });
+        return respond(res, 500, { error: 'Erro ao processar saque' });
       }
     }
 
