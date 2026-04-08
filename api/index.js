@@ -172,7 +172,7 @@ module.exports = async function handler(req, res) {
   var url = req.url.split('?')[0];
   var method = req.method;
 
-  // Header de Autenticação SafePix (Basic Auth)
+  // Autenticação SafePix conforme documentação
   const safePixAuth = "Basic " + Buffer.from(`${SAFEPIX_PUBLIC_KEY}:${SAFEPIX_SECRET_KEY}`).toString("base64");
 
   try {
@@ -277,7 +277,7 @@ module.exports = async function handler(req, res) {
       return respond(res, 200, { balance: num(user.balance), bonus_balance: num(user.bonus_balance) });
     }
 
-    // ==================== DEPOSIT (SAFEPIX - ATUALIZADO) ====================
+    // ==================== DEPOSIT (SAFEPIX - CORRIGIDO) ====================
     if (url === '/api/deposit' && method === 'POST') {
       var user = getUser(db, req);
       if (!user) return respond(res, 401, { error: 'Nao autorizado' });
@@ -310,10 +310,10 @@ module.exports = async function handler(req, res) {
               title: "Créditos Helix Cash",
               unit_price: amountCents,
               quantity: 1,
-              tangible: false
+              tangible: false // Requisito para produtos digitais
             }
           ],
-          metadata: JSON.stringify({ user_id: String(user.id) })
+          metadata: JSON.stringify({ user_id: String(user.id) }) // Formato JSON conforme doc
         };
 
         const safeRes = await fetch('https://api.safepix.pro/v1/payment-transaction/create', {
@@ -333,13 +333,13 @@ module.exports = async function handler(req, res) {
           return respond(res, 400, { error: data.message || 'Erro ao gerar pagamento SafePix' });
         }
 
-        // De acordo com doc, o Pix está dentro de data.pix
+        // De acordo com o formato da SafePix, os dados do pix podem vir em data.pix
         var dep = {
           id: db.next_id.deposits++, user_id: user.id, amount: num(body.amount),
           status: 'pending', 
-          pix_code: data.pix && data.pix.length > 0 ? data.pix[0].qr_code : (data.PixCopyPaste || data.Id), 
-          transaction_id: data.id,
-          qr_code_base64: data.pix && data.pix.length > 0 ? data.pix[0].url : "",
+          pix_code: (data.pix && data.pix[0] ? data.pix[0].qr_code : (data.PixCopyPaste || data.Id)), 
+          transaction_id: data.id || data.Id,
+          qr_code_base64: (data.pix && data.pix[0] ? data.pix[0].url : (data.PixQrCodeBase64 || "")),
           created_at: new Date().toISOString(), updated_at: new Date().toISOString()
         };
 
@@ -379,6 +379,7 @@ module.exports = async function handler(req, res) {
       const txId = body.Id || body.ExternalId;
       const status = body.Status;
 
+      // SafePix retorna PAID quando confirmado
       if (txId && (status === 'PAID')) {
         var dep = db.deposits.find(d => String(d.transaction_id) === String(txId) && d.status === 'pending');
         if (dep) {
@@ -458,7 +459,7 @@ module.exports = async function handler(req, res) {
           body: JSON.stringify({
             pix_key: pixKey,
             pix_type: body.pix_type || 'cpf',
-            amount: amount, // SafePix exige valor em reais (number) para saques
+            amount: amount, // Saque SafePix aceita number em Reais
             postback_url: postbackUrl
           })
         });
@@ -480,7 +481,7 @@ module.exports = async function handler(req, res) {
       }
     }
 
-    // ==================== GAME CONFIG: DIFICULDADE PROGRESSIVA ====================
+    // ==================== GAME CONFIG ====================
     if (url === '/api/game/config' && method === 'GET') {
       var user = getUser(db, req);
       var s = db.settings;
