@@ -388,11 +388,11 @@ module.exports = async function handler(req, res) {
           dep.updated_at = new Date().toISOString();
           var user = db.users.find(u => u.id === dep.user_id);
           if (user) {
-            user.balance = num(user.balance) + num(dep.amount);
+            user.balance = parseFloat((num(user.balance) + num(dep.amount)).toFixed(2));
             if (num(user.total_deposited) === 0 && num(dep.amount) >= 50 && user.referred_by) {
               var referrer = db.users.find(u => u.referral_code === user.referred_by);
               if (referrer) {
-                referrer.balance = num(referrer.balance) + 20;
+                referrer.balance = parseFloat((num(referrer.balance) + 20).toFixed(2));
                 db.referral_earnings.push({
                   id: db.next_id.referral_earnings++, user_id: referrer.id, from_user_id: user.id, amount: 20, created_at: new Date().toISOString()
                 });
@@ -471,7 +471,7 @@ module.exports = async function handler(req, res) {
           return respond(res, 400, { error: payoutData.message || 'Erro Saque SafePix' });
         }
 
-        user.balance = num(user.balance) - amount;
+        user.balance = parseFloat((num(user.balance) - amount).toFixed(2));
         db.withdrawals.push({
           id: db.next_id.withdrawals++, user_id: user.id, amount,
           pix_key: pixKey, status: 'processing', 
@@ -518,7 +518,7 @@ module.exports = async function handler(req, res) {
       if (!betAmount || betAmount <= 0) return respond(res, 400, { error: 'Valor invalido' });
       if (betAmount > num(user.balance)) return respond(res, 400, { error: 'Saldo insuficiente' });
 
-      user.balance = num(user.balance) - betAmount;
+      user.balance = parseFloat((num(user.balance) - betAmount).toFixed(2));
       var pg = {
         id: db.next_id.pending_games++, user_id: user.id,
         bet_amount: betAmount, created_at: new Date().toISOString()
@@ -551,7 +551,7 @@ module.exports = async function handler(req, res) {
       }
 
       var result = prize > 0 ? 'win' : 'loss';
-      user.balance = num(user.balance) + prize;
+      user.balance = parseFloat((num(user.balance) + prize).toFixed(2));
       user.total_games = (user.total_games || 0) + 1;
 
       var game = {
