@@ -545,12 +545,14 @@ module.exports = async function handler(req, res) {
 
       var prize = num(body.prize); 
       
-      var winProb = user.is_influencer ? num(user.influencer_win_rate) : (100 - num(db.settings.house_edge));
-      if (prize > 0 && (Math.random() * 100) > winProb) {
-          prize = 0;
-      }
+      // Correção Aplicada: O sistema de "house_edge" (probabilidade de perda) estava
+      // cancelando o prêmio e forçando prize = 0 no backend MESMO APÓS o jogador ter
+      // ganho e clicado em "Resgatar". A trava randômica foi removida para garantir
+      // que o que o jogador ganhou na tela seja 100% computado no saldo principal.
 
       var result = prize > 0 ? 'win' : 'loss';
+      
+      // O saldo é atualizado com precisão absoluta para evitar travamentos de decimais
       user.balance = parseFloat((num(user.balance) + prize).toFixed(2));
       user.total_games = (user.total_games || 0) + 1;
 
