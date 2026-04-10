@@ -17,15 +17,15 @@
     segmentsPerPlatform: 12, 
     
     // --- MUDANÇAS DA VERSÃO FÁCIL ---
-    holeSegments: 3,         // AUMENTADO: O buraco de descida agora é maior (ocupa 3 fatias), facilitando muito a passagem.
-    dangerStartLevel: 6,     // AUMENTADO: O jogador desce as primeiras 5 plataformas sem NENHUM perigo (tudo azul).
-    dangerProgression: 10,   // AUMENTADO: Demora muito mais andares para o jogo adicionar mais fatias vermelhas.
-    dangerMaxSlices: 2,      // REDUZIDO: O máximo de fatias vermelhas por andar nunca passa de 2 (sobrando muito espaço seguro).
+    holeSegments: 3,         
+    dangerStartLevel: 6,     
+    dangerProgression: 10,   
+    dangerMaxSlices: 2,      
     // --------------------------------
     
     cameraFov: 60, cameraDistance: 11.0, cameraHeight: 6.5, cameraOffsetDown: 3.5,
     postExtraTop: 20.0, cameraFollowSpeed: 0.15, rotationSensitivity: 0.008,
-    targetMultiplier: 8, // Meta de R$ 80 (10 de entrada * 8)
+    targetMultiplier: 8, 
     latheSegments: 32
   };
 
@@ -35,7 +35,7 @@
     { name:'Mint', platforms:0x8CE8A5, alt:0xB0F5C0, ball:0xFFFFFF, pole:0x208A40, bgTop:'#E0FFE8', bgBottom:'#A0F0B0', killer:0x102010, topCap:0x208A40 }
   ];
 
-  var gameActive = false, betAmount = 10, platformsPassed = 0; // Valor de entrada travado em R$ 10
+  var gameActive = false, betAmount = 10, platformsPassed = 0; 
   var gamePhase = 'ready', prizeAmount = 0;
   var currentPaletteIndex = 0, comboCount = 0, comboTimer = 0;
   var scene, camera, renderer, helixGroup, postMesh, ballMesh, topCapMesh;
@@ -46,7 +46,6 @@
   var lastGeneratedPlatformIndex = 0; 
   var audioCtx = null; var audioUnlocked = false;
 
-  // FUNÇÃO DE INÍCIO EXCLUSIVA DO DEMO
   window.startHelixDemo = function() {
     var oldModal = document.getElementById('demoConversionModal');
     if (oldModal) oldModal.remove();
@@ -242,69 +241,52 @@
     }
   }
 
-  // --- NOVA createHUD ATUALIZADA (ESTILO EXACT DESIGN MARCAÇÃO VERDE) ---
   function createHUD() {
     cleanupHUD();
     var container = document.getElementById('gameCanvas').parentElement;
     hudContainer = document.createElement('div');
-    hudContainer.id = 'helix-hud';
-    hudContainer.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:100;font-family:"Inter",sans-serif;';
+    hudContainer.id = 'hud-container';
+    // Estilo EXATO do seu snippet
+    hudContainer.style.cssText = 'position: fixed; top: 0px; left: 0px; right: 0px; z-index: 1000; background: linear-gradient(rgba(0, 0, 0, 0.85) 0%, transparent 100%); padding: 12px 16px 20px; display: block; font-family: "Inter", sans-serif;';
 
-    // Container Superior para os Cards
-    var header = document.createElement('div');
-    header.style.cssText = 'position:absolute;top:15px;left:0;width:100%;display:flex;justify-content:center;align-items:flex-start;padding:0 15px;gap:10px;box-sizing:border-box;';
-
-    // 1. Card Valor da Entrada (Esquerda)
-    var entryCard = `
-      <div style="background:rgba(13, 13, 25, 0.85); backdrop-filter:blur(12px); border:1px solid rgba(255,255,255,0.1); border-radius:14px; padding:10px 18px; min-width:110px; box-shadow: 0 8px 32px rgba(0,0,0,0.4);">
-        <div style="color:#8b8b9e; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.8px; margin-bottom:4px;">Entrada</div>
-        <div style="color:#fff; font-size:17px; font-weight:900;">R$ ${fmtBRL(betAmount)}</div>
-      </div>
-    `;
-
-    // 2. Card Meta Acumulada (Centro/Direita - Área da marcação verde)
-    var metaCard = `
-      <div style="background:rgba(13, 13, 25, 0.85); backdrop-filter:blur(12px); border:1px solid rgba(255,255,255,0.1); border-radius:14px; padding:10px 18px; flex-grow:1; max-width:260px; box-shadow: 0 8px 32px rgba(0,0,0,0.4);">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-          <span style="color:#8b8b9e; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.8px;">Meta Acumulada</span>
-          <span style="color:#00e676; font-size:11px; font-weight:900; background:rgba(0,230,118,0.1); padding:2px 6px; border-radius:6px;" id="hud-perc">0%</span>
+    hudContainer.innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
+        <div style="display:flex;flex-direction:column;gap:2px">
+          <div style="font-size:11px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:.5px">Aposta</div>
+          <div id="hud-aposta" style="font-size:16px;font-weight:800;color:#fff">R$ ${fmtBRL(betAmount)}</div>
         </div>
-        <div style="color:#fff; font-size:15px; font-weight:900; margin-bottom:8px;" id="hud-progress-val">R$ 0,00 / R$ 80,00</div>
-        <div style="width:100%; height:8px; background:rgba(255,255,255,0.08); border-radius:20px; overflow:hidden; border:1px solid rgba(255,255,255,0.05);">
-          <div id="hud-progress-bar" style="width:0%; height:100%; background:linear-gradient(90deg, #00e676, #00c853); box-shadow: 0 0 12px rgba(0,230,118,0.4); border-radius:20px; transition:width 0.4s cubic-bezier(0.1, 0.7, 0.1, 1);"></div>
+
+        <div style="flex:1;max-width:360px;text-align:center">
+          <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:5px">
+            <div id="hud-acumulado" style="font-size:20px;font-weight:800;color:#00C97A;transition:all .2s">R$ 0,00</div>
+            <div style="font-size:12px;color:rgba(255,255,255,.4)">/</div>
+            <div id="hud-meta" style="font-size:14px;color:rgba(255,255,255,.6)">R$ 80,00</div>
+          </div>
+          <div style="background:rgba(255,255,255,.1);border-radius:50px;height:6px;overflow:hidden">
+            <div id="hud-barra" style="height: 100%; border-radius: 50px; background: linear-gradient(90deg, rgb(0, 201, 122), rgb(77, 158, 255)); width: 0%; transition: width 0.3s;"></div>
+          </div>
+          <div id="hud-plat" style="font-size:11px;color:rgba(255,255,255,.4);margin-top:4px">0 plataformas • +R$ 0,00/plat</div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+          <div style="font-size:11px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:.5px">Meta</div>
+          <div id="hud-meta-label" style="font-size:16px;font-weight:800;color:#FFD700">R$ 80,00</div>
+          <button onclick="window.sairDoDemo('#login')" style="
+            background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);
+            border-radius:8px;padding:4px 10px;color:rgba(255,255,255,.5);
+            font-size:11px;cursor:pointer;font-family:inherit
+          ">Sair</button>
         </div>
       </div>
+      <div id="hud-combo" style="position:absolute;bottom:-150px;left:50%;transform:translateX(-50%);font-size:24px;font-weight:800;color:#ffab00;text-shadow:0 2px 8px rgba(255,171,0,0.5);opacity:0;transition:all 0.3s;pointer-events:none;"></div>
+      <div id="hud-score-popup" style="position:absolute;top:45vh;left:50%;transform:translate(-50%,-50%);font-size:36px;font-weight:900;color:#fff;text-shadow:0 2px 10px rgba(0,0,0,0.3);opacity:0;pointer-events:none;"></div>
     `;
 
-    header.innerHTML = entryCard + metaCard;
-    hudContainer.appendChild(header);
-
-    // Overlay de Início
-    var startOverlay = document.createElement('div');
-    startOverlay.id = 'hud-start';
-    startOverlay.style.cssText = 'position:absolute;top:55%;left:50%;transform:translate(-50%,-50%);text-align:center;transition:opacity 0.3s;pointer-events:none;';
-    startOverlay.innerHTML = `
-      <div style="background:rgba(0,0,0,0.5); padding:20px 40px; border-radius:60px; backdrop-filter:blur(6px); border:1px solid rgba(255,255,255,0.15); box-shadow: 0 10px 40px rgba(0,0,0,0.5);">
-        <div style="color:#fff; font-size:20px; font-weight:900; text-transform:uppercase; letter-spacing:1.5px; margin-bottom:8px;">Modo Treinamento</div>
-        <div style="color:rgba(255,255,255,0.8); font-size:13px; font-weight:600;">Toque para soltar a bola</div>
-        <div style="font-size:32px; margin-top:12px; animation: helixBounce 1.5s infinite ease-in-out;">🖱️</div>
-      </div>
-    `;
-    hudContainer.appendChild(startOverlay);
-
-    hudContainer.innerHTML += `
-      <div id="hud-combo" style="position:absolute;bottom:20%;left:50%;transform:translateX(-50%);font-size:32px;font-weight:900;color:#ffab00;text-shadow:0 0 25px rgba(255,171,0,0.7);opacity:0;transition:all 0.3s;"></div>
-      <div id="hud-score-popup" style="position:absolute;top:40%;left:50%;transform:translate(-50%,-50%);font-size:46px;font-weight:900;color:#fff;text-shadow:0 6px 20px rgba(0,0,0,0.6);opacity:0;pointer-events:none;"></div>
-    `;
-
-    if (!document.getElementById('helix-styles')) {
-      var style = document.createElement('style');
-      style.id = 'helix-styles';
-      style.textContent = '@keyframes helixBounce{0%,100%{transform:translateY(0)}50%{transform:translateY(10px)}}@keyframes helixFadeUp{0%{opacity:0;transform:translate(-50%,-20%) scale(0.6)}20%{opacity:1;transform:translate(-50%,-50%) scale(1.3)}100%{opacity:0;transform:translate(-50%,-120%) scale(1.6)}}';
-      document.head.appendChild(style);
-    }
-    
+    var style = document.createElement('style');
+    style.textContent = '@keyframes helixFadeUp{0%{opacity:1;transform:translate(-50%,-50%) scale(1)}100%{opacity:0;transform:translate(-50%,-80%) scale(1.5)}}';
+    hudContainer.appendChild(style);
     container.appendChild(hudContainer);
+    
     updateHUD();
   }
 
@@ -314,22 +296,19 @@
 
   function updateHUD() {
     if (!hudContainer) return;
-    var pv = document.getElementById('hud-progress-val');
-    var pb = document.getElementById('hud-progress-bar');
-    var pc = document.getElementById('hud-perc');
-    var ss = document.getElementById('hud-start');
+    var acc = document.getElementById('hud-acumulado');
+    var bar = document.getElementById('hud-barra');
+    var plat = document.getElementById('hud-plat');
 
     var prize = calcPrize(); prizeAmount = prize;
     var target = 80;
     var percentage = Math.min(100, (prize / target) * 100);
 
-    if(pv) pv.innerHTML = `<span style="color:#00e676;">R$ ${fmtBRL(prize)}</span> <span style="color:rgba(255,255,255,0.3); margin:0 5px;">/</span> R$ ${fmtBRL(target)}`;
-    if(pb) pb.style.width = percentage + '%';
-    if(pc) pc.textContent = Math.floor(percentage) + '%';
-    
-    if (ss) {
-        if (gamePhase === 'ready') { ss.style.opacity = '1'; ss.style.display = 'block'; } 
-        else { ss.style.opacity = '0'; setTimeout(() => { if(ss) ss.style.display = 'none'; }, 300); }
+    if(acc) acc.textContent = 'R$ ' + fmtBRL(prize);
+    if(bar) bar.style.width = percentage + '%';
+    if(plat) {
+        var valPerPlat = platformsPassed > 0 ? (prize / platformsPassed) : 0;
+        plat.textContent = platformsPassed + ' plataformas • +R$ ' + fmtBRL(valPerPlat) + '/plat';
     }
   }
 
@@ -340,9 +319,7 @@
     return Math.round(betAmount * totalMultiplier * 100) / 100;
   }
 
-  function fmtBRL(v) { 
-    return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); 
-  }
+  function fmtBRL(v) { return v.toFixed(2).replace('.', ','); }
 
   function unlockAudio() {
     if (audioUnlocked) return;
