@@ -89,14 +89,32 @@
     .admin-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 24px; margin-bottom: 24px; }
     .admin-card { background: var(--bg-card); padding: 24px; border-radius: 16px; border: 1px solid var(--border-color); position: relative; overflow: hidden; transition: transform 0.2s ease, box-shadow 0.2s ease; }
     .admin-card:hover { transform: translateY(-3px); box-shadow: 0 10px 30px rgba(0,0,0,0.5); border-color: var(--border-hover); }
-    
-    /* Brilho sutil no fundo do card */
     .admin-card::before { content: ''; position: absolute; top: 0; right: 0; width: 100px; height: 100px; background: radial-gradient(circle, var(--accent-glow) 0%, transparent 70%); opacity: 0.5; pointer-events: none; }
     
     .admin-card-title { display: flex; align-items: center; gap: 10px; color: var(--text-muted); font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
     .admin-card-title svg { background: rgba(0,0,0,0.3); padding: 6px; border-radius: 8px; width: 32px; height: 32px; border: 1px solid rgba(255,255,255,0.05); }
     .value { font-size: 32px; font-weight: 800; margin-top: 16px; letter-spacing: -1px; text-shadow: 0 0 20px rgba(255,255,255,0.1); }
     
+    /* DASHBOARD EXTRAS (JOGOS E BALANÇO) */
+    .dashboard-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 24px; margin-top: 24px; }
+    @media (max-width: 1100px) { .dashboard-grid { grid-template-columns: 1fr; } }
+    .dash-panel { background: var(--bg-card); padding: 24px; border-radius: 16px; border: 1px solid var(--border-color); }
+    .dash-panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    .dash-panel-header h3 { margin: 0; font-size: 16px; color: #fff; font-weight: 600; }
+    
+    .user-item { display: flex; align-items: center; justify-content: space-between; padding: 14px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+    .user-item:last-child { border-bottom: none; padding-bottom: 0; }
+    .user-info { display: flex; align-items: center; gap: 12px; }
+    .user-avatar { width: 42px; height: 42px; border-radius: 50%; background: rgba(124, 77, 255, 0.15); display: flex; align-items: center; justify-content: center; color: var(--accent); font-weight: 800; border: 1px solid rgba(124, 77, 255, 0.3); font-size: 16px; text-transform: uppercase;}
+    .user-details h4 { margin: 0 0 4px 0; font-size: 14px; color: #fff; font-weight: 600; }
+    .user-details span { font-size: 12px; color: var(--text-muted); }
+    .user-balance { font-weight: 700; color: var(--success); font-size: 15px; }
+
+    .dash-avatar-name { display: flex; align-items: center; gap: 12px; }
+    .dash-panel .admin-table td { padding: 12px; background: transparent; border: none; border-bottom: 1px solid rgba(255,255,255,0.05); }
+    .dash-panel .admin-table tr:last-child td { border-bottom: none; }
+    .dash-panel .admin-table th { padding: 0 12px 12px 12px; }
+
     /* COLORS */
     .green { color: var(--success); text-shadow: 0 0 15px rgba(16, 185, 129, 0.3); }
     .red { color: var(--danger); text-shadow: 0 0 15px rgba(239, 68, 68, 0.3); }
@@ -147,24 +165,9 @@
     .security-section h3 { color: var(--warning); margin-top:0; font-size: 16px; display:flex; align-items:center; gap:8px; }
 
     /* ================= MODAL / POPUP ================= */
-    .modal-overlay {
-      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(0,0,0,0.85); backdrop-filter: blur(8px);
-      display: none; align-items: center; justify-content: center; z-index: 9999;
-    }
-    .modal {
-      background: var(--bg-card); 
-      border: 1px solid var(--border-color);
-      border-radius: 16px; padding: 32px; 
-      max-width: 500px; width: 90%;
-      box-shadow: 0 20px 50px rgba(0,0,0,0.8);
-      animation: modalFadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-    }
-    @keyframes modalFadeIn { 
-      from { opacity: 0; transform: translateY(20px) scale(0.95); } 
-      to { opacity: 1; transform: translateY(0) scale(1); } 
-    }
-    
+    .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(8px); display: none; align-items: center; justify-content: center; z-index: 9999; }
+    .modal { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px; padding: 32px; max-width: 500px; width: 90%; box-shadow: 0 20px 50px rgba(0,0,0,0.8); animation: modalFadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+    @keyframes modalFadeIn { from { opacity: 0; transform: translateY(20px) scale(0.95); } to { opacity: 1; transform: translateY(0) scale(1); } }
     .modal h3 { color: #fff; margin-top: 0; font-size: 20px; }
     .modal label { font-size: 11px; color: var(--text-muted); font-weight: 700; text-transform: uppercase; margin-bottom: 8px; display: block; }
     .modal input { width: 100%; box-sizing: border-box; }
@@ -267,6 +270,32 @@
           </div>
           <div class="chart-container"><canvas id="mainChart"></canvas></div>
       </div>
+
+      <div class="dashboard-grid">
+        <div class="dash-panel">
+            <div class="dash-panel-header">
+                <h3>Últimas Jogadas</h3>
+                <button class="btn btn-sm btn-secondary" onclick="document.querySelector('[data-section=games]').click()">Ver mais</button>
+            </div>
+            <div class="table-responsive" style="margin: 0; padding: 0;">
+                <table class="admin-table">
+                    <thead><tr><th>Jogador</th><th>Aposta</th><th>Multiplicador</th><th>Ganhos</th></tr></thead>
+                    <tbody id="dash-recent-games">
+                        </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <div class="dash-panel">
+            <div class="dash-panel-header">
+                <h3>Balanço Geral</h3>
+                <button class="btn btn-sm btn-secondary" onclick="document.querySelector('[data-section=users]').click()">Ver mais</button>
+            </div>
+            <div id="dash-top-users">
+                </div>
+        </div>
+      </div>
+
     </div>
 
     <div id="section-users" class="admin-section">
@@ -657,7 +686,7 @@ async function saveSettings() {
   }
 }
 
-// DASHBOARD
+// DASHBOARD E PAINEIS EXTRAS
 async function loadDashboard() {
   try {
     const range = document.getElementById('dashboardRange').value;
@@ -668,10 +697,53 @@ async function loadDashboard() {
     document.getElementById('d-ggr').textContent = 'R$ ' + fmt(d.summary.ggr);
     
     renderChart(d.chart);
+    
+    // Puxando dados para as tabelas extras (Jogadas recentes e Top Usuários)
+    const [allGames, allUsers] = await Promise.all([
+        api('/api/admin/games'),
+        api('/api/admin/users')
+    ]);
+
+    // Últimas Jogadas (5 Primeiros)
+    const recentGames = allGames.slice(0, 5);
+    document.getElementById('dash-recent-games').innerHTML = recentGames.map(g => {
+        const isWin = g.result === 'win';
+        const avatarLetter = g.user_name ? g.user_name.charAt(0).toUpperCase() : '?';
+        return `<tr>
+            <td>
+                <div class="dash-avatar-name">
+                    <div class="user-avatar" style="width:32px; height:32px; font-size:12px;">${avatarLetter}</div>
+                    <div>
+                        <div style="color:#fff; font-weight:600; font-size:13px;">${g.user_name}</div>
+                        <div style="color:var(--text-muted); font-size:11px;">ID: ${g.user_id || g.id}</div>
+                    </div>
+                </div>
+            </td>
+            <td style="color:var(--text-muted); font-size:13px;">R$ ${fmt(g.bet_amount)}</td>
+            <td><span style="background: rgba(255,255,255,0.05); padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; color: ${isWin ? 'var(--success)' : 'var(--text-muted)'}">${g.multiplier}x</span></td>
+            <td style="font-weight:700; font-size:13px; color:${isWin ? 'var(--success)' : 'var(--text-muted)'}">${isWin ? '+ R$ ' + fmt(g.prize) : '- R$ ' + fmt(g.bet_amount)}</td>
+        </tr>`;
+    }).join('');
+
+    // Balanço Geral (Top 5 Saldo)
+    const topUsers = [...allUsers].sort((a, b) => b.balance - a.balance).slice(0, 5);
+    document.getElementById('dash-top-users').innerHTML = topUsers.map(u => {
+        const avatarLetter = u.name ? u.name.charAt(0).toUpperCase() : '?';
+        return `<div class="user-item">
+            <div class="user-info">
+                <div class="user-avatar">${avatarLetter}</div>
+                <div class="user-details">
+                    <h4>${u.name}</h4>
+                    <span>${u.email}</span>
+                </div>
+            </div>
+            <div class="user-balance">R$ ${fmt(u.balance)}</div>
+        </div>`;
+    }).join('');
+
   } catch (e) { console.error(e); }
 }
 
-// === GRÁFICO PROFISSIONAL AGRUPADO POR DIA ===
 function renderChart(data) {
     const canvasEl = document.getElementById('mainChart');
     if (!canvasEl) return;
@@ -681,22 +753,17 @@ function renderChart(data) {
     
     const chartData = (data && Array.isArray(data)) ? data : [];
     
-    // AGRUPAR OS JOGOS POR DATA
     const groupedData = {};
     chartData.forEach(item => {
-        // Pega apenas a data, ignorando a hora
         const dateObj = new Date(item.t);
         const dateStr = dateObj.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
-        
         if(!groupedData[dateStr]) groupedData[dateStr] = { ggr: 0 };
-        // GGR da casa = Valor da Aposta (b) - Valor do Prêmio pago (p)
         groupedData[dateStr].ggr += (parseFloat(item.b) - parseFloat(item.p));
     });
 
     const labels = Object.keys(groupedData);
     const plotValues = Object.values(groupedData).map(g => g.ggr);
 
-    // Se não tiver dados no período, adiciona um ponto zerado para o gráfico não quebrar
     if (labels.length === 0) {
         labels.push(new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }));
         plotValues.push(0);
@@ -715,7 +782,7 @@ function renderChart(data) {
                 data: plotValues, 
                 borderColor: '#7c4dff', 
                 borderWidth: 4, 
-                tension: 0.4, // Deixa a linha curvada igual as dashboards premium
+                tension: 0.4, 
                 fill: true, 
                 backgroundColor: gradient, 
                 pointBackgroundColor: '#0a0a14', 
