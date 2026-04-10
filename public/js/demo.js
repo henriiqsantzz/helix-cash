@@ -248,29 +248,57 @@
     var container = document.getElementById('gameCanvas').parentElement;
     hudContainer = document.createElement('div');
     hudContainer.id = 'helix-hud';
-    hudContainer.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:100;';
+    hudContainer.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:100;font-family:"Inter",sans-serif;';
 
-    // UI Exclusiva do modo Demo (Sem botão de resgatar)
-    var html = '<div style="position:absolute;top:12px;left:12px;z-index:100;background:rgba(0,0,0,0.55);color:#fff;padding:6px 14px;border-radius:12px;font-family:Inter,sans-serif;backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,0.15);">'
-      + '<div style="font-size:9px;text-transform:uppercase;letter-spacing:1px;opacity:0.7;">MODO DEMO</div>'
-      + '<div style="font-size:16px;font-weight:800;">R$ 10,00</div></div>';
+    // Container Superior para os Cards (Estilo Premium)
+    var header = document.createElement('div');
+    header.style.cssText = 'position:absolute;top:15px;left:0;width:100%;display:flex;justify-content:center;align-items:flex-start;padding:0 15px;gap:10px;box-sizing:border-box;';
 
-    html += '<div style="position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:100;background:rgba(0,0,0,0.55);color:#fff;padding:8px 16px;border-radius:12px;font-family:Inter,sans-serif;min-width:160px;text-align:center;backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,0.15);max-width:calc(100% - 140px);">'
-      + '<div style="font-size:9px;text-transform:uppercase;letter-spacing:1px;opacity:0.7;">Acumulado / Meta</div>'
-      + '<div style="font-size:14px;font-weight:800;" id="hud-progress-val">R$ 0,00 / R$ 80,00</div>'
-      + '<div style="width:100%;height:4px;background:rgba(255,255,255,0.15);border-radius:2px;margin-top:4px;overflow:hidden;">'
-      + '<div id="hud-progress-bar" style="width:0%;height:100%;background:linear-gradient(90deg,#00e676,#69f0ae);border-radius:2px;transition:width 0.3s;"></div></div></div>';
+    // 1. Card Valor da Entrada (Esquerda)
+    var entryCard = `
+      <div style="background:rgba(13, 13, 25, 0.8); backdrop-filter:blur(10px); border:1px solid rgba(255,255,255,0.1); border-radius:12px; padding:8px 15px; min-width:100px; box-shadow: 0 4px 15px rgba(0,0,0,0.3);">
+        <div style="color:#8b8b9e; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:2px;">Entrada</div>
+        <div style="color:#fff; font-size:15px; font-weight:900;">R$ ${fmtBRL(betAmount)}</div>
+      </div>
+    `;
 
-    html += '<div id="hud-start" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:100;font-family:Inter,sans-serif;text-align:center;pointer-events:none;">'
-      + '<div style="font-size:20px;font-weight:700;color:rgba(0,0,0,0.6);">Toque para testar</div>'
-      + '<div style="font-size:28px;margin-top:8px;color:rgba(0,0,0,0.4);animation:helixBounce 1s infinite;">&#8595;</div></div>';
+    // 2. Card Meta Acumulada (Centro/Direita)
+    var metaCard = `
+      <div style="background:rgba(13, 13, 25, 0.8); backdrop-filter:blur(10px); border:1px solid rgba(255,255,255,0.1); border-radius:12px; padding:8px 15px; flex-grow:1; max-width:220px; box-shadow: 0 4px 15px rgba(0,0,0,0.3);">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+          <span style="color:#8b8b9e; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px;">Meta Acumulada</span>
+          <span style="color:#00e676; font-size:10px; font-weight:800;" id="hud-perc">0%</span>
+        </div>
+        <div style="color:#fff; font-size:14px; font-weight:900; margin-bottom:6px;" id="hud-progress-val">R$ 0,00 / R$ 80,00</div>
+        <div style="width:100%; height:6px; background:rgba(255,255,255,0.1); border-radius:10px; overflow:hidden; border:1px solid rgba(255,255,255,0.05);">
+          <div id="hud-progress-bar" style="width:0%; height:100%; background:linear-gradient(90deg, #00e676, #69f0ae); box-shadow: 0 0 10px rgba(0,230,118,0.5); border-radius:10px; transition:width 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);"></div>
+        </div>
+      </div>
+    `;
 
-    html += '<div id="hud-combo" style="position:absolute;bottom:150px;left:50%;transform:translateX(-50%);z-index:100;pointer-events:none;font-family:Inter,sans-serif;font-size:24px;font-weight:800;color:#ffab00;text-shadow:0 2px 8px rgba(255,171,0,0.5);opacity:0;transition:all 0.3s;"></div>';
-    html += '<div id="hud-score-popup" style="position:absolute;top:45%;left:50%;transform:translate(-50%,-50%);z-index:100;pointer-events:none;font-family:Inter,sans-serif;font-size:36px;font-weight:900;color:#fff;text-shadow:0 2px 10px rgba(0,0,0,0.3);opacity:0;"></div>';
+    header.innerHTML = entryCard + metaCard;
+    hudContainer.appendChild(header);
 
-    hudContainer.innerHTML = html;
+    // Overlay de Início
+    var startOverlay = document.createElement('div');
+    startOverlay.id = 'hud-start';
+    startOverlay.style.cssText = 'position:absolute;top:55%;left:50%;transform:translate(-50%,-50%);text-align:center;transition:opacity 0.3s;pointer-events:none;';
+    startOverlay.innerHTML = `
+      <div style="background:rgba(0,0,0,0.4); padding:15px 30px; border-radius:50px; backdrop-filter:blur(4px); border:1px solid rgba(255,255,255,0.1);">
+        <div style="color:#fff; font-size:18px; font-weight:800; text-transform:uppercase; letter-spacing:1px; margin-bottom:5px;">Modo Treinamento</div>
+        <div style="color:rgba(255,255,255,0.7); font-size:12px; font-weight:500;">Toque na tela para começar</div>
+        <div style="font-size:30px; margin-top:10px; animation: helixBounce 1.2s infinite ease-in-out;">🖱️</div>
+      </div>
+    `;
+    hudContainer.appendChild(startOverlay);
+
+    hudContainer.innerHTML += `
+      <div id="hud-combo" style="position:absolute;bottom:20%;left:50%;transform:translateX(-50%);font-size:28px;font-weight:900;color:#ffab00;text-shadow:0 0 20px rgba(255,171,0,0.6);opacity:0;transition:all 0.3s;white-space:nowrap;"></div>
+      <div id="hud-score-popup" style="position:absolute;top:40%;left:50%;transform:translate(-50%,-50%);font-size:42px;font-weight:900;color:#fff;text-shadow:0 4px 15px rgba(0,0,0,0.5);opacity:0;pointer-events:none;"></div>
+    `;
+
     var style = document.createElement('style');
-    style.textContent = '@keyframes helixBounce{0%,100%{transform:translateY(0)}50%{transform:translateY(10px)}}@keyframes helixFadeUp{0%{opacity:1;transform:translate(-50%,-50%) scale(1)}100%{opacity:0;transform:translate(-50%,-80%) scale(1.5)}}';
+    style.textContent = '@keyframes helixBounce{0%,100%{transform:translateY(0)}50%{transform:translateY(8px)}}@keyframes helixFadeUp{0%{opacity:0;transform:translate(-50%,-20%) scale(0.5)}20%{opacity:1;transform:translate(-50%,-50%) scale(1.2)}100%{opacity:0;transform:translate(-50%,-100%) scale(1.5)}}';
     hudContainer.appendChild(style);
     container.appendChild(hudContainer);
     
@@ -285,13 +313,21 @@
     if (!hudContainer) return;
     var pv = document.getElementById('hud-progress-val');
     var pb = document.getElementById('hud-progress-bar');
+    var pc = document.getElementById('hud-perc');
     var ss = document.getElementById('hud-start');
 
     var prize = calcPrize(); prizeAmount = prize;
+    var target = 80;
+    var percentage = Math.min(100, (prize / target) * 100);
 
-    if(pv) pv.textContent = 'R$ ' + fmtBRL(prize) + ' / R$ 80,00';
-    if(pb) pb.style.width = Math.min(100, (prize / 80) * 100) + '%';
-    if (ss) ss.style.display = gamePhase === 'ready' ? 'block' : 'none';
+    if(pv) pv.innerHTML = `<span style="color:#00e676;">R$ ${fmtBRL(prize)}</span> <span style="color:rgba(255,255,255,0.3); margin:0 5px;">/</span> R$ ${fmtBRL(target)}`;
+    if(pb) pb.style.width = percentage + '%';
+    if(pc) pc.textContent = Math.floor(percentage) + '%';
+    
+    if (ss) {
+        if (gamePhase === 'ready') { ss.style.opacity = '1'; ss.style.display = 'block'; } 
+        else { ss.style.opacity = '0'; setTimeout(() => { if(ss) ss.style.display = 'none'; }, 300); }
+    }
   }
 
   function calcPrize() {
@@ -301,7 +337,9 @@
     return Math.round(betAmount * totalMultiplier * 100) / 100;
   }
 
-  function fmtBRL(v) { return v.toFixed(2).replace('.', ','); }
+  function fmtBRL(v) { 
+    return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); 
+  }
 
   function unlockAudio() {
     if (audioUnlocked) return;
@@ -379,17 +417,13 @@
     if (gamePhase === 'playing') {
       ballVelY += CONFIG.gravity;
       ballWorldY -= ballVelY;
-      
       if (ballMesh) {
         ballMesh.position.y = ballWorldY;
         ballMesh.position.z = (CONFIG.platformInnerRadius + CONFIG.platformOuterRadius) / 2; ballMesh.position.x = 0;
       }
-      
       if (comboTimer > 0) { comboTimer--; if (comboTimer <= 0) comboCount = 0; }
       checkCollisions();
-      
       if (Math.abs(ballWorldY) > (lastGeneratedPlatformIndex - 10) * CONFIG.platformSpacing) generateSinglePlatform(lastGeneratedPlatformIndex + 1);
-
       for (var i = platforms.length - 1; i >= 0; i--) {
           if (platforms[i].y > ballWorldY + 15) {
               helixGroup.remove(platforms[i].group);
@@ -398,13 +432,11 @@
           }
       }
     }
-
     if (camera && gamePhase !== 'ready') {
       cameraTargetY = ballWorldY + CONFIG.cameraHeight;
       camera.position.y += (cameraTargetY - camera.position.y) * CONFIG.cameraFollowSpeed;
       camera.lookAt(0, camera.position.y - CONFIG.cameraHeight - CONFIG.cameraOffsetDown, 0);
     }
-
     updateSplash();
     var np = Math.min(Math.floor(platformsPassed / 5), PALETTES.length - 1);
     if (np !== currentPaletteIndex) { currentPaletteIndex = np; updatePaletteColors(); }
@@ -416,31 +448,24 @@
     var ballAngle = normAngle((3 * Math.PI / 2) - helixRotation);
     var ballRadiusAngle = Math.asin(CONFIG.ballRadius / ((CONFIG.platformInnerRadius + CONFIG.platformOuterRadius) / 2));
     var killMargin = ballRadiusAngle * 0.6; 
-
     for (var i = 0; i < platforms.length; i++) {
       var p = platforms[i];
       if (p.passed) continue;
       var platTop = p.y + CONFIG.platformHeight / 2;
       var platBottom = p.y - CONFIG.platformHeight / 2;
-      
       if (ballWorldY <= platTop + (CONFIG.ballRadius * 0.5) && ballWorldY >= platBottom && ballVelY > 0) {
         var inHole = isAngleInRange(ballAngle, p.holeStart, p.holeStart + p.holeSize);
         if (inHole) {
           p.passed = true; platformsPassed++;
           comboCount++; comboTimer = 60;
           if (comboCount >= 3) showCombo(comboCount);
-          
           var oldP = prizeAmount;
           var newP = calcPrize();
           prizeAmount = newP; 
-
           playMoneySound();
           showScorePopup('+R$ ' + fmtBRL(newP - oldP));
-          
           p.segments.forEach(function(seg) { seg.mesh.material.transparent = true; seg.mesh.material.opacity = 0.2; });
           createSplash(p.y);
-
-          // VERIFICA SE BATEU A META DE 80 REAIS NO DEMO
           if (newP >= 80) {
               if (ballMesh) ballMesh.visible = false;
               createSplash(ballWorldY);
@@ -449,7 +474,6 @@
           }
         } else {
           var hitDanger = p.segments.some(seg => seg.isKiller && isAngleInRange(ballAngle, seg.startAngle - killMargin, seg.endAngle + killMargin));
-          
           if (hitDanger) { 
             if (ballMesh) ballMesh.visible = false;
             createSplash(ballWorldY); createSplash(ballWorldY - 0.1); 
@@ -473,95 +497,69 @@
     var finalScore = platformsPassed;
     var finalPrize = calcPrize(); 
     gamePhase = 'gameover'; 
-    
     setTimeout(function() { gameActive = false; }, 1500); 
-
     setTimeout(function() {
-      // GERA O POPUP DE CONVERSÃO DIRETAMENTE NA TELA DO JOGO
       showDemoConversionPopup(finalPrize, finalScore, isWin);
     }, 500); 
   }
 
-  // --- POPUP INJETADO DIRETAMENTE VIA JS (SEM PRECISAR DE HTML NO INDEX) ---
   function showDemoConversionPopup(prize, score, isWin) {
       var gameScreen = document.getElementById('gameCanvas').parentElement;
       if (!gameScreen) return;
-
       var modal = document.createElement('div');
       modal.id = 'demoConversionModal';
       modal.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);z-index:10000;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(8px);padding:15px; box-sizing:border-box; font-family: "Inter", sans-serif;';
-
       var iconHtml = isWin ? 
         '<div style="width:50px;height:50px;border-radius:50%;background:linear-gradient(135deg, #00e676, #1de9b6);display:flex;align-items:center;justify-content:center;font-size:24px;color:#fff;font-weight:900;margin:0 auto 12px;box-shadow:0 0 20px rgba(0,230,118,0.4);flex-shrink:0;">🎉</div>' : 
         '<div style="width:50px;height:50px;border-radius:50%;background:linear-gradient(135deg, #ff5722, #ff9800);display:flex;align-items:center;justify-content:center;font-size:24px;color:#fff;font-weight:900;margin:0 auto 12px;box-shadow:0 0 20px rgba(255,87,34,0.4);flex-shrink:0;">!</div>';
-
       var titleText = isWin ? 
         '<h2 style="color:#00e676;font-size:clamp(20px, 5vw, 24px);font-weight:900;margin-bottom:6px;text-transform:uppercase;">PARABÉNS!</h2>' : 
         '<h2 style="color:#fff;font-size:clamp(20px, 5vw, 24px);font-weight:900;margin-bottom:6px;text-transform:uppercase;">😔 QUE PENA!</h2>';
-
       var descText = isWin ? 
         '<p style="color:#a0a0c0;font-size:clamp(12px, 3.5vw, 14px);margin-bottom:15px;line-height:1.4;">Você bateu a meta e acumulou <b>R$ ' + fmtBRL(prize) + '</b>!<br>Crie sua conta para resgatar dinheiro de verdade.</p>' : 
         '<p style="color:#a0a0c0;font-size:clamp(12px, 3.5vw, 14px);margin-bottom:15px;line-height:1.4;">Você acumulou <b>R$ ' + fmtBRL(prize) + '</b> mas não resgatou a tempo.<br>Na próxima você consegue!</p>';
-
       var boxBorder = isWin ? 'rgba(0,230,118,0.2)' : 'rgba(255,100,100,0.2)';
       var prizeColor = isWin ? '#00e676' : '#ff7575';
       var boxLabel = isWin ? 'VOCÊ ACUMULOU' : 'VOCÊ PODERIA TER RESGATADO';
-
       var scrollStyle = '<style>#demoConversionModalInner::-webkit-scrollbar { display: none; } #demoConversionModalInner { -ms-overflow-style: none; scrollbar-width: none; }</style>';
-
       modal.innerHTML = scrollStyle + `
         <div id="demoConversionModalInner" style="background:#0f071a; border:1px solid rgba(255,255,255,0.05); border-radius:24px; padding:20px 15px; width:100%; max-width:400px; max-height:90vh; overflow-y:auto; text-align:center; box-shadow:0 20px 50px rgba(0,0,0,0.5); box-sizing:border-box;">
-          ${iconHtml}
-          ${titleText}
-          ${descText}
-
+          ${iconHtml} ${titleText} ${descText}
           <div style="background:rgba(255,255,255,0.03);border:1px solid ${boxBorder};border-radius:16px;padding:15px;margin-bottom:15px;">
             <div style="font-size:10px;text-transform:uppercase;color:#a0a0c0;letter-spacing:1px;font-weight:700;margin-bottom:5px;">${boxLabel}</div>
             <div style="font-size:clamp(30px, 8vw, 42px);font-weight:900;color:${prizeColor};line-height:1;">R$ ${fmtBRL(prize)}</div>
             <div style="font-size:12px;color:#a0a0c0;margin-top:5px;">${score} plataformas passadas</div>
           </div>
-
           <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.05);border-radius:12px;padding:10px;margin-bottom:10px;display:flex;align-items:center;gap:8px;font-size:clamp(11px, 3.5vw, 13px);color:#d0d0e0;text-align:left;">
             <div style="color:#00e676;font-size:16px;flex-shrink:0;">✅</div>
             <div>Mais de <strong style="color:#00e676;">12.000 jogadores</strong> já resgataram prêmios esta semana</div>
           </div>
-
           <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.05);border-radius:12px;padding:10px;margin-bottom:15px;display:flex;align-items:center;gap:8px;font-size:clamp(11px, 3.5vw, 13px);color:#d0d0e0;text-align:left;">
             <div style="font-size:16px;flex-shrink:0;">🎁</div>
             <div><strong style="color:#ff4081;">Ganhe 50% de bônus</strong> no primeiro depósito — oferta por tempo limitado!</div>
           </div>
-
           <p style="font-size:clamp(10px, 3vw, 12px);color:#a0a0c0;margin-bottom:15px;line-height:1.3;">Com uma conta real você pode resgatar de verdade. Não perca mais oportunidades!</p>
-
           <button onclick="window.sairDoDemo('#cadastro')" style="width:100%;background:linear-gradient(135deg, #ff4081, #d500f9);color:#fff;border:none;padding:clamp(12px, 3.5vw, 16px);border-radius:50px;font-size:clamp(12px, 3.5vw, 15px);font-weight:900;text-transform:uppercase;margin-bottom:10px;cursor:pointer;box-shadow:0 10px 20px rgba(213,0,249,0.3);display:flex;align-items:center;justify-content:center;gap:8px;">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
             CRIAR CONTA E GANHAR DE VERDADE
           </button>
-
           <button onclick="window.sairDoDemo('#login')" style="width:100%;background:rgba(255,255,255,0.05);color:#fff;border:1px solid rgba(255,255,255,0.1);padding:clamp(12px, 3.5vw, 16px);border-radius:50px;font-size:clamp(12px, 3.5vw, 14px);font-weight:700;text-transform:uppercase;margin-bottom:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path><polyline points="10 17 15 12 10 7"></polyline><line x1="15" y1="12" x2="3" y2="12"></line></svg>
             JÁ TENHO CONTA — ENTRAR
           </button>
-
           <div style="font-size:9px;color:rgba(255,255,255,0.2);line-height:1.4;">Estes valores são fictícios e servem apenas para demonstração.<br>Nenhum valor foi debitado ou creditado em conta real.</div>
         </div>
       `;
-
       gameScreen.appendChild(modal);
   }
 
-  // REDIRECIONAMENTO FINAL DO FUNIL
   window.sairDoDemo = function(hashTarget) {
-      document.getElementById('page-game').classList.add('hidden'); // Esconde o canvas do jogo
-      
-      // Tenta achar a home page original pra ativar, se existir
+      document.getElementById('page-game').classList.add('hidden');
       var landing = document.getElementById('page-landing');
       if(landing) landing.classList.add('active'); 
-      
       var modal = document.getElementById('demoConversionModal');
       if (modal) modal.remove();
-      
-      window.location.hash = hashTarget; // Joga pra página de cadastro ou login
+      window.location.hash = hashTarget;
   };
 
   function updatePaletteColors() {
@@ -573,11 +571,8 @@
     platforms.forEach(function(p) {
       if (p.passed) return;
       p.segments.forEach(function(seg, s) {
-        if (seg.isKiller) {
-            seg.mesh.material.color.setHex(pal.killer); seg.mesh.material.emissive.setHex(pal.killer);
-        } else {
-            seg.mesh.material.color.setHex(s % 2 === 0 ? pal.platforms : pal.alt);
-        }
+        if (seg.isKiller) { seg.mesh.material.color.setHex(pal.killer); seg.mesh.material.emissive.setHex(pal.killer); } 
+        else { seg.mesh.material.color.setHex(s % 2 === 0 ? pal.platforms : pal.alt); }
       });
     });
   }
