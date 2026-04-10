@@ -45,8 +45,8 @@ function createDefaultDB() {
       referral_code: 'ADMIN001', referred_by: null,
       is_admin: true, is_influencer: false,
       influencer_win_rate: 0, 
-      affiliate_commission_rate: null, // Nova propriedade: Comissão individual
-      affiliate_balance: 0,            // Nova propriedade: Saldo de afiliado
+      affiliate_commission_rate: null, 
+      affiliate_balance: 0,            
       total_deposited: 0, total_withdrawn: 0, total_games: 0,
       created_at: new Date().toISOString(), last_login: null
     }],
@@ -57,66 +57,74 @@ function createDefaultDB() {
     referral_earnings: [],
     webhooks: [],
     settings: {
-      min_deposit: '1', min_withdrawal: '20', max_multiplier: '7',
-      global_affiliate_commission_rate: '10', // Configuração: Comissão global em %
-      min_affiliate_withdrawal: '10',         // Configuração: Saque mínimo afiliado
-      referral_bonus: '20', house_edge: '15', influencer_house_edge: '5',
-      site_name: 'Helix Cash',
+      // BRANDING & LOGOS
+      site_name: 'Helix Cash', site_desc: 'Jogue e ganhe dinheiro de verdade!', promo_text: '',
+      logo_desktop: '', logo_mobile: '', favicon: '', whatsapp: '',
+      // FINANCEIRO
+      min_deposit: '10', max_deposit: '0', min_withdrawal: '20', max_withdrawal: '0',
+      min_affiliate_withdrawal: '10', deposit_bonus_percent: '0', min_bonus_deposit: '0', max_bonus_deposit: '0',
+      // JOGO
+      max_multiplier: '7', win_per_platform: '0.10', house_edge: '15', quick_values: '[10, 20, 50, 100]',
       game_platform_count: '25', game_danger_start_level: '2', game_danger_progression: '5',
       game_danger_max_slices: '6', game_hole_segments: '1.5', game_rotation_sensitivity: '0.008',
-      inf_game_danger_max_slices: '1', inf_game_danger_start_level: '10', inf_game_hole_segments: '3.0'
+      // AFILIADOS
+      global_affiliate_commission_rate: '10', aff_level_2: '0',
+      show_aff_banner: true, show_aff_balance: true, show_aff_withdraw_btn: true,
+      show_aff_link_box: true, show_aff_counters: true, show_aff_volume: true,
+      show_aff_list: true, show_aff_list_value: true,
+      // BANNERS
+      banner1_img: '', banner1_link: '', banner2_img: '', banner2_link: '', banner3_img: '', banner3_link: '',
+      // CORES (Root Vars)
+      'bg-main': '#05050a', 'bg-sec': '#0a0a14', 'bg-card': '#10101a', 'accent': '#7c4dff',
+      'site-primary': '#f472b6', 'site-grad': '#ff6b9d',
+      'success': '#10b981', 'danger': '#ef4444', 'warning': '#f59e0b', 'text-muted': '#8b8b9e',
+      // SISTEMA
+      maintenance_mode: false, allow_registration: true, demo_mode: true, block_withdrawals: false,
+      jwt_secret: '', admin_jwt_secret: '',
+      // ROLLOVER & PIXEL
+      rollover_active: false, rollover_type: 'multiplier', rollover_multiplier: '2', rollover_fixed: '0', rollover_bonus_only: false,
+      pixel_active: false, pixel_id: '', pixel_token: '', pixel_test_code: ''
     },
     next_id: { users: 2, deposits: 1, withdrawals: 1, games: 1, pending_games: 1, referral_earnings: 1, webhooks: 1 }
   };
 }
 
 async function loadDB() {
+  const defaultDB = createDefaultDB();
+  let dbData = defaultDB;
+
   if (USE_SUPABASE) {
     try {
       var rows = await supaFetch('app_state?select=data&id=eq.1');
       if (rows && rows.length > 0 && rows[0].data) {
         var data = typeof rows[0].data === 'string' ? JSON.parse(rows[0].data) : rows[0].data;
-        if (!data.pending_games) data.pending_games = [];
-        if (!data.webhooks) data.webhooks = [];
-        if (!data.next_id.pending_games) data.next_id.pending_games = 1;
-        
-        // Garante que as novas configurações de afiliados existam
-        if (!data.settings.global_affiliate_commission_rate) data.settings.global_affiliate_commission_rate = '10';
-        if (!data.settings.min_affiliate_withdrawal) data.settings.min_affiliate_withdrawal = '10';
-        
-        data.users.forEach(u => {
-            if(u.affiliate_commission_rate === undefined) u.affiliate_commission_rate = null;
-            if(u.affiliate_balance === undefined) u.affiliate_balance = 0;
-            // Limpeza opcional: remover is_blocked de usuários antigos se quiser
-            if(u.is_blocked !== undefined) delete u.is_blocked;
-        });
-
-        try { fs.writeFileSync(DB_FILE, JSON.stringify(data)); } catch(e) {}
-        return data;
+        dbData = data;
       }
     } catch (e) { console.error('Supabase load error:', e.message); }
+  } else {
+    try {
+      if (fs.existsSync(DB_FILE)) {
+        dbData = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
+      }
+    } catch (e) { console.error('DB load error:', e.message); }
   }
-  try {
-    if (fs.existsSync(DB_FILE)) {
-      var data = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
-      if (!data.pending_games) data.pending_games = [];
-      if (!data.webhooks) data.webhooks = [];
-      if (!data.next_id.pending_games) data.next_id.pending_games = 1;
 
-      // Garante que as novas configurações de afiliados existam
-      if (!data.settings.global_affiliate_commission_rate) data.settings.global_affiliate_commission_rate = '10';
-      if (!data.settings.min_affiliate_withdrawal) data.settings.min_affiliate_withdrawal = '10';
-      
-      data.users.forEach(u => {
-        if(u.affiliate_commission_rate === undefined) u.affiliate_commission_rate = null;
-        if(u.affiliate_balance === undefined) u.affiliate_balance = 0;
-        if(u.is_blocked !== undefined) delete u.is_blocked;
-      });
+  // Merge das configurações antigas com as novas (garante que nada quebre se faltar variável)
+  if (!dbData.settings) dbData.settings = {};
+  dbData.settings = { ...defaultDB.settings, ...dbData.settings };
+  
+  if (!dbData.pending_games) dbData.pending_games = [];
+  if (!dbData.webhooks) dbData.webhooks = [];
+  if (!dbData.next_id.pending_games) dbData.next_id.pending_games = 1;
 
-      return data;
-    }
-  } catch (e) { console.error('DB load error:', e.message); }
-  return createDefaultDB();
+  dbData.users.forEach(u => {
+    if(u.affiliate_commission_rate === undefined) u.affiliate_commission_rate = null;
+    if(u.affiliate_balance === undefined) u.affiliate_balance = 0;
+    if(u.is_blocked !== undefined) delete u.is_blocked;
+  });
+
+  try { fs.writeFileSync(DB_FILE, JSON.stringify(dbData)); } catch(e) {}
+  return dbData;
 }
 
 async function saveDB(db) {
@@ -203,6 +211,21 @@ module.exports = async function handler(req, res) {
   const safePixAuth = "Basic " + Buffer.from(`${SAFEPIX_PUBLIC_KEY}:${SAFEPIX_SECRET_KEY}`).toString("base64");
 
   try {
+    // ==================== CONFIGURAÇÕES PÚBLICAS (CORES E LOGOS) ====================
+    if (url === '/api/public-settings' && method === 'GET') {
+      const publicSettings = { ...db.settings };
+      // Removemos chaves secretas e métricas da casa para não expor pro jogador
+      delete publicSettings.jwt_secret;
+      delete publicSettings.admin_jwt_secret;
+      delete publicSettings.pixel_token;
+      delete publicSettings.pixel_test_code;
+      delete publicSettings.house_edge;
+      delete publicSettings.game_danger_start_level;
+      delete publicSettings.game_danger_progression;
+      
+      return respond(res, 200, publicSettings);
+    }
+
     // ==================== PUBLIC STATS ====================
     if (url === '/api/stats' && method === 'GET') {
       var nonAdmin = db.users.filter(function (u) { return !u.is_admin; });
@@ -222,6 +245,10 @@ module.exports = async function handler(req, res) {
 
     // ==================== AUTH: REGISTER ====================
     if (url === '/api/auth/register' && method === 'POST') {
+      if (String(db.settings.allow_registration) === 'false') {
+        return respond(res, 403, { error: 'O registro de novos usuários está temporariamente desativado.' });
+      }
+
       var body = await parseBody(req);
       var name = (body.name || '').trim();
       var email = (body.email || '').trim().toLowerCase();
@@ -310,13 +337,20 @@ module.exports = async function handler(req, res) {
       var user = getUser(db, req);
       if (!user) return respond(res, 401, { error: 'Nao autorizado' });
       var body = await parseBody(req);
-      
+      var reqAmount = num(body.amount);
+
+      var minDep = num(db.settings.min_deposit) || 1;
+      var maxDep = num(db.settings.max_deposit) || 0;
+
+      if (reqAmount < minDep) return respond(res, 400, { error: `Depósito mínimo é de R$ ${minDep}` });
+      if (maxDep > 0 && reqAmount > maxDep) return respond(res, 400, { error: `Depósito máximo é de R$ ${maxDep}` });
+
       try {
         const protocol = req.headers['x-forwarded-proto'] || 'https';
         const host = req.headers.host;
         const postbackUrl = `${protocol}://${host}/api/webhook/safepix`;
 
-        const amountCents = Math.round(num(body.amount) * 100);
+        const amountCents = Math.round(reqAmount * 100);
         const cleanCpf = body.cpf ? body.cpf.replace(/\D/g, '') : '';
 
         const payload = {
@@ -329,22 +363,13 @@ module.exports = async function handler(req, res) {
             document: { type: "cpf", number: cleanCpf },
             phone: user.phone || "5511999999999"
           },
-          items: [{
-            title: "Creditos Helix Cash",
-            unit_price: amountCents,
-            quantity: 1,
-            tangible: false
-          }],
+          items: [{ title: "Creditos Helix Cash", unit_price: amountCents, quantity: 1, tangible: false }],
           metadata: { provider_name: "API Pix", user_id: String(user.id) }
         };
 
         const safeRes = await fetch('https://api.safepix.pro/v1/payment-transaction/create', {
           method: 'POST',
-          headers: {
-            'accept': 'application/json',
-            'content-type': 'application/json',
-            'authorization': safePixAuth
-          },
+          headers: { 'accept': 'application/json', 'content-type': 'application/json', 'authorization': safePixAuth },
           body: JSON.stringify(payload)
         });
 
@@ -361,7 +386,7 @@ module.exports = async function handler(req, res) {
         var dep = {
           id: db.next_id.deposits++, 
           user_id: user.id, 
-          amount: num(body.amount),
+          amount: reqAmount,
           status: 'pending', 
           pix_code: pixString, 
           transaction_id: safeData.id,
@@ -373,13 +398,7 @@ module.exports = async function handler(req, res) {
         db.deposits.push(dep);
         await saveDB(db);
 
-        return respond(res, 200, { 
-          success: true, 
-          deposit: dep, 
-          pix_code: dep.pix_code, 
-          qr_code_base64: qrCodeImageUrl,
-          deposit_id: dep.id 
-        });
+        return respond(res, 200, { success: true, deposit: dep, pix_code: dep.pix_code, qr_code_base64: qrCodeImageUrl, deposit_id: dep.id });
       } catch (e) {
         return respond(res, 500, { error: 'Erro de conexao SafePix' });
       }
@@ -401,7 +420,7 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // ==================== WEBHOOK SAFEPIX ====================
+    // ==================== WEBHOOK SAFEPIX (DEPÓSITOS E BÔNUS) ====================
     if (url === '/api/webhook/safepix' && method === 'POST') {
       var body = await parseBody(req);
       db.webhooks.push({ id: db.next_id.webhooks++, data: body, created_at: new Date().toISOString() });
@@ -418,32 +437,38 @@ module.exports = async function handler(req, res) {
           var user = db.users.find(u => u.id === dep.user_id);
           
           if (user) {
-            // Adiciona saldo ao usuário que depositou
+            // Adiciona saldo
             user.balance = parseFloat((num(user.balance) + num(dep.amount)).toFixed(2));
             user.total_deposited = (user.total_deposited || 0) + num(dep.amount);
 
-            // ================= LÓGICA DE REGISTRO DE AFILIADOS =================
+            // ================= LÓGICA DE BÔNUS =================
+            let bonusPercent = num(db.settings.deposit_bonus_percent);
+            let minBonus = num(db.settings.min_bonus_deposit);
+            let maxBonus = num(db.settings.max_bonus_deposit);
+            
+            if (bonusPercent > 0 && num(dep.amount) >= minBonus && (maxBonus === 0 || num(dep.amount) <= maxBonus)) {
+                let bonusToAdd = (num(dep.amount) * bonusPercent) / 100;
+                user.bonus_balance = parseFloat((num(user.bonus_balance) + bonusToAdd).toFixed(2));
+            }
+
+            // ================= LÓGICA DE AFILIADOS =================
             if (user.referred_by) {
               var referrer = db.users.find(u => u.referral_code === user.referred_by);
               
               if (referrer && (referrer.is_influencer || referrer.is_admin)) {
-                // REGRA 1: É INFLUENCIADOR (Calcula a % de depósitos e só registra pro Admin)
-                
                 var commissionRate = referrer.affiliate_commission_rate !== null && referrer.affiliate_commission_rate !== undefined 
                                      ? num(referrer.affiliate_commission_rate) 
                                      : num(db.settings.global_affiliate_commission_rate || 10);
                 
                 if (commissionRate > 0) {
                   var commissionAmount = parseFloat(((commissionRate / 100) * num(dep.amount)).toFixed(2));
-                  
-                  // Apenas registra o histórico para calcular lá na aba de Afiliados do Admin
                   db.referral_earnings.push({
                     id: db.next_id.referral_earnings++, user_id: referrer.id, from_user_id: user.id, 
                     amount: commissionAmount, type: 'deposit_commission', created_at: new Date().toISOString()
                   });
                 }
               } else if (referrer && num(user.total_deposited) === num(dep.amount) && num(dep.amount) >= 50) {
-                // REGRA 2: USUÁRIO COMUM (Ganha fixo R$ 20 apenas no PRIMEIRO depósito >= R$ 50)
+                // CPA Fixo R$20 (apenas 1º deposito comum > 50)
                 referrer.balance = parseFloat((num(referrer.balance) + 20).toFixed(2));
                 db.referral_earnings.push({
                   id: db.next_id.referral_earnings++, user_id: referrer.id, from_user_id: user.id, 
@@ -451,7 +476,6 @@ module.exports = async function handler(req, res) {
                 });
               }
             }
-            // ================= FIM LÓGICA DE REGISTRO =================
           }
           await saveDB(db);
         }
@@ -504,6 +528,11 @@ module.exports = async function handler(req, res) {
       var pixKey = (body.pix_key || '').trim();
       var type = body.type || 'balance';
 
+      // Trava Global de Saque
+      if (String(db.settings.block_withdrawals) === 'true') {
+         return respond(res, 403, { error: 'Saques temporariamente suspensos pelo administrador.' });
+      }
+
       if (!pixKey) return respond(res, 400, { error: 'Chave PIX obrigatoria' });
 
       if (type === 'affiliate_balance') {
@@ -513,7 +542,9 @@ module.exports = async function handler(req, res) {
       } else {
          if (num(user.balance) < amount) return respond(res, 400, { error: 'Saldo insuficiente' });
          var minWd = num(db.settings.min_withdrawal) || 20;
+         var maxWd = num(db.settings.max_withdrawal) || 0;
          if (amount < minWd) return respond(res, 400, { error: 'Saque minimo: R$' + minWd });
+         if (maxWd > 0 && amount > maxWd) return respond(res, 400, { error: 'Saque máximo: R$' + maxWd });
       }
 
       try {
@@ -682,7 +713,7 @@ module.exports = async function handler(req, res) {
         return {
           id: u.id, name: u.name, email: u.email, balance: num(u.balance), 
           is_influencer: !!u.is_influencer, influencer_win_rate: num(u.influencer_win_rate),
-          is_admin: !!u.is_admin, created_at: u.created_at, // is_blocked removido daqui
+          is_admin: !!u.is_admin, created_at: u.created_at,
           total_deposited: uDeps.reduce((s, d) => s + num(d.amount), 0),
           total_withdrawn: uWds.reduce((s, w) => s + num(w.amount), 0),
           games_count: uGames.length,
@@ -714,7 +745,7 @@ module.exports = async function handler(req, res) {
       return respond(res, 200, { success: true });
     }
 
-    // ==================== NOVA ROTA: EXCLUIR USUÁRIO ====================
+    // EXCLUIR USUÁRIO
     if (url === '/api/admin/user/delete' && method === 'POST') {
       var body = await parseBody(req);
       var userId = parseInt(body.id);
@@ -725,13 +756,11 @@ module.exports = async function handler(req, res) {
       var userIndex = db.users.findIndex(x => x.id === userId);
       if (userIndex === -1) return respond(res, 404, { error: 'Usuário não encontrado' });
 
-      // Remove o usuário do banco de dados permanentemente
       db.users.splice(userIndex, 1);
       
       await saveDB(db);
       return respond(res, 200, { success: true, message: 'Usuário excluído com sucesso' });
     }
-    // ====================================================================
 
     // LISTAR DEPÓSITOS 
     if (url === '/api/admin/deposits' && method === 'GET') {
@@ -800,7 +829,8 @@ module.exports = async function handler(req, res) {
     // CONFIGURAÇÕES
     if (url === '/api/admin/settings' && method === 'GET') return respond(res, 200, db.settings || {});
     if (url === '/api/admin/settings' && method === 'POST') {
-      db.settings = { ...db.settings, ...(await parseBody(req)) };
+      var newSettings = await parseBody(req);
+      db.settings = { ...db.settings, ...newSettings };
       await saveDB(db);
       return respond(res, 200, { success: true });
     }
