@@ -394,13 +394,12 @@
     }
   }
 
-  // ===================== NOVO HUD ATUALIZADO (FIXADO NO FUNDO DA TELA) =====================
+  // ===================== HUD ATUALIZADO =====================
   function createHUD() {
     cleanupHUD();
     var container = document.getElementById('gameCanvas').parentElement;
     hudContainer = document.createElement('div');
     hudContainer.id = 'hud-container';
-    // Container fixado para ocupar a tela inteira (height: 100%) com pointer-events: none
     hudContainer.style.cssText = 'position: fixed; top: 0px; left: 0px; right: 0px; bottom: 0px; z-index: 1000; display: block; font-family: "Inter", sans-serif; pointer-events: none;';
 
     hudContainer.innerHTML = `
@@ -435,9 +434,9 @@
             </div>
         </div>
 
-        <button id="hud-cashout" style="position:absolute;bottom:40px;left:50%;transform:translateX(-50%);z-index:9999;pointer-events:auto;background:linear-gradient(135deg,#FFD700,#FFB300);color:#000000;padding:16px 32px;border-radius:50px;font-family:Inter,sans-serif;cursor:pointer;font-weight:900;font-size:18px;text-transform:uppercase;letter-spacing:1px;border:2px solid #fff;box-shadow:0 10px 30px rgba(255,215,0,0.5);display:none;align-items:center;justify-content:center;gap:12px;white-space:nowrap;transition:all 0.3s;" onpointerdown="window.helixGameCashOut(event)" ontouchstart="window.helixGameCashOut(event)" onclick="window.helixGameCashOut(event)">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path><path d="M4 22h16"></path><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"></path><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"></path><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"></path></svg>
-          RESGATAR <span id="hud-cashout-val" style="background:rgba(0,0,0,0.15);padding:4px 10px;border-radius:12px;">R$ 0,00</span>
+        <button id="hud-cashout" style="position:absolute;bottom:100px;left:50%;transform:translateX(-50%);z-index:9999;pointer-events:auto;background:linear-gradient(135deg,#FFD700,#FFB300);color:#000000;padding:12px 24px;border-radius:50px;font-family:Inter,sans-serif;cursor:pointer;font-weight:900;font-size:15px;text-transform:uppercase;letter-spacing:1px;border:none;box-shadow:0 10px 30px rgba(255,215,0,0.5);display:none;align-items:center;justify-content:center;gap:10px;white-space:nowrap;transition:all 0.3s;" onpointerdown="window.helixGameCashOut(event)" ontouchstart="window.helixGameCashOut(event)" onclick="window.helixGameCashOut(event)">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path><path d="M4 22h16"></path><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"></path><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"></path><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"></path></svg>
+          RESGATAR <span id="hud-cashout-val" style="background:rgba(0,0,0,0.15);padding:3px 8px;border-radius:12px;">R$ 0,00</span>
         </button>
 
         <div id="hud-start" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:100;font-family:Inter,sans-serif;text-align:center;pointer-events:none;">
