@@ -44,7 +44,10 @@ function createDefaultDB() {
       password: salt + ':' + hash, balance: 0, bonus_balance: 0,
       referral_code: 'ADMIN001', referred_by: null,
       is_admin: true, is_blocked: false, is_influencer: false,
-      influencer_win_rate: 0, total_deposited: 0, total_withdrawn: 0, total_games: 0,
+      influencer_win_rate: 0, 
+      affiliate_commission_rate: null, // Nova propriedade: Comissão individual
+      affiliate_balance: 0,            // Nova propriedade: Saldo de afiliado
+      total_deposited: 0, total_withdrawn: 0, total_games: 0,
       created_at: new Date().toISOString(), last_login: null
     }],
     deposits: [],
@@ -55,6 +58,8 @@ function createDefaultDB() {
     webhooks: [],
     settings: {
       min_deposit: '1', min_withdrawal: '20', max_multiplier: '7',
+      global_affiliate_commission_rate: '10', // Configuração: Comissão global em %
+      min_affiliate_withdrawal: '10',         // Configuração: Saque mínimo afiliado
       referral_bonus: '20', house_edge: '15', influencer_house_edge: '5',
       site_name: 'Helix Cash',
       game_platform_count: '25', game_danger_start_level: '2', game_danger_progression: '5',
@@ -74,6 +79,16 @@ async function loadDB() {
         if (!data.pending_games) data.pending_games = [];
         if (!data.webhooks) data.webhooks = [];
         if (!data.next_id.pending_games) data.next_id.pending_games = 1;
+        
+        // Garante que as novas configurações de afiliados existam
+        if (!data.settings.global_affiliate_commission_rate) data.settings.global_affiliate_commission_rate = '10';
+        if (!data.settings.min_affiliate_withdrawal) data.settings.min_affiliate_withdrawal = '10';
+        
+        data.users.forEach(u => {
+            if(u.affiliate_commission_rate === undefined) u.affiliate_commission_rate = null;
+            if(u.affiliate_balance === undefined) u.affiliate_balance = 0;
+        });
+
         try { fs.writeFileSync(DB_FILE, JSON.stringify(data)); } catch(e) {}
         return data;
       }
@@ -85,6 +100,16 @@ async function loadDB() {
       if (!data.pending_games) data.pending_games = [];
       if (!data.webhooks) data.webhooks = [];
       if (!data.next_id.pending_games) data.next_id.pending_games = 1;
+
+      // Garante que as novas configurações de afiliados existam
+      if (!data.settings.global_affiliate_commission_rate) data.settings.global_affiliate_commission_rate = '10';
+      if (!data.settings.min_affiliate_withdrawal) data.settings.min_affiliate_withdrawal = '10';
+      
+      data.users.forEach(u => {
+        if(u.affiliate_commission_rate === undefined) u.affiliate_commission_rate = null;
+        if(u.affiliate_balance === undefined) u.affiliate_balance = 0;
+      });
+
       return data;
     }
   } catch (e) { console.error('DB load error:', e.message); }
@@ -213,7 +238,8 @@ module.exports = async function handler(req, res) {
         password: hashPassword(password), balance: 0, bonus_balance: 0,
         referral_code: code, referred_by: referralCode || null,
         is_admin: false, is_blocked: false, is_influencer: false,
-        influencer_win_rate: 0, total_deposited: 0, total_withdrawn: 0, total_games: 0,
+        influencer_win_rate: 0, affiliate_commission_rate: null, affiliate_balance: 0,
+        total_deposited: 0, total_withdrawn: 0, total_games: 0,
         created_at: new Date().toISOString(), last_login: new Date().toISOString()
       };
       db.users.push(newUser);
@@ -262,6 +288,7 @@ module.exports = async function handler(req, res) {
         email: user.email,
         balance: num(user.balance),
         bonus_balance: num(user.bonus_balance),
+        affiliate_balance: num(user.affiliate_balance),
         referral_code: user.referral_code,
         is_admin: user.is_admin,
         is_influencer: user.is_influencer,
@@ -372,7 +399,7 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // ==================== WEBHOOK SAFEPIX ====================
+    // ==================== WEBHOOK SAFEPIX (APENAS REGISTRA COMISSÃO PRO ADMIN VER) ====================
     if (url === '/api/webhook/safepix' && method === 'POST') {
       var body = await parseBody(req);
       db.webhooks.push({ id: db.next_id.webhooks++, data: body, created_at: new Date().toISOString() });
@@ -387,18 +414,46 @@ module.exports = async function handler(req, res) {
           dep.status = 'approved';
           dep.updated_at = new Date().toISOString();
           var user = db.users.find(u => u.id === dep.user_id);
+          
           if (user) {
+            // Adiciona saldo ao usuário que depositou
             user.balance = parseFloat((num(user.balance) + num(dep.amount)).toFixed(2));
-            if (num(user.total_deposited) === 0 && num(dep.amount) >= 50 && user.referred_by) {
+            user.total_deposited = (user.total_deposited || 0) + num(dep.amount);
+
+            // ================= LÓGICA DE REGISTRO DE AFILIADOS =================
+            if (user.referred_by) {
               var referrer = db.users.find(u => u.referral_code === user.referred_by);
-              if (referrer) {
+              
+              if (referrer && (referrer.is_influencer || referrer.is_admin)) {
+                // REGRA 1: É INFLUENCIADOR (Calcula a % de depósitos e só registra pro Admin)
+                
+                var commissionRate = referrer.affiliate_commission_rate !== null && referrer.affiliate_commission_rate !== undefined 
+                                     ? num(referrer.affiliate_commission_rate) 
+                                     : num(db.settings.global_affiliate_commission_rate || 10);
+                
+                if (commissionRate > 0) {
+                  var commissionAmount = parseFloat(((commissionRate / 100) * num(dep.amount)).toFixed(2));
+                  
+                  // REMOVIDO: O saldo não vai mais para a conta do influenciador
+                  // referrer.affiliate_balance = ... 
+                  
+                  // Apenas registra o histórico para calcular lá na aba de Afiliados do Admin
+                  db.referral_earnings.push({
+                    id: db.next_id.referral_earnings++, user_id: referrer.id, from_user_id: user.id, 
+                    amount: commissionAmount, type: 'deposit_commission', created_at: new Date().toISOString()
+                  });
+                }
+              } else if (referrer && num(user.total_deposited) === num(dep.amount) && num(dep.amount) >= 50) {
+                // REGRA 2: USUÁRIO COMUM (Ganha fixo R$ 20 apenas no PRIMEIRO depósito >= R$ 50)
+                // Se quiser tirar isso também pro usuário comum, me avisa. Por hora deixei como estava.
                 referrer.balance = parseFloat((num(referrer.balance) + 20).toFixed(2));
                 db.referral_earnings.push({
-                  id: db.next_id.referral_earnings++, user_id: referrer.id, from_user_id: user.id, amount: 20, created_at: new Date().toISOString()
+                  id: db.next_id.referral_earnings++, user_id: referrer.id, from_user_id: user.id, 
+                  amount: 20, type: 'fixed_bonus', created_at: new Date().toISOString()
                 });
               }
             }
-            user.total_deposited = (user.total_deposited || 0) + num(dep.amount);
+            // ================= FIM LÓGICA DE REGISTRO =================
           }
           await saveDB(db);
         }
@@ -406,7 +461,7 @@ module.exports = async function handler(req, res) {
       return respond(res, 200, { success: true });
     }
 
-    // ==================== REFERRALS ====================
+    // ==================== REFERRALS / AFFILIATE DASHBOARD ====================
     if (url === '/api/referrals' && method === 'GET') {
       var user = getUser(db, req);
       if (!user) return respond(res, 401, { error: 'Nao autorizado' });
@@ -415,35 +470,53 @@ module.exports = async function handler(req, res) {
       var earnings = db.referral_earnings.filter(e => e.user_id === user.id);
       var totalEarned = earnings.reduce((s, e) => s + num(e.amount), 0);
 
+      var comDepositosCount = 0;
+
       var list = referredUsers.map(u => {
-        var hasContributed = earnings.some(e => e.from_user_id === u.id);
+        var userEarnings = earnings.filter(e => e.from_user_id === u.id);
+        var hasDeposited = db.deposits.some(d => d.user_id === u.id && d.status === 'approved');
+        if (hasDeposited) comDepositosCount++;
+        
+        var totalGeneratedByUser = userEarnings.reduce((s, e) => s + num(e.amount), 0);
+
         return {
           name: u.name,
           created_at: u.created_at,
-          status: hasContributed ? 'Confirmado' : 'Pendente (Aguardando R$ 50)',
-          amount: hasContributed ? 20.00 : 0
+          status: hasDeposited ? 'Ativo' : 'Sem Depósito',
+          amount: user.is_influencer ? parseFloat(totalGeneratedByUser.toFixed(2)) : (hasDeposited && totalGeneratedByUser > 0 ? 20.00 : 0)
         };
       });
 
       return respond(res, 200, {
         total_earned: totalEarned,
+        available_balance: num(user.affiliate_balance), 
         count_total: referredUsers.length,
+        count_depositors: comDepositosCount,
+        commission_rate: user.affiliate_commission_rate !== null ? num(user.affiliate_commission_rate) : num(db.settings.global_affiliate_commission_rate || 10),
         referrals: list
       });
     }
 
-    // ==================== WITHDRAW ====================
+    // ==================== WITHDRAW (SAQUE NORMAL E AFILIADOS) ====================
     if (url === '/api/withdraw' && method === 'POST') {
       var user = getUser(db, req);
       if (!user) return respond(res, 401, { error: 'Nao autorizado' });
       var body = await parseBody(req);
       var amount = num(body.amount);
       var pixKey = (body.pix_key || '').trim();
-      var minWd = num(db.settings.min_withdrawal) || 20;
+      var type = body.type || 'balance';
 
       if (!pixKey) return respond(res, 400, { error: 'Chave PIX obrigatoria' });
-      if (num(user.balance) < amount) return respond(res, 400, { error: 'Saldo insuficiente' });
-      if (amount < minWd) return respond(res, 400, { error: 'Saque minimo: R$' + minWd });
+
+      if (type === 'affiliate_balance') {
+         if (num(user.affiliate_balance) < amount) return respond(res, 400, { error: 'Saldo de afiliado insuficiente' });
+         var minAffWd = num(db.settings.min_affiliate_withdrawal) || 10;
+         if (amount < minAffWd) return respond(res, 400, { error: 'Saque minimo de afiliado: R$' + minAffWd });
+      } else {
+         if (num(user.balance) < amount) return respond(res, 400, { error: 'Saldo insuficiente' });
+         var minWd = num(db.settings.min_withdrawal) || 20;
+         if (amount < minWd) return respond(res, 400, { error: 'Saque minimo: R$' + minWd });
+      }
 
       try {
         const protocol = req.headers['x-forwarded-proto'] || 'https';
@@ -471,10 +544,15 @@ module.exports = async function handler(req, res) {
           return respond(res, 400, { error: payoutData.message || 'Erro Saque SafePix' });
         }
 
-        user.balance = parseFloat((num(user.balance) - amount).toFixed(2));
+        if (type === 'affiliate_balance') {
+             user.affiliate_balance = parseFloat((num(user.affiliate_balance) - amount).toFixed(2));
+        } else {
+             user.balance = parseFloat((num(user.balance) - amount).toFixed(2));
+        }
+
         db.withdrawals.push({
           id: db.next_id.withdrawals++, user_id: user.id, amount,
-          pix_key: pixKey, status: 'processing', 
+          pix_key: pixKey, status: 'processing', type: type,
           transaction_id: payoutData.data ? payoutData.data.id : payoutData.Id,
           created_at: new Date().toISOString(), updated_at: new Date().toISOString()
         });
@@ -544,15 +622,8 @@ module.exports = async function handler(req, res) {
       if (pgIndex >= 0) db.pending_games.splice(pgIndex, 1);
 
       var prize = num(body.prize); 
-      
-      // Correção Aplicada: O sistema de "house_edge" (probabilidade de perda) estava
-      // cancelando o prêmio e forçando prize = 0 no backend MESMO APÓS o jogador ter
-      // ganho e clicado em "Resgatar". A trava randômica foi removida para garantir
-      // que o que o jogador ganhou na tela seja 100% computado no saldo principal.
-
       var result = prize > 0 ? 'win' : 'loss';
       
-      // O saldo é atualizado com precisão absoluta para evitar travamentos de decimais
       user.balance = parseFloat((num(user.balance) + prize).toFixed(2));
       user.total_games = (user.total_games || 0) + 1;
 
@@ -573,7 +644,7 @@ module.exports = async function handler(req, res) {
       return respond(res, 401, { error: 'Acesso negado' });
     }
 
-    // DASHBOARD ADMIN (FILTROS DE PERÍODO IMPLEMENTADOS)
+    // DASHBOARD ADMIN 
     if (url === '/api/admin/dashboard' && method === 'GET') {
       const q = new URL(req.url, `http://${req.headers.host}`).searchParams;
       const range = q.get('range') || 'today';
@@ -616,7 +687,8 @@ module.exports = async function handler(req, res) {
           is_admin: !!u.is_admin, is_blocked: !!u.is_blocked, created_at: u.created_at,
           total_deposited: uDeps.reduce((s, d) => s + num(d.amount), 0),
           total_withdrawn: uWds.reduce((s, w) => s + num(w.amount), 0),
-          games_count: uGames.length
+          games_count: uGames.length,
+          affiliate_commission_rate: u.affiliate_commission_rate // Visível no admin
         };
       }));
     }
@@ -631,11 +703,21 @@ module.exports = async function handler(req, res) {
       if (body.is_admin !== undefined) u.is_admin = (body.is_admin === true || body.is_admin === 'true');
       if (body.influencer_win_rate !== undefined) u.influencer_win_rate = num(body.influencer_win_rate);
       if (body.is_blocked !== undefined) u.is_blocked = (body.is_blocked === true || body.is_blocked === 'true');
+      
+      if (body.affiliate_commission_rate !== undefined) {
+         if (body.affiliate_commission_rate === '' || body.affiliate_commission_rate === null) {
+            u.affiliate_commission_rate = null;
+         } else {
+            let parsedRate = parseFloat(body.affiliate_commission_rate);
+            u.affiliate_commission_rate = isNaN(parsedRate) ? 0 : parsedRate;
+         }
+      }
+
       await saveDB(db);
       return respond(res, 200, { success: true });
     }
 
-    // LISTAR DEPÓSITOS (REVERSE: RECENTES PRIMEIRO)
+    // LISTAR DEPÓSITOS 
     if (url === '/api/admin/deposits' && method === 'GET') {
       const deps = db.deposits.map(d => {
         const u = db.users.find(x => x.id === d.user_id);
@@ -644,7 +726,7 @@ module.exports = async function handler(req, res) {
       return respond(res, 200, deps.reverse());
     }
 
-    // LISTAR SAQUES (REVERSE: RECENTES PRIMEIRO)
+    // LISTAR SAQUES 
     if (url === '/api/admin/withdrawals' && method === 'GET') {
       const wds = db.withdrawals.map(w => {
         const u = db.users.find(x => x.id === w.user_id);
@@ -653,7 +735,7 @@ module.exports = async function handler(req, res) {
       return respond(res, 200, wds.reverse());
     }
 
-    // LISTAR JOGOS (REVERSE: RECENTES PRIMEIRO)
+    // LISTAR JOGOS 
     if (url === '/api/admin/games' && method === 'GET') {
       const games = db.games.map(g => {
         const u = db.users.find(x => x.id === g.user_id);
@@ -662,10 +744,11 @@ module.exports = async function handler(req, res) {
       return respond(res, 200, games.reverse());
     }
 
-    // AFILIADOS / INFLUENCIADORES
+    // AFILIADOS / INFLUENCIADORES (DADOS COMPLETOS)
     if (url === '/api/admin/affiliates' && method === 'GET') {
-      const influencers = db.users.filter(u => u.is_influencer || u.id === 1);
+      const influencers = db.users.filter(u => u.is_influencer || u.is_admin);
       const host = req.headers.host || 'helix-cash.com';
+      
       const affData = influencers.map(i => {
         const refs = db.users.filter(u => u.referred_by === i.referral_code);
         let totalDep = 0;
@@ -675,15 +758,27 @@ module.exports = async function handler(req, res) {
           if (userDeps.length > 0) depositantes++;
           totalDep += userDeps.reduce((s, d) => s + num(d.amount), 0);
         });
+        
+        const earnings = db.referral_earnings.filter(e => e.user_id === i.id);
+        const totalComissoes = earnings.reduce((s, e) => s + num(e.amount), 0);
+
         return {
           id: i.id, name: i.name, email: i.email, code: i.referral_code,
           count_total: refs.length,
           count_depositors: depositantes,
-          total_deposited: totalDep,
+          total_deposited: totalDep, // Montante total que a galera dele depositou
+          total_commission: totalComissoes, // Aqui o Admin vê toda a grana que o influencer gerou de comissão
+          affiliate_balance: num(i.affiliate_balance),
+          individual_rate: i.affiliate_commission_rate, 
           link: `https://${host}/#cadastro?ref=${i.referral_code}`
         };
       });
-      return respond(res, 200, affData);
+
+      return respond(res, 200, {
+          global_rate: num(db.settings.global_affiliate_commission_rate || 10),
+          min_withdrawal: num(db.settings.min_affiliate_withdrawal || 10),
+          affiliates: affData
+      });
     }
 
     // CONFIGURAÇÕES
