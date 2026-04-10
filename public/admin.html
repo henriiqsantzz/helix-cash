@@ -225,7 +225,7 @@
       <input type="text" id="searchUsers" class="search-input" placeholder="Buscar por nome ou email..." oninput="filterUsers()">
       <div class="table-responsive">
         <table class="admin-table">
-          <thead><tr><th>ID</th><th>Usuário</th><th>Email</th><th>Saldo</th><th>Cargos</th><th>Status</th><th>Ações</th></tr></thead>
+          <thead><tr><th>ID</th><th>Usuário</th><th>Email</th><th>Saldo</th><th>Ações</th></tr></thead>
           <tbody id="usersTable"></tbody>
         </table>
       </div>
@@ -428,7 +428,6 @@ function renderUsers(users) {
       <td>${u.name} ${u.is_influencer ? '<span class="influencer-badge">INF</span>' : ''} ${u.is_admin ? '<span class="admin-badge">ADM</span>' : ''}</td>
       <td>${u.email}</td>
       <td class="green">R$ ${fmt(u.balance)}</td>
-      <td>${u.is_blocked ? '<span class="red">Bloqueado</span>' : '<span class="green">Ativo</span>'}</td>
       <td><button class="btn btn-sm" onclick="openEdit(${u.id})">Gerenciar</button></td>
     </tr>
   `).join('');
@@ -440,7 +439,7 @@ function renderInfluencers(infs) {
   `).join('');
 }
 
-// AFILIADOS (AGORA COM COMISSÕES DINÂMICAS)
+// AFILIADOS
 async function loadAffiliates() {
   try {
     const res = await api('/api/admin/affiliates');
@@ -454,7 +453,6 @@ async function loadAffiliates() {
     }
 
     table.innerHTML = affs.map(a => {
-      // Regra visual de taxa: se a individual for vazia, mostra que tá puxando a Global. Se for 0, avisa que tá 0.
       let rateBadge = '';
       if (a.individual_rate !== null) {
           rateBadge = a.individual_rate === 0 
@@ -513,7 +511,6 @@ function openAffiliateEdit(id, name, currentRate) {
 async function saveAffiliateRate(id) {
   const rateVal = document.getElementById('m-aff-rate').value;
   try {
-    // Mandamos null se tiver vazio, ou o número digitado
     await api('/api/admin/user/update', { 
         method: 'POST', 
         body: JSON.stringify({ id: id, affiliate_commission_rate: rateVal }) 
@@ -544,10 +541,10 @@ function openEdit(id) {
     <div style="margin:15px 0; display:flex; gap:15px">
       <label><input type="checkbox" id="m-isadmin" ${u.is_admin ? 'checked' : ''}> Admin</label>
       <label><input type="checkbox" id="m-isinf" ${u.is_influencer ? 'checked' : ''}> Influencer</label>
-      <label><input type="checkbox" id="m-isblocked" ${u.is_blocked ? 'checked' : ''}> Bloqueado</label>
     </div>
-    <div style="display:flex; gap:10px">
+    <div style="display:flex; gap:10px; margin-top: 20px;">
       <button class="btn btn-primary" style="flex:1" onclick="saveUser(${u.id})">Salvar</button>
+      <button class="btn btn-danger" style="background: rgba(255, 23, 68, 0.1); color: #ff1744; border: 1px solid rgba(255, 23, 68, 0.2);" onclick="deleteUser(${u.id})">Excluir Conta</button>
       <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
     </div>
   `;
@@ -560,11 +557,25 @@ async function saveUser(id) {
     balance: document.getElementById('m-balance').value, 
     influencer_win_rate: document.getElementById('m-winrate').value, 
     is_admin: document.getElementById('m-isadmin').checked, 
-    is_influencer: document.getElementById('m-isinf').checked,
-    is_blocked: document.getElementById('m-isblocked').checked 
+    is_influencer: document.getElementById('m-isinf').checked
   };
   await api('/api/admin/user/update', { method: 'POST', body: JSON.stringify(body) });
   closeModal(); loadUsers();
+}
+
+// NOVA FUNÇÃO: EXCLUIR USUÁRIO
+async function deleteUser(id) {
+  if(!confirm('Tem certeza absoluta que deseja excluir este usuário? Todos os dados dele serão apagados e isso NÃO pode ser desfeito.')) {
+    return;
+  }
+  try {
+    await api('/api/admin/user/delete', { method: 'POST', body: JSON.stringify({ id }) });
+    closeModal();
+    loadUsers();
+    alert('Usuário excluído com sucesso.');
+  } catch(e) {
+    alert('Erro ao excluir usuário: ' + e.message);
+  }
 }
 
 function closeModal() { document.getElementById('modal').style.display = 'none'; }
@@ -582,7 +593,7 @@ async function loadFinancial() {
   } catch (e) { console.error(e); }
 }
 
-// SETTINGS (AGORA INCLUI A TAXA GLOBAL DE AFILIADO)
+// SETTINGS 
 async function loadSettings() {
   try {
     const s = await api('/api/admin/settings');
