@@ -8,6 +8,33 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/style.css">
   <meta name="theme-color" content="#0a0a1a">
+  <script>
+// Puxa as configurações da API e aplica as cores globais no CSS do site inteiro
+async function carregarCoresDoSite() {
+  try {
+    const res = await fetch('/api/admin/settings');
+    const settings = await res.json();
+    
+    // Lista das cores configuradas no painel
+    const cores = [
+      'bg-main', 'bg-sec', 'bg-card', 'accent', 
+      'site-primary', 'site-grad', 'success', 'danger', 'warning', 'text-muted'
+    ];
+    
+    // Aplica cada cor encontrada na raiz do CSS (root)
+    cores.forEach(cor => {
+      if (settings[cor]) {
+        document.documentElement.style.setProperty(`--${cor}`, settings[cor]);
+      }
+    });
+  } catch (e) {
+    console.error("Não foi possível carregar as cores personalizadas do painel.", e);
+  }
+}
+
+// Executa a função imediatamente ao carregar a página
+carregarCoresDoSite();
+</script>
   <style>
     /* Isso garante que a logo apareça e não quebre o layout */
     .logo {
