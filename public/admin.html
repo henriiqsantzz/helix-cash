@@ -693,10 +693,10 @@ async function loadDashboard() {
 
 // === CORREÇÃO: Função renderChart blindada contra erros da API ===
 function renderChart(data) {
-    const canvas = document.getElementById('mainChart');
-    if (!canvas) return;
+    const canvasEl = document.getElementById('mainChart');
+    if (!canvasEl) return;
     
-    const ctx = canvas.getContext('2d');
+    const ctx = canvasEl.getContext('2d');
     if (chartInstance) chartInstance.destroy();
     
     // Se a API não mandar dados pro gráfico, ele inicia como um array vazio para não quebrar a página
