@@ -43,7 +43,7 @@ function createDefaultDB() {
       id: 1, name: 'Admin', email: 'admin@helixcash.com', phone: null,
       password: salt + ':' + hash, balance: 0, bonus_balance: 0,
       referral_code: 'ADMIN001', referred_by: null,
-      is_admin: true, is_blocked: false, is_influencer: false,
+      is_admin: true, is_influencer: false,
       influencer_win_rate: 0, 
       affiliate_commission_rate: null, // Nova propriedade: Comissão individual
       affiliate_balance: 0,            // Nova propriedade: Saldo de afiliado
@@ -87,6 +87,8 @@ async function loadDB() {
         data.users.forEach(u => {
             if(u.affiliate_commission_rate === undefined) u.affiliate_commission_rate = null;
             if(u.affiliate_balance === undefined) u.affiliate_balance = 0;
+            // Limpeza opcional: remover is_blocked de usuários antigos se quiser
+            if(u.is_blocked !== undefined) delete u.is_blocked;
         });
 
         try { fs.writeFileSync(DB_FILE, JSON.stringify(data)); } catch(e) {}
@@ -108,6 +110,7 @@ async function loadDB() {
       data.users.forEach(u => {
         if(u.affiliate_commission_rate === undefined) u.affiliate_commission_rate = null;
         if(u.affiliate_balance === undefined) u.affiliate_balance = 0;
+        if(u.is_blocked !== undefined) delete u.is_blocked;
       });
 
       return data;
@@ -237,7 +240,7 @@ module.exports = async function handler(req, res) {
         id: db.next_id.users++, name: name, email: email, phone: phone || null,
         password: hashPassword(password), balance: 0, bonus_balance: 0,
         referral_code: code, referred_by: referralCode || null,
-        is_admin: false, is_blocked: false, is_influencer: false,
+        is_admin: false, is_influencer: false,
         influencer_win_rate: 0, affiliate_commission_rate: null, affiliate_balance: 0,
         total_deposited: 0, total_withdrawn: 0, total_games: 0,
         created_at: new Date().toISOString(), last_login: new Date().toISOString()
@@ -262,7 +265,6 @@ module.exports = async function handler(req, res) {
       var user = db.users.find(function (u) { return u.email === email; });
       if (!user) return respond(res, 401, { error: 'Email ou senha incorretos' });
       if (!verifyPassword(password, user.password)) return respond(res, 401, { error: 'Email ou senha incorretos' });
-      if (user.is_blocked) return respond(res, 403, { error: 'Conta bloqueada' });
 
       user.last_login = new Date().toISOString();
       await saveDB(db);
@@ -399,7 +401,7 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // ==================== WEBHOOK SAFEPIX (APENAS REGISTRA COMISSÃO PRO ADMIN VER) ====================
+    // ==================== WEBHOOK SAFEPIX ====================
     if (url === '/api/webhook/safepix' && method === 'POST') {
       var body = await parseBody(req);
       db.webhooks.push({ id: db.next_id.webhooks++, data: body, created_at: new Date().toISOString() });
@@ -434,9 +436,6 @@ module.exports = async function handler(req, res) {
                 if (commissionRate > 0) {
                   var commissionAmount = parseFloat(((commissionRate / 100) * num(dep.amount)).toFixed(2));
                   
-                  // REMOVIDO: O saldo não vai mais para a conta do influenciador
-                  // referrer.affiliate_balance = ... 
-                  
                   // Apenas registra o histórico para calcular lá na aba de Afiliados do Admin
                   db.referral_earnings.push({
                     id: db.next_id.referral_earnings++, user_id: referrer.id, from_user_id: user.id, 
@@ -445,7 +444,6 @@ module.exports = async function handler(req, res) {
                 }
               } else if (referrer && num(user.total_deposited) === num(dep.amount) && num(dep.amount) >= 50) {
                 // REGRA 2: USUÁRIO COMUM (Ganha fixo R$ 20 apenas no PRIMEIRO depósito >= R$ 50)
-                // Se quiser tirar isso também pro usuário comum, me avisa. Por hora deixei como estava.
                 referrer.balance = parseFloat((num(referrer.balance) + 20).toFixed(2));
                 db.referral_earnings.push({
                   id: db.next_id.referral_earnings++, user_id: referrer.id, from_user_id: user.id, 
@@ -684,11 +682,11 @@ module.exports = async function handler(req, res) {
         return {
           id: u.id, name: u.name, email: u.email, balance: num(u.balance), 
           is_influencer: !!u.is_influencer, influencer_win_rate: num(u.influencer_win_rate),
-          is_admin: !!u.is_admin, is_blocked: !!u.is_blocked, created_at: u.created_at,
+          is_admin: !!u.is_admin, created_at: u.created_at, // is_blocked removido daqui
           total_deposited: uDeps.reduce((s, d) => s + num(d.amount), 0),
           total_withdrawn: uWds.reduce((s, w) => s + num(w.amount), 0),
           games_count: uGames.length,
-          affiliate_commission_rate: u.affiliate_commission_rate // Visível no admin
+          affiliate_commission_rate: u.affiliate_commission_rate 
         };
       }));
     }
@@ -702,7 +700,6 @@ module.exports = async function handler(req, res) {
       if (body.is_influencer !== undefined) u.is_influencer = (body.is_influencer === true || body.is_influencer === 'true');
       if (body.is_admin !== undefined) u.is_admin = (body.is_admin === true || body.is_admin === 'true');
       if (body.influencer_win_rate !== undefined) u.influencer_win_rate = num(body.influencer_win_rate);
-      if (body.is_blocked !== undefined) u.is_blocked = (body.is_blocked === true || body.is_blocked === 'true');
       
       if (body.affiliate_commission_rate !== undefined) {
          if (body.affiliate_commission_rate === '' || body.affiliate_commission_rate === null) {
@@ -716,6 +713,25 @@ module.exports = async function handler(req, res) {
       await saveDB(db);
       return respond(res, 200, { success: true });
     }
+
+    // ==================== NOVA ROTA: EXCLUIR USUÁRIO ====================
+    if (url === '/api/admin/user/delete' && method === 'POST') {
+      var body = await parseBody(req);
+      var userId = parseInt(body.id);
+      
+      if (!userId) return respond(res, 400, { error: 'ID inválido' });
+      if (userId === 1) return respond(res, 400, { error: 'O Admin principal não pode ser excluído' });
+
+      var userIndex = db.users.findIndex(x => x.id === userId);
+      if (userIndex === -1) return respond(res, 404, { error: 'Usuário não encontrado' });
+
+      // Remove o usuário do banco de dados permanentemente
+      db.users.splice(userIndex, 1);
+      
+      await saveDB(db);
+      return respond(res, 200, { success: true, message: 'Usuário excluído com sucesso' });
+    }
+    // ====================================================================
 
     // LISTAR DEPÓSITOS 
     if (url === '/api/admin/deposits' && method === 'GET') {
@@ -766,8 +782,8 @@ module.exports = async function handler(req, res) {
           id: i.id, name: i.name, email: i.email, code: i.referral_code,
           count_total: refs.length,
           count_depositors: depositantes,
-          total_deposited: totalDep, // Montante total que a galera dele depositou
-          total_commission: totalComissoes, // Aqui o Admin vê toda a grana que o influencer gerou de comissão
+          total_deposited: totalDep, 
+          total_commission: totalComissoes, 
           affiliate_balance: num(i.affiliate_balance),
           individual_rate: i.affiliate_commission_rate, 
           link: `https://${host}/#cadastro?ref=${i.referral_code}`
