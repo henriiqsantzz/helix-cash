@@ -48,7 +48,6 @@
 
   // FUNÇÃO DE INÍCIO EXCLUSIVA DO DEMO
   window.startHelixDemo = function() {
-    // Remove o popup se ele já estiver na tela
     var oldModal = document.getElementById('demoConversionModal');
     if (oldModal) oldModal.remove();
 
@@ -243,6 +242,7 @@
     }
   }
 
+  // --- NOVA createHUD ATUALIZADA (ESTILO EXACT DESIGN MARCAÇÃO VERDE) ---
   function createHUD() {
     cleanupHUD();
     var container = document.getElementById('gameCanvas').parentElement;
@@ -250,28 +250,28 @@
     hudContainer.id = 'helix-hud';
     hudContainer.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:100;font-family:"Inter",sans-serif;';
 
-    // Container Superior para os Cards (Estilo Premium)
+    // Container Superior para os Cards
     var header = document.createElement('div');
     header.style.cssText = 'position:absolute;top:15px;left:0;width:100%;display:flex;justify-content:center;align-items:flex-start;padding:0 15px;gap:10px;box-sizing:border-box;';
 
     // 1. Card Valor da Entrada (Esquerda)
     var entryCard = `
-      <div style="background:rgba(13, 13, 25, 0.8); backdrop-filter:blur(10px); border:1px solid rgba(255,255,255,0.1); border-radius:12px; padding:8px 15px; min-width:100px; box-shadow: 0 4px 15px rgba(0,0,0,0.3);">
-        <div style="color:#8b8b9e; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:2px;">Entrada</div>
-        <div style="color:#fff; font-size:15px; font-weight:900;">R$ ${fmtBRL(betAmount)}</div>
+      <div style="background:rgba(13, 13, 25, 0.85); backdrop-filter:blur(12px); border:1px solid rgba(255,255,255,0.1); border-radius:14px; padding:10px 18px; min-width:110px; box-shadow: 0 8px 32px rgba(0,0,0,0.4);">
+        <div style="color:#8b8b9e; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.8px; margin-bottom:4px;">Entrada</div>
+        <div style="color:#fff; font-size:17px; font-weight:900;">R$ ${fmtBRL(betAmount)}</div>
       </div>
     `;
 
-    // 2. Card Meta Acumulada (Centro/Direita)
+    // 2. Card Meta Acumulada (Centro/Direita - Área da marcação verde)
     var metaCard = `
-      <div style="background:rgba(13, 13, 25, 0.8); backdrop-filter:blur(10px); border:1px solid rgba(255,255,255,0.1); border-radius:12px; padding:8px 15px; flex-grow:1; max-width:220px; box-shadow: 0 4px 15px rgba(0,0,0,0.3);">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
-          <span style="color:#8b8b9e; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px;">Meta Acumulada</span>
-          <span style="color:#00e676; font-size:10px; font-weight:800;" id="hud-perc">0%</span>
+      <div style="background:rgba(13, 13, 25, 0.85); backdrop-filter:blur(12px); border:1px solid rgba(255,255,255,0.1); border-radius:14px; padding:10px 18px; flex-grow:1; max-width:260px; box-shadow: 0 8px 32px rgba(0,0,0,0.4);">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+          <span style="color:#8b8b9e; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.8px;">Meta Acumulada</span>
+          <span style="color:#00e676; font-size:11px; font-weight:900; background:rgba(0,230,118,0.1); padding:2px 6px; border-radius:6px;" id="hud-perc">0%</span>
         </div>
-        <div style="color:#fff; font-size:14px; font-weight:900; margin-bottom:6px;" id="hud-progress-val">R$ 0,00 / R$ 80,00</div>
-        <div style="width:100%; height:6px; background:rgba(255,255,255,0.1); border-radius:10px; overflow:hidden; border:1px solid rgba(255,255,255,0.05);">
-          <div id="hud-progress-bar" style="width:0%; height:100%; background:linear-gradient(90deg, #00e676, #69f0ae); box-shadow: 0 0 10px rgba(0,230,118,0.5); border-radius:10px; transition:width 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);"></div>
+        <div style="color:#fff; font-size:15px; font-weight:900; margin-bottom:8px;" id="hud-progress-val">R$ 0,00 / R$ 80,00</div>
+        <div style="width:100%; height:8px; background:rgba(255,255,255,0.08); border-radius:20px; overflow:hidden; border:1px solid rgba(255,255,255,0.05);">
+          <div id="hud-progress-bar" style="width:0%; height:100%; background:linear-gradient(90deg, #00e676, #00c853); box-shadow: 0 0 12px rgba(0,230,118,0.4); border-radius:20px; transition:width 0.4s cubic-bezier(0.1, 0.7, 0.1, 1);"></div>
         </div>
       </div>
     `;
@@ -284,24 +284,27 @@
     startOverlay.id = 'hud-start';
     startOverlay.style.cssText = 'position:absolute;top:55%;left:50%;transform:translate(-50%,-50%);text-align:center;transition:opacity 0.3s;pointer-events:none;';
     startOverlay.innerHTML = `
-      <div style="background:rgba(0,0,0,0.4); padding:15px 30px; border-radius:50px; backdrop-filter:blur(4px); border:1px solid rgba(255,255,255,0.1);">
-        <div style="color:#fff; font-size:18px; font-weight:800; text-transform:uppercase; letter-spacing:1px; margin-bottom:5px;">Modo Treinamento</div>
-        <div style="color:rgba(255,255,255,0.7); font-size:12px; font-weight:500;">Toque na tela para começar</div>
-        <div style="font-size:30px; margin-top:10px; animation: helixBounce 1.2s infinite ease-in-out;">🖱️</div>
+      <div style="background:rgba(0,0,0,0.5); padding:20px 40px; border-radius:60px; backdrop-filter:blur(6px); border:1px solid rgba(255,255,255,0.15); box-shadow: 0 10px 40px rgba(0,0,0,0.5);">
+        <div style="color:#fff; font-size:20px; font-weight:900; text-transform:uppercase; letter-spacing:1.5px; margin-bottom:8px;">Modo Treinamento</div>
+        <div style="color:rgba(255,255,255,0.8); font-size:13px; font-weight:600;">Toque para soltar a bola</div>
+        <div style="font-size:32px; margin-top:12px; animation: helixBounce 1.5s infinite ease-in-out;">🖱️</div>
       </div>
     `;
     hudContainer.appendChild(startOverlay);
 
     hudContainer.innerHTML += `
-      <div id="hud-combo" style="position:absolute;bottom:20%;left:50%;transform:translateX(-50%);font-size:28px;font-weight:900;color:#ffab00;text-shadow:0 0 20px rgba(255,171,0,0.6);opacity:0;transition:all 0.3s;white-space:nowrap;"></div>
-      <div id="hud-score-popup" style="position:absolute;top:40%;left:50%;transform:translate(-50%,-50%);font-size:42px;font-weight:900;color:#fff;text-shadow:0 4px 15px rgba(0,0,0,0.5);opacity:0;pointer-events:none;"></div>
+      <div id="hud-combo" style="position:absolute;bottom:20%;left:50%;transform:translateX(-50%);font-size:32px;font-weight:900;color:#ffab00;text-shadow:0 0 25px rgba(255,171,0,0.7);opacity:0;transition:all 0.3s;"></div>
+      <div id="hud-score-popup" style="position:absolute;top:40%;left:50%;transform:translate(-50%,-50%);font-size:46px;font-weight:900;color:#fff;text-shadow:0 6px 20px rgba(0,0,0,0.6);opacity:0;pointer-events:none;"></div>
     `;
 
-    var style = document.createElement('style');
-    style.textContent = '@keyframes helixBounce{0%,100%{transform:translateY(0)}50%{transform:translateY(8px)}}@keyframes helixFadeUp{0%{opacity:0;transform:translate(-50%,-20%) scale(0.5)}20%{opacity:1;transform:translate(-50%,-50%) scale(1.2)}100%{opacity:0;transform:translate(-50%,-100%) scale(1.5)}}';
-    hudContainer.appendChild(style);
-    container.appendChild(hudContainer);
+    if (!document.getElementById('helix-styles')) {
+      var style = document.createElement('style');
+      style.id = 'helix-styles';
+      style.textContent = '@keyframes helixBounce{0%,100%{transform:translateY(0)}50%{transform:translateY(10px)}}@keyframes helixFadeUp{0%{opacity:0;transform:translate(-50%,-20%) scale(0.6)}20%{opacity:1;transform:translate(-50%,-50%) scale(1.3)}100%{opacity:0;transform:translate(-50%,-120%) scale(1.6)}}';
+      document.head.appendChild(style);
+    }
     
+    container.appendChild(hudContainer);
     updateHUD();
   }
 
