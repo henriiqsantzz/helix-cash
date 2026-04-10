@@ -105,7 +105,8 @@
     .admin-table tr td:first-child { border-left: 1px solid var(--border-color); border-top-left-radius: 8px; border-bottom-left-radius: 8px; }
     .admin-table tr td:last-child { border-right: 1px solid var(--border-color); border-top-right-radius: 8px; border-bottom-right-radius: 8px; }
 
-    .chart-container { background: var(--bg-card); padding: 24px; border-radius: 12px; border: 1px solid var(--border-color); height: 350px; }
+    /* === CORREÇÃO: position relative e width 100% adicionados aqui === */
+    .chart-container { position: relative; width: 100%; background: var(--bg-card); padding: 24px; border-radius: 12px; border: 1px solid var(--border-color); height: 350px; }
 
     /* SETTINGS TABS */
     .settings-nav { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 16px; margin-bottom: 24px; border-bottom: 1px solid var(--border-color); }
@@ -685,14 +686,22 @@ async function loadDashboard() {
     document.getElementById('d-users').textContent = d.summary.users;
     document.getElementById('d-games').textContent = d.summary.games_count;
     
+    // Passa os dados do gráfico que vêm da sua API (d.chart)
     renderChart(d.chart);
   } catch (e) { console.error(e); }
 }
 
+// === CORREÇÃO: Função renderChart blindada contra erros da API ===
 function renderChart(data) {
-    const ctx = document.getElementById('mainChart').getContext('2d');
+    const canvas = document.getElementById('mainChart');
+    if (!canvas) return;
+    
+    const ctx = canvas.getContext('2d');
     if (chartInstance) chartInstance.destroy();
     
+    // Se a API não mandar dados pro gráfico, ele inicia como um array vazio para não quebrar a página
+    const chartData = (data && Array.isArray(data)) ? data : [];
+
     let gradient = ctx.createLinearGradient(0, 0, 0, 350);
     gradient.addColorStop(0, 'rgba(124, 77, 255, 0.4)');
     gradient.addColorStop(1, 'rgba(124, 77, 255, 0.0)');
@@ -700,10 +709,36 @@ function renderChart(data) {
     chartInstance = new Chart(ctx, {
         type: 'line',
         data: {
-            labels: data.map(i => new Date(i.t).toLocaleDateString()),
-            datasets: [{ label: 'GGR Gerado (R$)', data: data.map(i => i.b - i.p), borderColor: '#7c4dff', borderWidth: 3, tension: 0.4, fill: true, backgroundColor: gradient, pointBackgroundColor: '#0a0a14', pointBorderColor: '#7c4dff', pointBorderWidth: 2, pointRadius: 4, pointHoverRadius: 6 }]
+            // Formata a data (i.t) para DD/MM para o gráfico ficar bonito
+            labels: chartData.map(i => {
+                const date = new Date(i.t);
+                return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+            }),
+            datasets: [{ 
+                label: 'GGR Gerado (R$)', 
+                // i.b = total bet (aposta), i.p = total prize (prêmios) | Lucro da casa é a diferença
+                data: chartData.map(i => i.b - i.p), 
+                borderColor: '#7c4dff', 
+                borderWidth: 3, 
+                tension: 0.4, 
+                fill: true, 
+                backgroundColor: gradient, 
+                pointBackgroundColor: '#0a0a14', 
+                pointBorderColor: '#7c4dff', 
+                pointBorderWidth: 2, 
+                pointRadius: 4, 
+                pointHoverRadius: 6 
+            }]
         },
-        options: { maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.03)', drawBorder: false }, ticks: { color: '#8b8b9e' } }, x: { grid: { display: false, drawBorder: false }, ticks: { color: '#8b8b9e', maxTicksLimit: 7 } } } }
+        options: { 
+            maintainAspectRatio: false, 
+            responsive: true,
+            plugins: { legend: { display: false } }, 
+            scales: { 
+                y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.03)', drawBorder: false }, ticks: { color: '#8b8b9e' } }, 
+                x: { grid: { display: false, drawBorder: false }, ticks: { color: '#8b8b9e', maxTicksLimit: 7 } } 
+            } 
+        }
     });
 }
 
