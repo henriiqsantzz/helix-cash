@@ -486,6 +486,17 @@
             <div class="toggle-row"><span>Modo Demo Disponível (Jogar sem saldo)</span> <label class="switch"><input type="checkbox" id="set-demo_mode" class="setting-input" checked><span class="slider"></span></label></div>
             <div class="toggle-row"><span>Bloquear Todos os Saques</span> <label class="switch"><input type="checkbox" id="set-block_withdrawals" class="setting-input"><span class="slider"></span></label></div>
             
+            <div class="toggle-row" style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 8px; padding: 14px; margin-top: 16px; margin-bottom: 8px;">
+                <span style="display:block; line-height: 1.5;">
+                    <strong style="color: #fff; font-size: 14px;">Exigir CPF igual da conta</strong><br>
+                    <small style="color:var(--text-muted); font-size: 12px; font-weight:normal;">Se ativo, o saque só é aprovado se o Pix for para o mesmo CPF da conta.</small>
+                </span> 
+                <label class="switch">
+                    <input type="checkbox" id="set-require_same_cpf" class="setting-input">
+                    <span class="slider"></span>
+                </label>
+            </div>
+            
             <h3 class="settings-card-title" style="margin-top:32px;">Chaves JWT (Avançado)</h3>
             <div class="form-group"><label>JWT Secret (Tokens de Usuários)</label><input type="password" id="set-jwt_secret" class="form-input setting-input" placeholder="****************"></div>
             <div class="form-group"><label>Admin JWT Secret</label><input type="password" id="set-admin_jwt_secret" class="form-input setting-input" placeholder="****************"></div>
@@ -785,7 +796,13 @@ function closeModal() { document.getElementById('modal').style.display = 'none';
 async function loadFinancial() {
   try {
     const deps = await api('/api/admin/deposits'); const wds = await api('/api/admin/withdrawals'); const games = await api('/api/admin/games');
-    document.getElementById('depositsTable').innerHTML = deps.map(d => `<tr><td style="color:var(--text-muted); font-size:12px;">#${d.transaction_id || d.id}</td><td style="font-weight:600; color:#fff;">${d.user_name}</td><td class="green" style="font-weight:700">R$ ${fmt(d.amount)}</td><td><span style="background:rgba(16,185,129,0.1); color:var(--success); padding:4px 8px; border-radius:6px; font-size:11px; font-weight:800; text-transform:uppercase;">${d.status}</span></td><td style="color:var(--text-muted); font-size:13px;">${new Date(d.created_at).toLocaleString('pt-BR')}</td></tr>`).join('');
+    
+    document.getElementById('depositsTable').innerHTML = deps.map(d => {
+      let bg = d.status === 'approved' ? 'rgba(16,185,129,0.1)' : (d.status === 'pending' ? 'rgba(245,158,11,0.1)' : 'rgba(239,68,68,0.1)');
+      let cor = d.status === 'approved' ? 'var(--success)' : (d.status === 'pending' ? 'var(--warning)' : 'var(--danger)');
+      return `<tr><td style="color:var(--text-muted); font-size:12px;">#${d.transaction_id || d.id}</td><td style="font-weight:600; color:#fff;">${d.user_name}</td><td class="green" style="font-weight:700">R$ ${fmt(d.amount)}</td><td><span style="background:${bg}; color:${cor}; padding:4px 8px; border-radius:6px; font-size:11px; font-weight:800; text-transform:uppercase;">${d.status}</span></td><td style="color:var(--text-muted); font-size:13px;">${new Date(d.created_at).toLocaleString('pt-BR')}</td></tr>`;
+    }).join('');
+    
     document.getElementById('withdrawalsTable').innerHTML = wds.map(w => `<tr><td style="color:var(--text-muted); font-size:12px;">#${w.id}</td><td style="font-weight:600; color:#fff;">${w.user_name}</td><td class="red" style="font-weight:700">R$ ${fmt(w.amount)}</td><td style="color:var(--text-muted); font-size:13px;">${w.pix_key}</td><td><span style="background:rgba(245,158,11,0.1); color:var(--warning); padding:4px 8px; border-radius:6px; font-size:11px; font-weight:800; text-transform:uppercase;">${w.status}</span></td></tr>`).join('');
     document.getElementById('gamesTable').innerHTML = games.map(g => `<tr><td style="color:var(--text-muted); font-size:12px;">#${g.id}</td><td style="font-weight:600; color:#fff;">${g.user_name}</td><td style="color:var(--text-muted)">R$ ${fmt(g.bet_amount)}</td><td class="${g.result === 'win' ? 'green' : 'red'}" style="font-weight:700">R$ ${fmt(g.prize)}</td><td><span style="background:${g.result === 'win' ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)'}; color:${g.result === 'win' ? 'var(--success)' : 'var(--danger)'}; padding:4px 8px; border-radius:6px; font-size:11px; font-weight:800; text-transform:uppercase;">${g.result}</span></td><td style="color:var(--text-muted); font-size:13px;">${new Date(g.created_at).toLocaleTimeString('pt-BR')}</td></tr>`).join('');
   } catch (e) { console.error(e); }
