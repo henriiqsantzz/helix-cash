@@ -3,22 +3,23 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Helix Cash - Painel Admin</title>
+  <title>Helix Cash - Painel Admin PRO</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+  
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+  
   <style>
     /* ================= DESIGN SYSTEM PREMUIM ================= */
     :root {
-      /* Estas variáveis serão sobrescritas pelas configurações do banco de dados */
       --bg-main: #05050a;
       --bg-sec: #0a0a14;
       --bg-card: #10101a;
       --accent: #7c4dff;
-      --accent-glow: rgba(124, 77, 255, 0.15);
+      --accent-glow: rgba(124, 77, 255, 0.2);
       
       --border-color: rgba(255, 255, 255, 0.05);
-      --border-hover: rgba(124, 77, 255, 0.3);
+      --border-hover: rgba(124, 77, 255, 0.15);
       --text-main: #ffffff;
       --text-muted: #8b8b9e;
       --success: #10b981;
@@ -35,7 +36,7 @@
     .admin-sidebar { width: 260px; background: var(--bg-sec); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; position: fixed; height: 100vh; top: 0; left: 0; z-index: 1000; transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
     .admin-main { flex: 1; margin-left: 260px; padding: 40px; max-width: 100%; box-sizing: border-box; }
     .logo { font-size: 24px; font-weight: 900; letter-spacing: -1px; display: flex; align-items: center; gap: 5px;}
-    .logo span { color: var(--accent); }
+    .logo span { color: var(--accent); text-shadow: 0 0 10px var(--accent-glow); }
 
     .admin-mobile-header { display: none; padding: 16px 20px; background: var(--bg-sec); border-bottom: 1px solid var(--border-color); align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 998; }
 
@@ -51,27 +52,27 @@
     /* NAVIGATION */
     .admin-nav { padding: 0 12px; }
     .admin-nav-item { display: flex; align-items: center; gap: 12px; width: 100%; padding: 14px 16px; margin-bottom: 4px; background: transparent; border: none; border-radius: 10px; color: var(--text-muted); font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.2s ease; }
-    .admin-nav-item:hover { background: rgba(255,255,255,0.03); color: var(--text-main); }
-    .admin-nav-item.active { background: var(--accent-glow); color: #fff; font-weight: 600; box-shadow: inset 3px 0 0 var(--accent); }
+    .admin-nav-item:hover { background: rgba(255,255,255,0.02); color: var(--text-main); }
+    .admin-nav-item.active { background: linear-gradient(90deg, rgba(124, 77, 255, 0.15) 0%, rgba(124, 77, 255, 0) 100%); color: #fff; font-weight: 600; border-left: 3px solid var(--accent); border-radius: 4px 10px 10px 4px; }
     .admin-nav-item svg { stroke: currentColor; opacity: 0.7; transition: 0.2s; }
     .admin-nav-item.active svg { opacity: 1; stroke: var(--accent); }
 
     /* SECTIONS */
     .admin-section { display: none; animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
     .admin-section.active { display: block; }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     
     h1 { display: flex; align-items: center; gap: 12px; margin-top: 0; font-size: 24px; font-weight: 700; letter-spacing: -0.5px;}
     h1 svg { stroke: var(--accent); }
 
     /* FORM ELEMENTS */
-    .form-input, .search-input, select { background: var(--bg-card); border: 1px solid var(--border-color); color: #fff; font-size: 14px; padding: 12px 16px; border-radius: 8px; font-family: inherit; transition: 0.2s ease; width: 100%; }
+    .form-input, .search-input, select { background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); color: #fff; font-size: 14px; padding: 12px 16px; border-radius: 8px; font-family: inherit; transition: 0.2s ease; width: 100%; }
     .form-input:focus, .search-input:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
     .search-input { margin-bottom: 24px; }
     
     .btn { padding: 10px 18px; font-size: 14px; font-weight: 600; border-radius: 8px; cursor: pointer; transition: 0.2s ease; font-family: inherit; border: none; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
-    .btn-primary { background: var(--accent); color: #fff; }
-    .btn-primary:hover { filter: brightness(1.1); transform: translateY(-1px); box-shadow: 0 4px 15px var(--accent-glow); }
+    .btn-primary { background: var(--accent); color: #fff; box-shadow: 0 4px 15px var(--accent-glow); }
+    .btn-primary:hover { filter: brightness(1.1); transform: translateY(-1px); }
     .btn-secondary { background: rgba(255,255,255,0.05); color: #fff; border: 1px solid var(--border-color); }
     .btn-secondary:hover { background: rgba(255,255,255,0.1); }
     .btn-sm { padding: 6px 12px; font-size: 12px; border-radius: 6px;}
@@ -84,28 +85,36 @@
     input:checked + .slider { background-color: rgba(16, 185, 129, 0.2); border-color: var(--success); }
     input:checked + .slider:before { transform: translateX(20px); background-color: var(--success); }
 
-    /* CARDS */
+    /* CARDS PREMIUM */
     .admin-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 24px; margin-bottom: 24px; }
-    .admin-card { background: var(--bg-card); padding: 24px; border-radius: 12px; border: 1px solid var(--border-color); box-shadow: 0 4px 20px rgba(0,0,0,0.2); transition: transform 0.2s ease, border-color 0.2s ease; }
-    .admin-card:hover { transform: translateY(-3px); border-color: var(--border-hover); }
+    .admin-card { background: var(--bg-card); padding: 24px; border-radius: 16px; border: 1px solid var(--border-color); position: relative; overflow: hidden; transition: transform 0.2s ease, box-shadow 0.2s ease; }
+    .admin-card:hover { transform: translateY(-3px); box-shadow: 0 10px 30px rgba(0,0,0,0.5); border-color: var(--border-hover); }
+    
+    /* Brilho sutil no fundo do card */
+    .admin-card::before { content: ''; position: absolute; top: 0; right: 0; width: 100px; height: 100px; background: radial-gradient(circle, var(--accent-glow) 0%, transparent 70%); opacity: 0.5; pointer-events: none; }
+    
     .admin-card-title { display: flex; align-items: center; gap: 10px; color: var(--text-muted); font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
-    .admin-card-title svg { background: rgba(255,255,255,0.03); padding: 6px; border-radius: 8px; width: 28px; height: 28px; }
-    .value { font-size: 32px; font-weight: 800; margin-top: 12px; letter-spacing: -1px; }
+    .admin-card-title svg { background: rgba(0,0,0,0.3); padding: 6px; border-radius: 8px; width: 32px; height: 32px; border: 1px solid rgba(255,255,255,0.05); }
+    .value { font-size: 32px; font-weight: 800; margin-top: 16px; letter-spacing: -1px; text-shadow: 0 0 20px rgba(255,255,255,0.1); }
     
     /* COLORS */
-    .green { color: var(--success); }
-    .red { color: var(--danger); }
-    .purple { color: #a78bfa; }
+    .green { color: var(--success); text-shadow: 0 0 15px rgba(16, 185, 129, 0.3); }
+    .red { color: var(--danger); text-shadow: 0 0 15px rgba(239, 68, 68, 0.3); }
+    .purple { color: #a78bfa; text-shadow: 0 0 15px rgba(167, 139, 250, 0.3); }
 
     /* TABLES */
     .table-responsive { width: 100%; overflow-x: auto; margin-top: 10px; padding-bottom: 20px;}
     .admin-table { width: 100%; border-collapse: separate; border-spacing: 0 8px; }
     .admin-table th { text-align: left; padding: 0 16px 8px 16px; color: var(--text-muted); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; border: none; }
-    .admin-table td { padding: 16px; background: var(--bg-card); font-size: 14px; font-weight: 500; border-top: 1px solid var(--border-color); border-bottom: 1px solid var(--border-color); }
-    .admin-table tr td:first-child { border-left: 1px solid var(--border-color); border-top-left-radius: 8px; border-bottom-left-radius: 8px; }
-    .admin-table tr td:last-child { border-right: 1px solid var(--border-color); border-top-right-radius: 8px; border-bottom-right-radius: 8px; }
+    .admin-table td { padding: 16px; background: var(--bg-card); font-size: 14px; font-weight: 500; border-top: 1px solid var(--border-color); border-bottom: 1px solid var(--border-color); transition: background 0.2s; }
+    .admin-table tr:hover td { background: rgba(255,255,255,0.02); }
+    .admin-table tr td:first-child { border-left: 1px solid var(--border-color); border-top-left-radius: 12px; border-bottom-left-radius: 12px; }
+    .admin-table tr td:last-child { border-right: 1px solid var(--border-color); border-top-right-radius: 12px; border-bottom-right-radius: 12px; }
 
-    .chart-container { position: relative; width: 100%; background: var(--bg-card); padding: 24px; border-radius: 12px; border: 1px solid var(--border-color); height: 350px; }
+    .chart-wrapper { background: var(--bg-card); padding: 24px; border-radius: 16px; border: 1px solid var(--border-color); margin-top: 16px; }
+    .chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    .chart-header h3 { margin: 0; font-size: 16px; color: #fff; font-weight: 600; }
+    .chart-container { position: relative; width: 100%; height: 350px; }
 
     /* SETTINGS TABS */
     .settings-nav { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 16px; margin-bottom: 24px; border-bottom: 1px solid var(--border-color); }
@@ -156,35 +165,13 @@
       to { opacity: 1; transform: translateY(0) scale(1); } 
     }
     
-    /* Ajustes internos do modal */
     .modal h3 { color: #fff; margin-top: 0; font-size: 20px; }
     .modal label { font-size: 11px; color: var(--text-muted); font-weight: 700; text-transform: uppercase; margin-bottom: 8px; display: block; }
     .modal input { width: 100%; box-sizing: border-box; }
 
     /* ================= TAGS DE USUÁRIO (INF / ADM) ================= */
-    .influencer-badge {
-      background: rgba(124, 77, 255, 0.15);
-      color: var(--accent);
-      font-size: 10px;
-      font-weight: 800;
-      padding: 3px 6px;
-      border-radius: 4px;
-      margin-left: 6px;
-      vertical-align: middle;
-      border: 1px solid rgba(124, 77, 255, 0.3);
-    }
-    
-    .admin-badge {
-      background: rgba(239, 68, 68, 0.15);
-      color: var(--danger);
-      font-size: 10px;
-      font-weight: 800;
-      padding: 3px 6px;
-      border-radius: 4px;
-      margin-left: 6px;
-      vertical-align: middle;
-      border: 1px solid rgba(239, 68, 68, 0.3);
-    }
+    .influencer-badge { background: rgba(124, 77, 255, 0.15); color: var(--accent); font-size: 10px; font-weight: 800; padding: 3px 6px; border-radius: 4px; margin-left: 6px; vertical-align: middle; border: 1px solid rgba(124, 77, 255, 0.3); }
+    .admin-badge { background: rgba(239, 68, 68, 0.15); color: var(--danger); font-size: 10px; font-weight: 800; padding: 3px 6px; border-radius: 4px; margin-left: 6px; vertical-align: middle; border: 1px solid rgba(239, 68, 68, 0.3); }
   </style>
 </head>
 <body>
@@ -245,23 +232,41 @@
     <div id="section-dashboard" class="admin-section active">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:32px;flex-wrap:wrap;gap:15px;">
         <h1>
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>
           Dashboard Geral
         </h1>
-        <select id="dashboardRange" class="form-input" style="width:200px;" onchange="loadDashboard()">
+        <select id="dashboardRange" class="form-input" style="width:200px; background:var(--bg-card);" onchange="loadDashboard()">
           <option value="today">Hoje</option>
-          <option value="7days">Últimos 7 Dias</option>
+          <option value="7days" selected>Últimos 7 Dias</option>
           <option value="thisMonth">Este Mês</option>
-          <option value="max" selected>Todo o Período</option>
+          <option value="max">Todo o Período</option>
         </select>
       </div>
+      
       <div class="admin-cards">
-        <div class="admin-card"><div class="admin-card-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg> Depósitos</div><div class="value green" id="d-deposits">R$ 0,00</div></div>
-        <div class="admin-card"><div class="admin-card-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg> Saques</div><div class="value red" id="d-withdrawals">R$ 0,00</div></div>
-        <div class="admin-card"><div class="admin-card-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg> Lucro Líquido</div><div class="value green" id="d-profit">R$ 0,00</div></div>
-        <div class="admin-card"><div class="admin-card-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="6" y1="12" x2="10" y2="12"/><line x1="8" y1="10" x2="8" y2="14"/><line x1="15" y1="13" x2="15.01" y2="13"/><line x1="18" y1="11" x2="18.01" y2="11"/><rect x="2" y="6" width="20" height="12" rx="2"/></svg> GGR (Casa)</div><div class="value purple" id="d-ggr">R$ 0,00</div></div>
+        <div class="admin-card">
+            <div class="admin-card-title"><svg viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg> Depósitos</div>
+            <div class="value green" id="d-deposits">R$ 0,00</div>
+        </div>
+        <div class="admin-card">
+            <div class="admin-card-title"><svg viewBox="0 0 24 24" fill="none" stroke="var(--danger)" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg> Saques</div>
+            <div class="value red" id="d-withdrawals">R$ 0,00</div>
+        </div>
+        <div class="admin-card">
+            <div class="admin-card-title"><svg viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg> Lucro Líquido</div>
+            <div class="value green" id="d-profit">R$ 0,00</div>
+        </div>
+        <div class="admin-card" style="border-color: rgba(124, 77, 255, 0.3);">
+            <div class="admin-card-title"><svg viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><line x1="6" y1="12" x2="10" y2="12"/><line x1="8" y1="10" x2="8" y2="14"/><line x1="15" y1="13" x2="15.01" y2="13"/><line x1="18" y1="11" x2="18.01" y2="11"/><rect x="2" y="6" width="20" height="12" rx="2"/></svg> GGR (Casa)</div>
+            <div class="value purple" id="d-ggr">R$ 0,00</div>
+        </div>
       </div>
-      <div class="chart-container"><canvas id="mainChart"></canvas></div>
+
+      <div class="chart-wrapper">
+          <div class="chart-header">
+              <h3>Evolução do GGR (Lucro da Casa)</h3>
+          </div>
+          <div class="chart-container"><canvas id="mainChart"></canvas></div>
+      </div>
     </div>
 
     <div id="section-users" class="admin-section">
@@ -428,17 +433,14 @@
       <div id="tab-banners" class="settings-tab-content">
         <div class="settings-card">
             <h3 class="settings-card-title">Banners do Painel</h3>
-            
             <div style="background: rgba(255,255,255,0.02); padding: 16px; border-radius: 8px; border: 1px dashed var(--border-color); margin-bottom: 16px;">
                 <div class="form-group"><label>Banner 1 - URL da Imagem</label><input type="text" id="set-banner1_img" class="form-input setting-input"></div>
                 <div class="form-group"><label>Banner 1 - Link ao Clicar (Opcional)</label><input type="text" id="set-banner1_link" class="form-input setting-input"></div>
             </div>
-            
             <div style="background: rgba(255,255,255,0.02); padding: 16px; border-radius: 8px; border: 1px dashed var(--border-color); margin-bottom: 16px;">
                 <div class="form-group"><label>Banner 2 - URL da Imagem</label><input type="text" id="set-banner2_img" class="form-input setting-input"></div>
                 <div class="form-group"><label>Banner 2 - Link ao Clicar (Opcional)</label><input type="text" id="set-banner2_link" class="form-input setting-input"></div>
             </div>
-
             <div style="background: rgba(255,255,255,0.02); padding: 16px; border-radius: 8px; border: 1px dashed var(--border-color);">
                 <div class="form-group"><label>Banner 3 - URL da Imagem</label><input type="text" id="set-banner3_img" class="form-input setting-input"></div>
                 <div class="form-group"><label>Banner 3 - Link ao Clicar (Opcional)</label><input type="text" id="set-banner3_link" class="form-input setting-input"></div>
@@ -457,7 +459,6 @@
                     <div class="color-item"><label>Cor Primária (Destaque)</label><span id="val-accent">#7c4dff</span><input type="color" id="set-accent" class="setting-input color-picker" value="#7c4dff"></div>
                 </div>
             </div>
-
             <div class="settings-card">
                 <h3 class="settings-card-title">Cores — Landing Page / Site Público</h3>
                 <div class="color-grid">
@@ -465,7 +466,6 @@
                     <div class="color-item"><label>Gradiente / Hover</label><span id="val-site-grad">#ff6b9d</span><input type="color" id="set-site-grad" class="setting-input color-picker" value="#ff6b9d"></div>
                 </div>
             </div>
-
             <div class="settings-card" style="grid-column: 1 / -1;">
                 <h3 class="settings-card-title">Cores — Sistema (Status)</h3>
                 <div class="color-grid">
@@ -511,7 +511,6 @@
             </div>
             <p style="color:var(--text-muted); font-size:13px;">Ative para exigir volume de apostas antes de liberar saques.</p>
         </div>
-
         <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap:24px;">
             <div class="settings-card">
                 <h3 class="settings-card-title">Tipo de Cálculo</h3>
@@ -531,7 +530,6 @@
                 <span style="font-size:11px; color:var(--text-muted)">Aplica este valor independente do depósito.</span>
             </div>
         </div>
-
         <div class="settings-card">
             <div class="toggle-row" style="border:none; padding:0; background:transparent;">
                 <span style="display:block">
@@ -549,7 +547,6 @@
                 <span><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#4267B2" stroke-width="2"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"></path></svg> <strong style="color:#4267B2">Ativar Facebook Pixel + Conversions API</strong></span> 
                 <label class="switch"><input type="checkbox" id="set-pixel_active" class="setting-input"><span class="slider"></span></label>
             </div>
-            
             <div style="margin-top: 24px;">
                 <div class="form-group"><label>Pixel ID</label><input type="text" id="set-pixel_id" class="form-input setting-input"></div>
                 <div class="form-group"><label>Access Token (Conversions API)</label><input type="password" id="set-pixel_token" class="form-input setting-input" placeholder="(não alterado)"></div>
@@ -561,7 +558,6 @@
       <div class="security-section" style="margin-top: 40px;">
         <h3><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg> Segurança do Painel Administrativo</h3>
         <p style="font-size:13px; color:var(--text-muted); margin-bottom:24px;">Altere aqui o login (e-mail ou telefone) e a senha do administrador atual.</p>
-        
         <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap:24px;">
             <div class="form-group"><label>Login Atual</label><input type="text" class="form-input" value="admin" disabled style="opacity:0.6"></div>
             <div class="form-group"><label>Senha Atual (Obrigatória para confirmar)</label><input type="password" class="form-input" placeholder="Senha atual..."></div>
@@ -602,13 +598,11 @@ document.querySelectorAll('.settings-nav-btn').forEach(btn => {
     btn.addEventListener('click', () => {
         document.querySelectorAll('.settings-nav-btn').forEach(b => b.classList.remove('active'));
         document.querySelectorAll('.settings-tab-content').forEach(c => c.classList.remove('active'));
-        
         btn.classList.add('active');
         document.getElementById(`tab-${btn.dataset.tab}`).classList.add('active');
     });
 });
 
-// COLOR PICKERS REALTIME UPDATE
 document.querySelectorAll('.color-picker').forEach(picker => {
     picker.addEventListener('input', (e) => {
         const cssVarName = `--${e.target.id.replace('set-', '')}`;
@@ -617,12 +611,9 @@ document.querySelectorAll('.color-picker').forEach(picker => {
     });
 });
 
-// LOAD SETTINGS (Mapeando todos os campos e cores)
 async function loadSettings() {
   try {
     const s = await api('/api/admin/settings');
-    
-    // Popula inputs normais e checkboxes
     document.querySelectorAll('.setting-input').forEach(el => {
         const key = el.id.replace('set-', '');
         if (s[key] !== undefined) {
@@ -630,21 +621,18 @@ async function loadSettings() {
                 el.checked = (s[key] === true || s[key] === 'true');
             } else if (el.type === 'color') {
                 el.value = s[key];
-                document.documentElement.style.setProperty(`--${key}`, s[key]); // Aplica cor
-                document.getElementById(`val-${key}`).innerText = s[key]; // Atualiza texto
+                document.documentElement.style.setProperty(`--${key}`, s[key]); 
+                document.getElementById(`val-${key}`).innerText = s[key]; 
             } else {
                 el.value = s[key];
             }
         }
     });
-
   } catch (e) { console.error("Erro ao carregar settings", e); }
 }
 
-// SAVE SETTINGS
 async function saveSettings() {
   const body = {};
-  
   document.querySelectorAll('.setting-input').forEach(el => {
       const key = el.id.replace('set-', '');
       if (el.type === 'checkbox') {
@@ -660,13 +648,9 @@ async function saveSettings() {
   
   try {
       await api('/api/admin/settings', { method: 'POST', body: JSON.stringify(body) });
-      btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg> SALVO COM SUCESSO';
+      btn.innerHTML = 'SALVO COM SUCESSO';
       btn.style.background = 'var(--success)';
-      
-      setTimeout(() => {
-          btn.innerHTML = originalHtml;
-          btn.style.background = 'var(--accent)';
-      }, 3000);
+      setTimeout(() => { btn.innerHTML = originalHtml; btn.style.background = 'var(--accent)'; }, 3000);
   } catch(e) {
       alert("Erro ao salvar: " + e.message);
       btn.innerHTML = originalHtml;
@@ -682,15 +666,12 @@ async function loadDashboard() {
     document.getElementById('d-withdrawals').textContent = 'R$ ' + fmt(d.summary.withdrawals);
     document.getElementById('d-profit').textContent = 'R$ ' + fmt(d.summary.profit);
     document.getElementById('d-ggr').textContent = 'R$ ' + fmt(d.summary.ggr);
-    document.getElementById('d-users').textContent = d.summary.users;
-    document.getElementById('d-games').textContent = d.summary.games_count;
     
-    // Passa os dados do gráfico que vêm da sua API (d.chart)
     renderChart(d.chart);
   } catch (e) { console.error(e); }
 }
 
-// === FUNÇÃO DO GRÁFICO BLINDADA ===
+// === GRÁFICO PROFISSIONAL AGRUPADO POR DIA ===
 function renderChart(data) {
     const canvasEl = document.getElementById('mainChart');
     if (!canvasEl) return;
@@ -698,8 +679,28 @@ function renderChart(data) {
     const ctx = canvasEl.getContext('2d');
     if (chartInstance) chartInstance.destroy();
     
-    // Se a API não mandar dados pro gráfico, ele inicia como um array vazio
     const chartData = (data && Array.isArray(data)) ? data : [];
+    
+    // AGRUPAR OS JOGOS POR DATA
+    const groupedData = {};
+    chartData.forEach(item => {
+        // Pega apenas a data, ignorando a hora
+        const dateObj = new Date(item.t);
+        const dateStr = dateObj.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+        
+        if(!groupedData[dateStr]) groupedData[dateStr] = { ggr: 0 };
+        // GGR da casa = Valor da Aposta (b) - Valor do Prêmio pago (p)
+        groupedData[dateStr].ggr += (parseFloat(item.b) - parseFloat(item.p));
+    });
+
+    const labels = Object.keys(groupedData);
+    const plotValues = Object.values(groupedData).map(g => g.ggr);
+
+    // Se não tiver dados no período, adiciona um ponto zerado para o gráfico não quebrar
+    if (labels.length === 0) {
+        labels.push(new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }));
+        plotValues.push(0);
+    }
 
     let gradient = ctx.createLinearGradient(0, 0, 0, 350);
     gradient.addColorStop(0, 'rgba(124, 77, 255, 0.4)');
@@ -708,34 +709,33 @@ function renderChart(data) {
     chartInstance = new Chart(ctx, {
         type: 'line',
         data: {
-            // Formata a data (i.t) para DD/MM
-            labels: chartData.map(i => {
-                const date = new Date(i.t);
-                return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
-            }),
+            labels: labels,
             datasets: [{ 
-                label: 'GGR Gerado (R$)', 
-                // i.b = bet_amount, i.p = prize
-                data: chartData.map(i => i.b - i.p), 
+                label: 'GGR Diário (R$)', 
+                data: plotValues, 
                 borderColor: '#7c4dff', 
-                borderWidth: 3, 
-                tension: 0.4, 
+                borderWidth: 4, 
+                tension: 0.4, // Deixa a linha curvada igual as dashboards premium
                 fill: true, 
                 backgroundColor: gradient, 
                 pointBackgroundColor: '#0a0a14', 
                 pointBorderColor: '#7c4dff', 
-                pointBorderWidth: 2, 
-                pointRadius: 4, 
-                pointHoverRadius: 6 
+                pointBorderWidth: 3, 
+                pointRadius: 5, 
+                pointHoverRadius: 8 
             }]
         },
         options: { 
             maintainAspectRatio: false, 
             responsive: true,
-            plugins: { legend: { display: false } }, 
+            interaction: { mode: 'index', intersect: false },
+            plugins: { 
+                legend: { display: false },
+                tooltip: { backgroundColor: 'rgba(16, 16, 26, 0.9)', titleColor: '#8b8b9e', bodyColor: '#fff', bodyFont: { size: 14, weight: 'bold' }, borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1, padding: 12 }
+            }, 
             scales: { 
-                y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.03)', drawBorder: false }, ticks: { color: '#8b8b9e' } }, 
-                x: { grid: { display: false, drawBorder: false }, ticks: { color: '#8b8b9e', maxTicksLimit: 7 } } 
+                y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)', borderDash: [5, 5], drawBorder: false }, ticks: { color: '#8b8b9e', padding: 10 } }, 
+                x: { grid: { display: false, drawBorder: false }, ticks: { color: '#8b8b9e', padding: 10, maxTicksLimit: 10 } } 
             } 
         }
     });
@@ -826,28 +826,25 @@ async function saveUser(id) {
 async function deleteUser(id) { if(confirm('Excluir este usuário permanentemente?')) { await api('/api/admin/user/delete', { method: 'POST', body: JSON.stringify({ id }) }); closeModal(); loadUsers(); } }
 function closeModal() { document.getElementById('modal').style.display = 'none'; }
 
-// FINANCEIRO & JOGOS (Com as cores dinâmicas para saques)
+// FINANCEIRO & JOGOS
 async function loadFinancial() {
   try {
     const deps = await api('/api/admin/deposits'); 
     const wds = await api('/api/admin/withdrawals'); 
     const games = await api('/api/admin/games');
     
-    // Tabela de Depósitos
     document.getElementById('depositsTable').innerHTML = deps.map(d => {
       let bg = d.status === 'approved' ? 'rgba(16,185,129,0.1)' : (d.status === 'pending' ? 'rgba(245,158,11,0.1)' : 'rgba(239,68,68,0.1)');
       let cor = d.status === 'approved' ? 'var(--success)' : (d.status === 'pending' ? 'var(--warning)' : 'var(--danger)');
       return `<tr><td style="color:var(--text-muted); font-size:12px;">#${d.transaction_id || d.id}</td><td style="font-weight:600; color:#fff;">${d.user_name}</td><td class="green" style="font-weight:700">R$ ${fmt(d.amount)}</td><td><span style="background:${bg}; color:${cor}; padding:4px 8px; border-radius:6px; font-size:11px; font-weight:800; text-transform:uppercase;">${d.status}</span></td><td style="color:var(--text-muted); font-size:13px;">${new Date(d.created_at).toLocaleString('pt-BR')}</td></tr>`;
     }).join('');
     
-    // Tabela de Saques (Agora com as mesmas variáveis dinâmicas de bg e cor)
     document.getElementById('withdrawalsTable').innerHTML = wds.map(w => {
       let bg = w.status === 'approved' ? 'rgba(16,185,129,0.1)' : (w.status === 'pending' ? 'rgba(245,158,11,0.1)' : 'rgba(239,68,68,0.1)');
       let cor = w.status === 'approved' ? 'var(--success)' : (w.status === 'pending' ? 'var(--warning)' : 'var(--danger)');
       return `<tr><td style="color:var(--text-muted); font-size:12px;">#${w.id}</td><td style="font-weight:600; color:#fff;">${w.user_name}</td><td class="red" style="font-weight:700">R$ ${fmt(w.amount)}</td><td style="color:var(--text-muted); font-size:13px;">${w.pix_key}</td><td><span style="background:${bg}; color:${cor}; padding:4px 8px; border-radius:6px; font-size:11px; font-weight:800; text-transform:uppercase;">${w.status}</span></td></tr>`;
     }).join('');
 
-    // Tabela de Jogos
     document.getElementById('gamesTable').innerHTML = games.map(g => `<tr><td style="color:var(--text-muted); font-size:12px;">#${g.id}</td><td style="font-weight:600; color:#fff;">${g.user_name}</td><td style="color:var(--text-muted)">R$ ${fmt(g.bet_amount)}</td><td class="${g.result === 'win' ? 'green' : 'red'}" style="font-weight:700">R$ ${fmt(g.prize)}</td><td><span style="background:${g.result === 'win' ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)'}; color:${g.result === 'win' ? 'var(--success)' : 'var(--danger)'}; padding:4px 8px; border-radius:6px; font-size:11px; font-weight:800; text-transform:uppercase;">${g.result}</span></td><td style="color:var(--text-muted); font-size:13px;">${new Date(g.created_at).toLocaleTimeString('pt-BR')}</td></tr>`).join('');
   } catch (e) { console.error(e); }
 }
