@@ -792,18 +792,28 @@ async function saveUser(id) {
 async function deleteUser(id) { if(confirm('Excluir este usuário permanentemente?')) { await api('/api/admin/user/delete', { method: 'POST', body: JSON.stringify({ id }) }); closeModal(); loadUsers(); } }
 function closeModal() { document.getElementById('modal').style.display = 'none'; }
 
-// FINANCEIRO & JOGOS
+// FINANCEIRO & JOGOS (Com as cores dinâmicas para saques)
 async function loadFinancial() {
   try {
-    const deps = await api('/api/admin/deposits'); const wds = await api('/api/admin/withdrawals'); const games = await api('/api/admin/games');
+    const deps = await api('/api/admin/deposits'); 
+    const wds = await api('/api/admin/withdrawals'); 
+    const games = await api('/api/admin/games');
     
+    // Tabela de Depósitos
     document.getElementById('depositsTable').innerHTML = deps.map(d => {
       let bg = d.status === 'approved' ? 'rgba(16,185,129,0.1)' : (d.status === 'pending' ? 'rgba(245,158,11,0.1)' : 'rgba(239,68,68,0.1)');
       let cor = d.status === 'approved' ? 'var(--success)' : (d.status === 'pending' ? 'var(--warning)' : 'var(--danger)');
       return `<tr><td style="color:var(--text-muted); font-size:12px;">#${d.transaction_id || d.id}</td><td style="font-weight:600; color:#fff;">${d.user_name}</td><td class="green" style="font-weight:700">R$ ${fmt(d.amount)}</td><td><span style="background:${bg}; color:${cor}; padding:4px 8px; border-radius:6px; font-size:11px; font-weight:800; text-transform:uppercase;">${d.status}</span></td><td style="color:var(--text-muted); font-size:13px;">${new Date(d.created_at).toLocaleString('pt-BR')}</td></tr>`;
     }).join('');
     
-    document.getElementById('withdrawalsTable').innerHTML = wds.map(w => `<tr><td style="color:var(--text-muted); font-size:12px;">#${w.id}</td><td style="font-weight:600; color:#fff;">${w.user_name}</td><td class="red" style="font-weight:700">R$ ${fmt(w.amount)}</td><td style="color:var(--text-muted); font-size:13px;">${w.pix_key}</td><td><span style="background:rgba(245,158,11,0.1); color:var(--warning); padding:4px 8px; border-radius:6px; font-size:11px; font-weight:800; text-transform:uppercase;">${w.status}</span></td></tr>`).join('');
+    // Tabela de Saques (Agora com as mesmas variáveis dinâmicas de bg e cor)
+    document.getElementById('withdrawalsTable').innerHTML = wds.map(w => {
+      let bg = w.status === 'approved' ? 'rgba(16,185,129,0.1)' : (w.status === 'pending' ? 'rgba(245,158,11,0.1)' : 'rgba(239,68,68,0.1)');
+      let cor = w.status === 'approved' ? 'var(--success)' : (w.status === 'pending' ? 'var(--warning)' : 'var(--danger)');
+      return `<tr><td style="color:var(--text-muted); font-size:12px;">#${w.id}</td><td style="font-weight:600; color:#fff;">${w.user_name}</td><td class="red" style="font-weight:700">R$ ${fmt(w.amount)}</td><td style="color:var(--text-muted); font-size:13px;">${w.pix_key}</td><td><span style="background:${bg}; color:${cor}; padding:4px 8px; border-radius:6px; font-size:11px; font-weight:800; text-transform:uppercase;">${w.status}</span></td></tr>`;
+    }).join('');
+
+    // Tabela de Jogos
     document.getElementById('gamesTable').innerHTML = games.map(g => `<tr><td style="color:var(--text-muted); font-size:12px;">#${g.id}</td><td style="font-weight:600; color:#fff;">${g.user_name}</td><td style="color:var(--text-muted)">R$ ${fmt(g.bet_amount)}</td><td class="${g.result === 'win' ? 'green' : 'red'}" style="font-weight:700">R$ ${fmt(g.prize)}</td><td><span style="background:${g.result === 'win' ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)'}; color:${g.result === 'win' ? 'var(--success)' : 'var(--danger)'}; padding:4px 8px; border-radius:6px; font-size:11px; font-weight:800; text-transform:uppercase;">${g.result}</span></td><td style="color:var(--text-muted); font-size:13px;">${new Date(g.created_at).toLocaleTimeString('pt-BR')}</td></tr>`).join('');
   } catch (e) { console.error(e); }
 }
