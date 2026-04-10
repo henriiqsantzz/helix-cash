@@ -56,13 +56,6 @@
       color: #fff; font-size: 14px; margin-bottom: 16px; outline: none;
     }
 
-    .tab-bar { display: flex; gap: 8px; margin-bottom: 16px; overflow-x: auto; padding-bottom: 4px; }
-    .tab-btn {
-      padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600;
-      background: rgba(124,77,255,0.1); color: #b388ff; border: none; cursor: pointer; white-space: nowrap;
-    }
-    .tab-btn.active { background: #7c4dff; color: white; }
-    
     .table-responsive { width: 100%; overflow-x: auto; border-radius: 12px; border: 1px solid rgba(124,77,255,0.1); background: #12122a; }
     .admin-table { width: 100%; border-collapse: collapse; }
     .admin-table th { text-align: left; padding: 15px; background: rgba(124,77,255,0.05); color: #a0a0c0; font-size: 12px; text-transform: uppercase; }
@@ -83,7 +76,6 @@
 
     .chart-container { background: #12122a; padding: 20px; border-radius: 12px; border: 1px solid rgba(124,77,255,0.1); margin-top: 20px; height: 300px; }
 
-    /* --- NOVAS REGRAS PARA ALINHAMENTO DOS ÍCONES SVG --- */
     .admin-nav-item { display: flex; align-items: center; gap: 12px; text-align: left; width: 100%; padding: 12px 20px; background: none; border: none; color: #a0a0c0; font-size: 15px; font-weight: 500; cursor: pointer; transition: 0.2s; }
     .admin-nav-item:hover, .admin-nav-item.active { background: rgba(124,77,255,0.1); color: #fff; border-right: 3px solid #7c4dff; }
     .admin-nav-item svg { stroke: currentColor; opacity: 0.8; }
@@ -258,10 +250,21 @@
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
             Sistema de Afiliados
         </h1>
-        <p style="color:#a0a0c0;margin-bottom:20px;">Acompanhe a conversão real dos seus influenciadores.</p>
+        <p style="color:#a0a0c0;margin-bottom:20px;">Acompanhe a conversão real e as comissões geradas pelos influenciadores.</p>
         <div class="table-responsive">
             <table class="admin-table">
-              <thead><tr><th>Influenciador</th><th>Link de Convite</th><th style="text-align:center">Cadastros</th><th style="text-align:center">Depositantes</th><th style="text-align:right">Total Depositado</th></tr></thead>
+              <thead>
+                <tr>
+                    <th>Influenciador</th>
+                    <th>Link de Convite</th>
+                    <th style="text-align:center">Cadastros</th>
+                    <th style="text-align:center">Depositantes</th>
+                    <th style="text-align:right">Total Depositado</th>
+                    <th style="text-align:right">Comissão Gerada</th>
+                    <th style="text-align:center">Taxa (%)</th>
+                    <th style="text-align:center">Ações</th>
+                </tr>
+              </thead>
               <tbody id="affiliatesTable"></tbody>
             </table>
         </div>
@@ -334,6 +337,7 @@
                 Financeiro e Casa
             </h3>
             <div class="form-group"><label>Taxa da Casa (%)</label><input type="number" id="set-house_edge" class="form-input"></div>
+            <div class="form-group"><label>Taxa Global Afiliados (%)</label><input type="number" id="set-global_affiliate_commission_rate" class="form-input" placeholder="Comissão base pros influencers"></div>
             <div class="form-group"><label>Depósito Mínimo</label><input type="number" id="set-min_deposit" class="form-input"></div>
             <div class="form-group"><label>Saque Mínimo</label><input type="number" id="set-min_withdrawal" class="form-input"></div>
             <div class="form-group"><label>Multiplicador Máximo</label><input type="number" id="set-max_multiplier" class="form-input"></div>
@@ -436,23 +440,38 @@ function renderInfluencers(infs) {
   `).join('');
 }
 
-// AFILIADOS
+// AFILIADOS (AGORA COM COMISSÕES DINÂMICAS)
 async function loadAffiliates() {
   try {
-    const affs = await api('/api/admin/affiliates');
+    const res = await api('/api/admin/affiliates');
+    const affs = res.affiliates;
+    const globalRate = res.global_rate;
     const table = document.getElementById('affiliatesTable');
+    
     if (affs.length === 0) {
-      table.innerHTML = '<tr><td colspan="5" style="text-align:center">Nenhum influenciador encontrado.</td></tr>';
+      table.innerHTML = '<tr><td colspan="8" style="text-align:center">Nenhum influenciador encontrado.</td></tr>';
       return;
     }
-    table.innerHTML = affs.map(a => `
+
+    table.innerHTML = affs.map(a => {
+      // Regra visual de taxa: se a individual for vazia, mostra que tá puxando a Global. Se for 0, avisa que tá 0.
+      let rateBadge = '';
+      if (a.individual_rate !== null) {
+          rateBadge = a.individual_rate === 0 
+                      ? `<span style="color:#ff1744; font-weight:bold">0% (Inativo)</span>`
+                      : `<span style="color:#00e676; font-weight:bold">${a.individual_rate}% (Indiv)</span>`;
+      } else {
+          rateBadge = `<span style="color:#a0a0c0">${globalRate}% (Global)</span>`;
+      }
+
+      return `
       <tr>
         <td>
           <strong style="color:#b388ff">${a.name}</strong><br>
           <small style="color:#a0a0c0">Cód: ${a.code}</small>
         </td>
         <td>
-          <input type="text" readonly value="${a.link}" class="form-input" style="font-size:10px; width:150px; display:inline-block; padding:5px" id="link-${a.code}">
+          <input type="text" readonly value="${a.link}" class="form-input" style="font-size:10px; width:120px; display:inline-block; padding:5px; background:rgba(0,0,0,0.2)" id="link-${a.code}">
           <button class="btn btn-sm" onclick="copyLink('${a.code}')">Copiar</button>
         </td>
         <td style="text-align:center; font-weight:bold">${a.count_total}</td>
@@ -460,9 +479,48 @@ async function loadAffiliates() {
           <span style="background:rgba(0,230,118,0.1); color:#00e676; padding:2px 8px; border-radius:4px; font-weight:bold">${a.count_depositors}</span>
         </td>
         <td style="text-align:right; font-weight:bold" class="green">R$ ${fmt(a.total_deposited)}</td>
+        <td style="text-align:right; font-weight:bold" class="purple">R$ ${fmt(a.total_commission)}</td>
+        <td style="text-align:center">${rateBadge}</td>
+        <td style="text-align:center">
+           <button class="btn btn-sm" style="background:rgba(124,77,255,0.2); color:#b388ff" onclick="openAffiliateEdit(${a.id}, '${a.name}', ${a.individual_rate !== null ? a.individual_rate : "''"})">Ajustar</button>
+        </td>
       </tr>
-    `).join('');
+      `;
+    }).join('');
   } catch (e) { console.error(e); }
+}
+
+function openAffiliateEdit(id, name, currentRate) {
+  document.getElementById('modalContent').innerHTML = `
+    <h3>Ajustar Comissão de ${name}</h3>
+    <p style="color:#a0a0c0; font-size:12px; margin-bottom:15px; line-height:1.4;">
+      Defina a porcentagem de ganho em cima dos depósitos.<br>
+      • Digite <b>0</b> se não quiser pagar comissão nenhuma.<br>
+      • Deixe <b>em branco</b> para seguir a Taxa Global das Configurações.
+    </p>
+    <div class="form-group">
+        <label>Taxa Individual (%)</label>
+        <input type="number" id="m-aff-rate" class="form-input" value="${currentRate}" placeholder="Ex: 15">
+    </div>
+    <div style="display:flex; gap:10px; margin-top:20px;">
+      <button class="btn btn-primary" style="flex:1" onclick="saveAffiliateRate(${id})">Salvar Taxa</button>
+      <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+    </div>
+  `;
+  document.getElementById('modal').style.display = 'flex';
+}
+
+async function saveAffiliateRate(id) {
+  const rateVal = document.getElementById('m-aff-rate').value;
+  try {
+    // Mandamos null se tiver vazio, ou o número digitado
+    await api('/api/admin/user/update', { 
+        method: 'POST', 
+        body: JSON.stringify({ id: id, affiliate_commission_rate: rateVal }) 
+    });
+    closeModal();
+    loadAffiliates();
+  } catch(e) { alert('Erro ao salvar taxa'); }
 }
 
 function copyLink(code) {
@@ -524,18 +582,18 @@ async function loadFinancial() {
   } catch (e) { console.error(e); }
 }
 
-// SETTINGS
+// SETTINGS (AGORA INCLUI A TAXA GLOBAL DE AFILIADO)
 async function loadSettings() {
   try {
     const s = await api('/api/admin/settings');
-    const keys = ['house_edge', 'min_deposit', 'min_withdrawal', 'max_multiplier', 'game_platform_count', 'game_danger_start_level', 'game_danger_max_slices', 'game_hole_segments'];
+    const keys = ['house_edge', 'global_affiliate_commission_rate', 'min_deposit', 'min_withdrawal', 'max_multiplier', 'game_platform_count', 'game_danger_start_level', 'game_danger_max_slices', 'game_hole_segments'];
     keys.forEach(k => { if(document.getElementById('set-'+k)) document.getElementById('set-'+k).value = s[k]; });
   } catch (e) {}
 }
 
 async function saveSettings() {
   const body = {};
-  const keys = ['house_edge', 'min_deposit', 'min_withdrawal', 'max_multiplier', 'game_platform_count', 'game_danger_start_level', 'game_danger_max_slices', 'game_hole_segments'];
+  const keys = ['house_edge', 'global_affiliate_commission_rate', 'min_deposit', 'min_withdrawal', 'max_multiplier', 'game_platform_count', 'game_danger_start_level', 'game_danger_max_slices', 'game_hole_segments'];
   keys.forEach(k => { body[k] = document.getElementById('set-'+k).value; });
   await api('/api/admin/settings', { method: 'POST', body: JSON.stringify(body) });
   alert('Configurações salvas!');
@@ -560,7 +618,6 @@ document.querySelectorAll('.admin-nav-item').forEach(btn => {
     if (['deposits', 'withdrawals', 'games'].includes(btn.dataset.section)) loadFinancial();
     if (btn.dataset.section === 'settings') loadSettings();
     
-    // Auto-close sidebar on mobile after clicking a link
     if (window.innerWidth <= 900) {
       document.querySelector('.admin-sidebar').classList.remove('open');
     }
